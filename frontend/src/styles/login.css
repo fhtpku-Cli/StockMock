@@ -1,0 +1,88 @@
+.login-layout {
+	min-height: 100dvh;
+	display: grid;
+	grid-template-columns: 1.1fr 1fr;
+	background: var(--paper);
+}
+.login-story {
+	padding: 48px 64px;
+	background: var(--sidebar);
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 64px;
+}
+.login-story .brand {
+	padding: 0;
+}
+.login-story h1 {
+	font-size: 48px;
+	line-height: 1.45;
+	letter-spacing: -2px;
+	font-weight: 500;
+	margin: 24px 0;
+}
+.login-story p {
+	color: var(--muted);
+	font-size: 14px;
+	line-height: 2;
+}
+.login-principles {
+	display: flex;
+	gap: 12px;
+	flex-direction: column;
+	margin-top: 48px;
+	font-size: 12px;
+}
+.login-principles span {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.login-principles span:before {
+	content: "";
+	height: 4px;
+	width: 4px;
+	background: var(--accent);
+	border-radius: 50%;
+}
+.login-story > small {
+	font-size: 11px;
+}
+.login-form {
+	max-width: 400px;
+	align-self: center;
+	justify-self: center;
+	width: 100%;
+	padding: 32px;
+}
+.login-lock {
+	display: grid;
+	place-items: center;
+	width: 56px;
+	height: 56px;
+	background: var(--soft);
+	border-radius: 12px;
+	color: var(--accent);
+	margin-bottom: 24px;
+}
+.login-form h2 {
+	font-size: 24px;
+	font-weight: 550;
+}
+.login-form > p {
+	font-size: 12px;
+	color: var(--muted);
+	margin: 12px 0 28px;
+}
+.login-form > .footnote {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	font-size: 11px;
+	margin-top: 24px;
+}
+.login-form .full {
+	margin-top: 8px;
+}

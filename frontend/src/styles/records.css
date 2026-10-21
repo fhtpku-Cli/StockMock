@@ -1,0 +1,161 @@
+.journal-intro {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	color: var(--accent);
+	padding: 8px 0 8px;
+}
+.journal-intro h2 {
+	font-size: 20px;
+	font-weight: 500;
+}
+.journal-intro p {
+	font-size: 12px;
+	color: var(--muted);
+	margin-top: 4px;
+}
+.journal-input {
+	border: 0;
+	background: var(--canvas);
+	min-height: 180px;
+	padding: 16px;
+}
+.form-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 16px;
+	gap: 16px;
+}
+.journal-list article {
+	border-bottom: 1px solid var(--line);
+	padding: 16px 0;
+}
+.journal-list article:first-child {
+	padding-top: 0;
+}
+.journal-list article:last-child {
+	border: 0;
+}
+.journal-list p {
+	margin-top: 12px;
+	font-size: 13px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ledger-list article {
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+	align-items: flex-start;
+	padding: 16px 0;
+	border-bottom: 1px solid var(--line);
+}
+.ledger-list article:last-child {
+	border: 0;
+}
+.ledger-list strong {
+	font-size: 12px;
+	font-weight: 500;
+}
+.ledger-list b {
+	font-size: 12px;
+	font-weight: 550;
+	white-space: nowrap;
+}
+.ledger-list small {
+	display: block;
+	font-size: 10px;
+}
+.round-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--line);
+	font-size: 12px;
+}
+.settings-section {
+	padding-bottom: 24px;
+	margin-bottom: 24px;
+	border-bottom: 1px solid var(--line);
+}
+.settings-section > p {
+	font-size: 12px;
+	color: var(--muted);
+	margin: 12px 0 16px;
+}
+.settings-section > input {
+	margin: 8px 0 16px;
+}
+.fx-rates {
+	display: grid;
+	gap: 12px;
+	margin: 16px 0 24px;
+	font-size: 13px;
+}
+.fx-rates small {
+	display: block;
+}
+.table-scroll {
+	overflow-x: auto;
+}
+table {
+	border-collapse: collapse;
+	width: 100%;
+	text-align: left;
+	font-size: 12px;
+	white-space: nowrap;
+}
+th {
+	color: var(--muted);
+	font-weight: 400;
+	padding: 12px 8px;
+	border-bottom: 1px solid var(--line);
+}
+td {
+	padding: 16px 8px;
+	border-bottom: 1px solid var(--line);
+	font-variant-numeric: tabular-nums;
+}
+td small {
+	display: block;
+	font-size: 10px;
+}
+.symbol-link {
+	border: 0;
+	background: transparent;
+	padding: 0;
+	min-height: 44px;
+	text-align: left;
+	font: inherit;
+	color: var(--ink);
+}
+.symbol-link:hover {
+	color: var(--accent);
+}
+.mobile-settings {
+	display: none;
+}
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+.skip-link {
+	position: fixed;
+	z-index: 5;
+	left: 16px;
+	top: -100px;
+	background: var(--paper);
+	padding: 12px;
+}
+.skip-link:focus {
+	top: 16px;
+}

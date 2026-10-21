@@ -1,0 +1,113 @@
+@media (max-width: 700px) {
+	.modal {
+		width: calc(100vw - 24px);
+		max-height: 92dvh;
+	}
+	.modal-heading {
+		padding: 12px 20px;
+	}
+	.modal-body {
+		padding: 20px;
+	}
+	.form-grid {
+		gap: 12px;
+	}
+	.filters {
+		flex-direction: column;
+	}
+	.filters > select {
+		width: 100%;
+	}
+	.security-row {
+		gap: 8px;
+	}
+	.security-avatar {
+		width: 32px;
+		height: 32px;
+		font-size: 12px;
+	}
+	.security-main {
+		gap: 8px;
+	}
+	.security-main strong {
+		font-size: 12px;
+	}
+	.security-main small {
+		font-size: 10px;
+	}
+	.security-row > .badge {
+		font-size: 9px;
+	}
+	.watch-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+	}
+	.watch-card {
+		padding: 12px;
+	}
+	.watch-card strong {
+		font-size: 12px;
+	}
+	.order-top > div {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+	.order-details {
+		gap: 8px;
+		font-size: 11px;
+	}
+	.journal-intro h2 {
+		font-size: 16px;
+	}
+	.journal-intro {
+		gap: 12px;
+	}
+	.journal-intro > svg {
+		width: 28px;
+	}
+	.journal-intro p {
+		font-size: 11px;
+	}
+	.login-layout {
+		display: flex;
+		flex-direction: column;
+		min-height: 100dvh;
+	}
+	.login-story {
+		padding: 28px 24px 32px;
+		gap: 28px;
+	}
+	.login-story > small,
+	.login-principles {
+		display: none;
+	}
+	.login-story h1 {
+		font-size: 32px;
+		letter-spacing: -1px;
+		margin: 12px 0;
+	}
+	.login-story h1 br {
+		display: none;
+	}
+	.login-story p {
+		font-size: 12px;
+	}
+	.login-story .eyebrow {
+		font-size: 11px;
+	}
+	.login-form {
+		padding: 32px 24px;
+		width: 100%;
+		max-width: 460px;
+	}
+	.login-lock {
+		display: none;
+	}
+	.login-form h2 {
+		font-size: 20px;
+	}
+	.login-form > p {
+		margin-bottom: 24px;
+	}
+}

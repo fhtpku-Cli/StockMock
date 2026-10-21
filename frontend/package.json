@@ -1,0 +1,35 @@
+{
+	"name": "position-practice",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite --host 127.0.0.1",
+		"build": "tsc --noEmit && vite build",
+		"preview": "vite preview --host 127.0.0.1 --port 5173",
+		"test": "bun test tests/*.test.ts",
+		"test:browser": "bun tests/smoke.mjs && bun tests/interactions.mjs",
+		"test:trading": "bun tests/trading.mjs"
+	},
+	"dependencies": {
+		"@phosphor-icons/react": "^2.1.10",
+		"@tanstack/react-query": "^5.90.0",
+		"ky": "^1.10.0",
+		"react": "^19.1.0",
+		"react-dom": "^19.1.0",
+		"zod": "^4.0.0"
+	},
+	"devDependencies": {
+		"@axe-core/playwright": "latest",
+		"@biomejs/biome": "^2.6.2",
+		"@playwright/test": "latest",
+		"@types/react": "^19.1.0",
+		"@types/react-dom": "^19.1.0",
+		"@vitejs/plugin-react": "^5.0.0",
+		"react-doctor": "latest",
+		"react-grab": "latest",
+		"react-scan": "latest",
+		"typescript": "^5.9.0",
+		"vite": "^7.1.0"
+	}
+}

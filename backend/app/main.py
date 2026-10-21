@@ -1,0 +1,126 @@
+"""启动：uv run uvicorn app.main:app --host 127.0.0.1 --port 8000。"""
+
+import os
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import anyio
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import RequestResponseEndpoint
+
+from app.asset_routes import register as register_asset_routes
+from app.auth import Auth
+from app.auth_routes import register as register_auth_routes
+from app.catalog import CATALOG, instrument
+from app.engine import Engine
+from app.market_routes import register as register_market_routes
+from app.marketdata import MarketDataClient, MarketDataError
+from app.models import (
+    DomainError,
+)
+from app.record_routes import register as register_record_routes
+from app.storage import Store
+from app.trading_routes import register as register_trading_routes
+from app.worker import Worker
+
+
+def configured_engine() -> Engine:
+    """从本地环境配置建立真实行情与可人工暂停的标的清单。"""
+    paused = frozenset(filter(None, os.getenv("PAPER_PAUSED_SYMBOLS", "").split(",")))
+    for symbol in paused:
+        _ = instrument(symbol)
+    catalog = tuple(
+        item.model_copy(update={"tradable": False, "restriction": "公司行动或规则待人工核对，已暂停交易"})
+        if item.symbol in paused
+        else item
+        for item in CATALOG
+    )
+    return Engine(Store(Path(os.getenv("PAPER_DB", "data/paper.sqlite3"))), MarketDataClient(), catalog)
+
+
+def create_app(
+    engine: Engine | None = None,
+    password: str | None = None,
+    *,
+    run_worker: bool = True,
+) -> FastAPI:
+    """创建个人应用；测试通过构造依赖隔离外部行情。"""
+    engine = engine or configured_engine()
+    auth = Auth(
+        password if password is not None else os.getenv("PAPER_PASSWORD", ""),
+        secure=os.getenv("PAPER_SECURE_COOKIE") == "1",
+    )
+    worker = Worker(engine)
+
+    @asynccontextmanager
+    async def lifespan(_application: FastAPI) -> AsyncGenerator[None]:
+        async with anyio.create_task_group() as group:
+            if run_worker:
+                _ = group.start_soon(worker.run)
+            yield
+            group.cancel_scope.cancel()
+
+    app = FastAPI(title="个人模拟投资", lifespan=lifespan)
+    app.state.engine = engine
+    app.state.worker = worker
+
+    @app.middleware("http")
+    async def origin_guard(request: Request, call_next: RequestResponseEndpoint) -> Response:
+        origin = request.headers.get("origin")
+        if request.method not in {"GET", "HEAD", "OPTIONS"} and origin:
+            allowed = {
+                f"{request.url.scheme}://{request.headers.get('host', '')}",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+            }
+            if origin not in allowed:
+                return JSONResponse(
+                    {
+                        "detail": {
+                            "code": "origin_rejected",
+                            "message": "拒绝跨站写入请求",
+                        }
+                    },
+                    status_code=403,
+                )
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
+
+    @app.exception_handler(DomainError)
+    async def domain_error(_: Request, error: DomainError) -> JSONResponse:
+        return JSONResponse(
+            {"detail": {"code": error.code, "message": error.message}},
+            status_code=error.status,
+        )
+
+    @app.exception_handler(MarketDataError)
+    async def market_error(_: Request, error: MarketDataError) -> JSONResponse:
+        return JSONResponse(
+            {
+                "detail": {
+                    "code": error.code,
+                    "message": "外部行情暂不可用，未使用替代假数据",
+                }
+            },
+            status_code=503,
+        )
+
+    register_auth_routes(app, auth)
+    register_market_routes(app, engine, auth)
+    register_trading_routes(app, engine, auth)
+    register_record_routes(app, engine, auth)
+    register_asset_routes(app, engine, auth, worker)
+
+    frontend = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if frontend.exists():
+        app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
+    return app
+
+
+app = create_app()

@@ -1,0 +1,31 @@
+# 本地凭据与账户记录
+.env
+.env.*
+!.env.example
+.local-password
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+data/
+*.pem
+*.key
+
+# 依赖与构建缓存
+.venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.pyc
+dist/
+*.egg-info/
+.DS_Store
+
+# 仅本机保存：原始行情、浏览器会话、代理记录及验证截图
+work/
+.omo/
+*.log
+playwright-report/
+test-results/

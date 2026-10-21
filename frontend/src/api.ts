@@ -1,0 +1,119 @@
+import ky, { HTTPError } from "ky";
+import { z } from "zod";
+export class ApiError extends Error {
+	constructor(
+		readonly code: string,
+		message: string,
+	) {
+		super(message);
+		this.name = "ApiError";
+	}
+}
+const http = ky.create({
+	prefixUrl: "/api",
+	credentials: "same-origin",
+	timeout: 25000,
+	retry: { limit: 1, methods: ["get"] },
+});
+const errorSchema = z.object({
+	detail: z.union([
+		z.string(),
+		z.object({ code: z.string(), message: z.string() }),
+	]),
+});
+export async function api<T>(
+	path: string,
+	schema: z.ZodType<T>,
+	body?: Readonly<Record<string, unknown>>,
+): Promise<T> {
+	try {
+		const response = body
+			? await http.post(path, { json: body })
+			: await http.get(path);
+		const raw: unknown = await response.json();
+		const result = schema.safeParse(raw);
+		if (!result.success)
+			throw new ApiError(
+				"invalid_response",
+				"返回的数据格式不完整，请稍后重试。",
+			);
+		return result.data;
+	} catch (error) {
+		if (error instanceof HTTPError) {
+			const raw: unknown = await error.response.json();
+			const parsed = errorSchema.safeParse(raw);
+			if (parsed.success) {
+				const detail = parsed.data.detail;
+				throw new ApiError(
+					typeof detail === "string" ? "request_failed" : detail.code,
+					typeof detail === "string" ? detail : detail.message,
+				);
+			}
+			throw new ApiError("request_failed", "请求未完成，请稍后重试。");
+		}
+		if (error instanceof ApiError) throw error;
+		if (error instanceof Error)
+			throw new ApiError("connection", "暂时无法连接服务，请检查连接后重试。");
+		throw error;
+	}
+}
+export async function removeWatch(symbol: string): Promise<void> {
+	try {
+		await http.delete(`watchlist/${encodeURIComponent(symbol)}`);
+	} catch (error) {
+		if (error instanceof Error)
+			throw new ApiError("request_failed", "移除失败，请重试。");
+		throw error;
+	}
+}
+export const errorMessage = (error: unknown): string =>
+	error instanceof Error ? error.message : "操作未完成，请重试。";
+const currencies = new Map<string, Intl.NumberFormat>();
+export const money = (value: string | null, currency = "CNY"): string => {
+	if (value === null) return "—";
+	let format = currencies.get(currency);
+	if (!format) {
+		format = new Intl.NumberFormat("zh-CN", {
+			style: "currency",
+			currency,
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		});
+		currencies.set(currency, format);
+	}
+	return format.format(Number(value));
+};
+const numberFormat = new Intl.NumberFormat("zh-CN");
+export const number = (value: number): string => numberFormat.format(value);
+const dateFormat = new Intl.DateTimeFormat("zh-CN", {
+	timeZone: "Asia/Shanghai",
+	month: "2-digit",
+	day: "2-digit",
+	hour: "2-digit",
+	minute: "2-digit",
+	hour12: false,
+});
+export const time = (value: string | null): string =>
+	value ? dateFormat.format(new Date(value)) : "尚无记录";
+
+export const price = (
+	value: string | null,
+	currency: string,
+	tickSize?: string,
+): string => {
+	if (value === null) return "—";
+	const digits = (tickSize ?? value).split(".")[1]?.length ?? 0;
+	const precision = Math.min(Math.max(digits, 2), 8);
+	const key = `${currency}:${precision}`;
+	let formatter = currencies.get(key);
+	if (!formatter) {
+		formatter = new Intl.NumberFormat("zh-CN", {
+			style: "currency",
+			currency,
+			minimumFractionDigits: precision,
+			maximumFractionDigits: precision,
+		});
+		currencies.set(key, formatter);
+	}
+	return formatter.format(Number(value));
+};

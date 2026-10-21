@@ -1,0 +1,28 @@
+[project]
+name = "paper-investment"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2",
+    "anyio>=4",
+    "exchange-calendars>=4.11",
+    "httpx2[brotli,http2,zstd]>=2.16.0",
+]
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.28", "ruff", "basedpyright"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+[tool.basedpyright]
+typeCheckingMode = "all"
+include = ["app", "tests"]
+[tool.ruff]
+line-length = 120
+[tool.ruff.lint]
+select = ["ALL"]
+# 中文标点与中文句号遵循项目语言规范；结构化异常保留错误码参数。
+ignore = ["COM812", "D203", "D213", "D400", "D415", "RUF001", "RUF002", "RUF003", "CPY001", "EM101", "EM102"]
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004", "D", "ARG", "SLF001", "INP001"]
