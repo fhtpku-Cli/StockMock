@@ -137,7 +137,7 @@ export function Detail({
 			</dl>
 			{instrument.rule_source && (
 				<p className="footnote">
-					交易规则来源：{instrument.rule_source} · 核对日期{" "}
+					证券资料与规则来源：{instrument.rule_source} · 核对日期{" "}
 					{instrument.verified_on ?? "未注明"}
 				</p>
 			)}

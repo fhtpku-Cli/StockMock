@@ -6,6 +6,7 @@ from typing import ClassVar, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.instrument_universe import US_EXPANSION
 from app.marketdata_models import Currency
 
 
@@ -75,6 +76,7 @@ _US: Final[tuple[tuple[str, str, Literal["stock", "ETF"]], ...]] = (
     ("QQQ", "纳斯达克100ETF", "ETF"),
     ("IWM", "罗素2000ETF", "ETF"),
     ("DIA", "道琼斯ETF", "ETF"),
+    *((entry.symbol, entry.name, entry.kind) for entry in US_EXPANSION),
 )
 _VERIFIED: Final = date(2026, 10, 22)
 _CN_RESTRICTION: Final = "仅成熟普通股票/境内股票ETF；ST、退市、IPO无涨跌幅期及个股科创/创业板不接入；公司行动人工核对"
@@ -151,8 +153,11 @@ CATALOG_RULES: Final = (
             settlement_days=0,
             tradable=True,
             tick_rule="US",
-            restriction="新浪延迟五分钟，常规时段整股；≥1美元仅支持0.01报价网格；公司行动人工核对，排除杠杆/反向ETF",
-            rule_source="https://www.sec.gov/newsroom/press-releases/2024-137",
+            restriction="新浪五分钟样本，实际延迟以行情时间为准；常规时段整股，≥1美元仅支持0.01报价网格；公司行动人工核对，排除杠杆/反向ETF",
+            rule_source=next(
+                (entry.metadata_source for entry in US_EXPANSION if entry.symbol == s),
+                "https://www.sec.gov/newsroom/press-releases/2024-137",
+            ),
             verified_on=_VERIFIED,
         )
         for s, n, kind in _US

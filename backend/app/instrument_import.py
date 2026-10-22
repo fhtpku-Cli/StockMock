@@ -20,17 +20,28 @@ class ImportEntry(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, extra="forbid")
     rule: InstrumentRule
-    listing_date: date
+    listing_date: date | None = None
+    listed_on_or_before: date | None = None
     status: Literal["normal"]
     product: Literal["ordinary_stock", "unleveraged_equity_etf"]
     metadata_source: str = Field(min_length=1)
+
+    def maturity_bound(self) -> date:
+        """精确上市日或官方资料证明的最晚上市日二选一，不把年报日伪称 IPO 日。"""
+        dates = tuple(value for value in (self.listing_date, self.listed_on_or_before) if value is not None)
+        if len(dates) != 1:
+            raise MarketDataError("invalid_listing_evidence", self.rule.symbol)
+        return dates[0]
 
 
 def verify_entry(entry: ImportEntry, client: MarketDataClient) -> InstrumentRule:
     """只有规则自洽且真实股票行情通过，才生成可加载目录记录。"""
     rule = validate_rule(entry.rule)
     today = datetime.now(UTC).date()
-    if entry.listing_date > today - timedelta(days=90) or not today - timedelta(days=7) <= rule.verified_on <= today:
+    if (
+        entry.maturity_bound() > today - timedelta(days=90)
+        or not today - timedelta(days=7) <= rule.verified_on <= today
+    ):
         raise MarketDataError("unverified_instrument_metadata", rule.symbol)
     if (entry.product == "ordinary_stock") != (rule.kind == "stock"):
         raise MarketDataError("invalid_instrument_rule", rule.symbol)
