@@ -41,16 +41,16 @@ class Worker:
                 failures.append(error.code)
                 logging.getLogger(__name__).warning("行情获取失败 symbol=%s code=%s", symbol, error.code)
             try:
-                self.engine.process(symbol, samples, now)
+                self.engine.process(symbol, samples, datetime.now(UTC))
             except (DomainError, sqlite3.OperationalError) as error:
                 failures.append(type(error).__name__)
                 logging.getLogger(__name__).warning("订单处理失败 symbol=%s type=%s", symbol, type(error).__name__)
         try:
-            capture(self.engine, now)
+            capture(self.engine, datetime.now(UTC))
         except (DomainError, sqlite3.OperationalError) as error:
             failures.append(type(error).__name__)
             logging.getLogger(__name__).warning("资产观察失败 type=%s", type(error).__name__)
-        self.view = WorkerView(last_run=now, status="行情异常，按截止规则处理" if failures else "running")
+        self.view = WorkerView(last_run=datetime.now(UTC), status="行情异常，按截止规则处理" if failures else "running")
 
     async def run(self) -> None:
         """持续后台处理，应用关闭时由任务组取消。"""
