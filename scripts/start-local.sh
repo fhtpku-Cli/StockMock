@@ -51,4 +51,4 @@ if [[ -f "$password_file" ]]; then chmod 600 "$password_file"; fi
 export PAPER_PASSWORD
 export PAPER_DB="$project_dir/backend/data/paper.sqlite3"
 cd "$project_dir/backend"
-exec uv run --frozen uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+exec uv run --frozen uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1

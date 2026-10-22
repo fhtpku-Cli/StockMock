@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .local-password
+.runtime.json
 *.sqlite3
 *.sqlite3-*
 *.db

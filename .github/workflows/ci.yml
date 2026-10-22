@@ -26,6 +26,14 @@ jobs:
         run: uv sync --frozen
       - name: 运行行为测试
         run: uv run --frozen python -m pytest
+      - name: 验证后台工具隔离行为
+        run: uv run --frozen python ../scripts/test_service.py
+      - name: 检查后台启动器类型
+        run: uv run --frozen basedpyright ../scripts/service.py ../scripts/run-service.py
+      - name: 检查后台工具格式与规范
+        run: |
+          uv run --frozen ruff check ../scripts/*.py --select E,F
+          uv run --frozen ruff format --check ../scripts/*.py
       - name: 检查全部类型
         run: uv run --frozen basedpyright
       - name: 检查代码规范
