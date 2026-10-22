@@ -4,16 +4,30 @@ export class ApiError extends Error {
 	constructor(
 		readonly code: string,
 		message: string,
+		readonly status?: number,
 	) {
 		super(message);
 		this.name = "ApiError";
 	}
 }
+export const SESSION_EXPIRED = "stockmock:session-expired";
 const http = ky.create({
 	prefixUrl: "/api",
 	credentials: "same-origin",
 	timeout: 25000,
 	retry: { limit: 1, methods: ["get"] },
+	hooks: {
+		afterResponse: [
+			(request, _options, response) => {
+				if (
+					response.status === 401 &&
+					!new URL(request.url).pathname.endsWith("/auth/login")
+				)
+					window.dispatchEvent(new Event(SESSION_EXPIRED));
+				return response;
+			},
+		],
+	},
 });
 const errorSchema = z.object({
 	detail: z.union([
@@ -42,16 +56,21 @@ export async function api<T>(
 		return result.data;
 	} catch (error) {
 		if (error instanceof HTTPError) {
-			const raw: unknown = await error.response.json();
+			const raw: unknown = await error.response.json().catch(() => null);
 			const parsed = errorSchema.safeParse(raw);
 			if (parsed.success) {
 				const detail = parsed.data.detail;
 				throw new ApiError(
 					typeof detail === "string" ? "request_failed" : detail.code,
 					typeof detail === "string" ? detail : detail.message,
+					error.response.status,
 				);
 			}
-			throw new ApiError("request_failed", "请求未完成，请稍后重试。");
+			throw new ApiError(
+				"request_failed",
+				"请求未完成，请稍后重试。",
+				error.response.status,
+			);
 		}
 		if (error instanceof ApiError) throw error;
 		if (error instanceof Error)

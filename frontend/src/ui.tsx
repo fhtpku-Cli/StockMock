@@ -99,7 +99,21 @@ export function Modal({
 	useEffect(() => {
 		const dialog = ref.current;
 		dialog?.showModal();
-		return () => dialog?.close();
+		const viewport = window.visualViewport;
+		const resize = () => {
+			if (dialog && viewport) {
+				dialog.style.setProperty("--visible-height", `${viewport.height}px`);
+				dialog.style.setProperty("--visible-top", `${viewport.offsetTop}px`);
+			}
+		};
+		resize();
+		viewport?.addEventListener("resize", resize);
+		viewport?.addEventListener("scroll", resize);
+		return () => {
+			viewport?.removeEventListener("resize", resize);
+			viewport?.removeEventListener("scroll", resize);
+			dialog?.close();
+		};
 	}, []);
 	return (
 		<dialog

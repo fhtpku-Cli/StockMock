@@ -9,7 +9,7 @@ import {
 	ArrowClockwise,
 	MagnifyingGlass,
 } from "@phosphor-icons/react";
-import { api, errorMessage } from "./api";
+import { api, errorMessage, SESSION_EXPIRED } from "./api";
 import { instrumentSchema, sessionSchema } from "./schema";
 import type { Instrument } from "./schema";
 import { ErrorNotice, Loading } from "./ui";
@@ -40,10 +40,14 @@ export function App() {
 	const [overlay, setOverlay] = useState<Overlay>({ kind: "none" });
 	const [journalOrder, setJournalOrder] = useState<string | null>(null);
 	const [online, setOnline] = useState(navigator.onLine);
+	const [sessionExpired, setSessionExpired] = useState(false);
 	const [actionError, setActionError] = useState("");
 	const client = useQueryClient();
 	useEffect(() => {
-		const up = () => setOnline(true);
+		const up = () => {
+			setOnline(true);
+			void client.invalidateQueries();
+		};
 		const down = () => setOnline(false);
 		window.addEventListener("online", up);
 		window.addEventListener("offline", down);
@@ -52,6 +56,22 @@ export function App() {
 			window.removeEventListener("offline", down);
 		};
 	}, []);
+	useEffect(() => {
+		const expire = () => {
+			setSessionExpired(true);
+			setOverlay({ kind: "none" });
+			setJournalOrder(null);
+			setActionError("");
+			void client.cancelQueries();
+			client.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+			client.setQueryData(["session"], {
+				authenticated: false,
+				configured: true,
+			});
+		};
+		window.addEventListener(SESSION_EXPIRED, expire);
+		return () => window.removeEventListener(SESSION_EXPIRED, expire);
+	}, [client]);
 	useEffect(() => {
 		document.title = `${navigation.find((n) => n.id === page)?.label ?? "资产"} · 持仓练习`;
 	}, [page]);
@@ -88,7 +108,11 @@ export function App() {
 		return (
 			<Login
 				configured={session.data.configured}
-				onSuccess={() => void session.refetch()}
+				expired={sessionExpired}
+				onSuccess={() => {
+					setSessionExpired(false);
+					void session.refetch();
+				}}
 			/>
 		);
 	const current = navigation.find((n) => n.id === page) ?? navigation[0];
@@ -149,7 +173,7 @@ export function App() {
 						)}
 					</div>
 					{!online && (
-						<ErrorNotice message="当前离线。显示内容可能已过时，联网后请刷新；暂勿提交交易。" />
+						<ErrorNotice message="当前离线。显示内容可能已过时，联网后请刷新；交易暂不可提交。" />
 					)}
 					{actionError && <ErrorNotice message={actionError} />}
 					<div className="page-view">

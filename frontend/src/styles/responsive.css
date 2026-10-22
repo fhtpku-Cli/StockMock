@@ -1,4 +1,4 @@
-@media (max-width: 700px) {
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
 	.app-shell {
 		display: block;
 		height: 100dvh;

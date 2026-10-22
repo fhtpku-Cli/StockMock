@@ -6,9 +6,11 @@ import { acknowledgmentSchema } from "./schema";
 import { ErrorNotice } from "./ui";
 export function Login({
 	configured,
+	expired = false,
 	onSuccess,
 }: {
 	readonly configured: boolean;
+	readonly expired?: boolean;
 	readonly onSuccess: () => void;
 }) {
 	const [password, setPassword] = useState("");
@@ -50,7 +52,11 @@ export function Login({
 					<LockKey size={28} />
 				</span>
 				<h2>回到你的投资空间</h2>
-				<p>输入私有访问密码，继续这一轮练习。</p>
+				<p>
+					{expired
+						? "登录已失效，请重新输入密码。账户记录仍保留在服务端。"
+						: "输入私有访问密码，继续这一轮练习。"}
+				</p>
 				{!configured ? (
 					<ErrorNotice message="当前空间尚未配置访问密码，请联系本机管理员完成初始化。" />
 				) : (

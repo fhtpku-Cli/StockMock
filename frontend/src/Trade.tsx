@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useOnline } from "./useOnline";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage, money, price, time } from "./api";
+import { ApiError, api, errorMessage, money, price, time } from "./api";
 import { orderSchema, previewSchema } from "./schema";
 import type { Instrument } from "./schema";
 import { ErrorNotice, Modal } from "./ui";
@@ -53,6 +53,7 @@ export function Trade({
 		...(draft.target ? { target_price: draft.target } : {}),
 		...(draft.stop ? { stop_price: draft.stop } : {}),
 	};
+	const [unresolved, setUnresolved] = useState<typeof payload | null>(null);
 	const preview = useMutation({
 		mutationFn: () => api("orders/preview", previewSchema, payload),
 	});
@@ -73,7 +74,20 @@ export function Trade({
 		},
 	});
 	const submit = useMutation({
-		mutationFn: () => api("orders", orderSchema, payload),
+		mutationFn: (original: typeof payload) =>
+			api("orders", orderSchema, original),
+		onError: (error) => {
+			if (
+				error instanceof ApiError &&
+				error.status !== undefined &&
+				error.status >= 400 &&
+				error.status < 500 &&
+				error.status !== 408
+			) {
+				setUnresolved(null);
+				preview.reset();
+			}
+		},
 		onSuccess: async () => {
 			await Promise.all([
 				client.invalidateQueries({ queryKey: ["portfolio"] }),
@@ -85,6 +99,13 @@ export function Trade({
 	useEffect(() => {
 		if (!online) preview.reset();
 	}, [online]);
+	useEffect(() => {
+		const resume = () => {
+			if (document.visibilityState === "visible") preview.reset();
+		};
+		document.addEventListener("visibilitychange", resume);
+		return () => document.removeEventListener("visibilitychange", resume);
+	}, []);
 	const change = (patch: Partial<Draft>) => {
 		setDraft((previous) => ({
 			...previous,
@@ -103,13 +124,20 @@ export function Trade({
 				onSubmit={(e) => {
 					e.preventDefault();
 					if (!online) return;
-					if (preview.isSuccess) submit.mutate();
-					else preview.mutate();
+					if (unresolved) submit.mutate(unresolved);
+					else if (preview.isSuccess) {
+						setUnresolved(payload);
+						submit.mutate(payload);
+					} else preview.mutate();
 				}}
 			>
 				<fieldset
 					disabled={
-						!online || sizing.isPending || preview.isPending || submit.isPending
+						!!unresolved ||
+						!online ||
+						sizing.isPending ||
+						preview.isPending ||
+						submit.isPending
 					}
 				>
 					<div className="field">
@@ -256,6 +284,11 @@ export function Trade({
 					<ErrorNotice message={errorMessage(preview.error)} />
 				)}{" "}
 				{submit.isError && <ErrorNotice message={errorMessage(submit.error)} />}
+				{unresolved && !submit.isPending && (
+					<p className="notice" role="status">
+						委托结果尚未确认。请联网后重试确认结果；将核对原委托，不会重复创建。确认前暂不能修改交易内容。
+					</p>
+				)}
 				{preview.isSuccess && (
 					<div className="preview-box">
 						<h3>确认这笔委托</h3>
@@ -318,11 +351,13 @@ export function Trade({
 				>
 					{submit.isPending
 						? "正在提交…"
-						: preview.isPending
-							? "正在计算…"
-							: preview.isSuccess
-								? "确认提交委托"
-								: "预览费用与资金占用"}
+						: unresolved
+							? "重试确认委托结果"
+							: preview.isPending
+								? "正在计算…"
+								: preview.isSuccess
+									? "确认提交委托"
+									: "预览费用与资金占用"}
 				</button>
 			</form>
 		</Modal>

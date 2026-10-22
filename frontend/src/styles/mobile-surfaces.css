@@ -1,4 +1,4 @@
-@media (max-width: 700px) {
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
 	.modal {
 		width: calc(100vw - 24px);
 		max-height: 92dvh;
@@ -109,5 +109,50 @@
 	}
 	.login-form > p {
 		margin-bottom: 24px;
+	}
+}
+
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+	input,
+	select,
+	textarea {
+		font-size: 16px;
+	}
+	.segmented button,
+	.symbol-link {
+		min-height: 44px;
+	}
+	.main-scroll {
+		padding-bottom: calc(76px + env(safe-area-inset-bottom));
+	}
+	.topbar {
+		height: calc(56px + env(safe-area-inset-top));
+		padding-top: env(safe-area-inset-top);
+	}
+	.page-content,
+	.topbar {
+		padding-left: max(20px, env(safe-area-inset-left));
+		padding-right: max(20px, env(safe-area-inset-right));
+	}
+	.sidebar {
+		padding-left: max(12px, env(safe-area-inset-left));
+		padding-right: max(12px, env(safe-area-inset-right));
+	}
+	.modal,
+	.modal.wide {
+		position: fixed;
+		top: calc(var(--visible-top, 0px) + max(12px, env(safe-area-inset-top)));
+		bottom: auto;
+		margin-block: 0;
+		max-height: calc(
+			var(--visible-height, 100dvh) -
+			max(12px, env(safe-area-inset-top)) -
+			max(12px, env(safe-area-inset-bottom))
+		);
+		overscroll-behavior: contain;
+	}
+	.login-layout {
+		padding-top: env(safe-area-inset-top);
+		padding-bottom: env(safe-area-inset-bottom);
 	}
 }
