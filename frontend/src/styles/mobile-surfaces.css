@@ -15,6 +15,16 @@
 	.filters {
 		flex-direction: column;
 	}
+	.record-filters {
+		align-items: stretch;
+	}
+	.record-filters label {
+		flex: none;
+		width: 100%;
+	}
+	.record-filters > button {
+		align-self: flex-start;
+	}
 	.filters > select {
 		width: 100%;
 	}

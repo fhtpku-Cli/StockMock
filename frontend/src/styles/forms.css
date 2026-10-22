@@ -192,13 +192,19 @@ details .footnote {
 }
 .record-filters label {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-content: start;
 	gap: 4px;
 	min-width: 0;
+	max-width: 100%;
+	flex: 1 1 160px;
+}
+.record-filters input,
+.record-filters select {
+	max-width: 100%;
+	height: 48px;
 }
 @media (max-width: 600px) {
-	.record-filters label {
-		flex: 1 1 140px;
-	}
 	.filters {
 		flex-wrap: wrap;
 	}
