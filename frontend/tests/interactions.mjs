@@ -1,7 +1,8 @@
-import { launchBrowser, baseUrl } from "./browser.mjs";
-import { chromium, devices, expect } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
 import { readFile, writeFile } from "node:fs/promises";
+import AxeBuilder from "@axe-core/playwright";
+import { chromium, devices, expect } from "@playwright/test";
+import { baseUrl, launchBrowser } from "./browser.mjs";
+
 const output = new URL("../../.omo/evidence/frontend/", import.meta.url)
 	.pathname;
 const browser = await launchBrowser();
@@ -50,9 +51,9 @@ try {
 		.waitFor();
 	await capture("watchlist-added");
 	await page.getByLabel("搜索代码或名称").fill("AAPL");
-	await expect(page.locator(".security-row")).toHaveCount(1);
+	await expect(page.locator('[data-symbol="AAPL"]')).toHaveCount(1);
 	await capture("search-filter");
-	await page.locator(".security-main").filter({ hasText: "苹果" }).click();
+	await page.locator('[data-symbol="AAPL"] .security-main').click();
 	await page.getByRole("dialog").waitFor();
 	await expect(
 		page.getByRole("button", { name: "模拟买入", exact: true }),

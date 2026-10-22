@@ -1,7 +1,7 @@
-import { verifyPreview } from "./completion-checks.mjs";
-import { launchBrowser } from "./browser.mjs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { expect } from "@playwright/test";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { launchBrowser } from "./browser.mjs";
+import { verifyPreview } from "./completion-checks.mjs";
 export async function createCompletionFixture() {
 	const out = new URL(
 		process.env.FRONTEND_TEST_OUTPUT ??
@@ -51,7 +51,7 @@ export async function createCompletionFixture() {
 		await page.getByLabel("筛选证券类型").selectOption("all");
 		await page.getByLabel("筛选交易状态").selectOption("all");
 		await page.getByLabel("搜索代码或名称").fill(symbol);
-		await page.locator(".security-main").click();
+		await page.locator(`[data-symbol="${symbol}"] .security-main`).click();
 	};
 	let previewCount = 0;
 	const order = async (side, quantity, price) => {

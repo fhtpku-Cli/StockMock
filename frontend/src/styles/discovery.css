@@ -1,0 +1,56 @@
+.discovery-intro {
+	margin-top: 0;
+	margin-bottom: 16px;
+}
+.discovery-filters {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+	margin-bottom: 16px;
+}
+.discovery-filters .search-box {
+	grid-column: 1 / -1;
+}
+.discovery-filters select {
+	width: 100%;
+	min-width: 0;
+}
+.discovery .security-copy {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.discovery .security-main strong {
+	display: block;
+}
+.discovery .watch-card {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.discovery-detail-actions {
+	flex-wrap: wrap;
+}
+@media (max-width: 540px) {
+	.discovery-filters {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.discovery-filters select:last-child {
+		grid-column: 1 / -1;
+	}
+	.discovery .security-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 44px;
+		gap: 10px;
+	}
+	.discovery .security-main {
+		grid-column: 1 / -1;
+	}
+	.discovery .security-row > .badge {
+		justify-self: start;
+	}
+	.discovery .security-row > .icon-button {
+		justify-self: end;
+	}
+	.discovery .watch-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

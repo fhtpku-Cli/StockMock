@@ -4,6 +4,7 @@ import type { Instrument } from "./schema";
 import { historySchema, portfolioSchema, quoteSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 import { useOnline } from "./useOnline";
+import { useWatchlist } from "./useWatchlist";
 import { VolumeHistory } from "./VolumeHistory";
 export function Detail({
 	instrument,
@@ -15,6 +16,7 @@ export function Detail({
 	readonly onTrade: (side: "buy" | "sell") => void;
 }) {
 	const online = useOnline();
+	const { toggle, contains, pending } = useWatchlist();
 	const portfolio = useQuery({
 		queryKey: ["portfolio"],
 		queryFn: () => api("portfolio", portfolioSchema),
@@ -38,6 +40,7 @@ export function Detail({
 				historySchema,
 			),
 	});
+	const tickSize = quote.data?.tick_size ?? instrument.tick_size;
 	const prices = history.data?.map((p) => Number(p.close)) ?? [];
 	const low = Math.min(...prices);
 	const high = Math.max(...prices);
@@ -71,7 +74,7 @@ export function Detail({
 						{price(
 							quote.data.price,
 							quote.data.currency,
-							quote.data.tick_size ?? instrument.tick_size,
+							tickSize ?? undefined,
 						)}
 					</div>
 					<p className="footnote">
@@ -128,19 +131,24 @@ export function Detail({
 			<dl className="summary-list">
 				<div>
 					<dt>每手数量</dt>
-					<dd>{instrument.lot_size} 股 / 份</dd>
+					<dd>
+						{instrument.lot_size === null
+							? "待核验"
+							: `${instrument.lot_size} 股 / 份`}
+					</dd>
 				</div>
 				<div>
 					<dt>最小价位</dt>
 					<dd>
-						{quote.data?.tick_size ?? instrument.tick_size}{" "}
-						{instrument.currency}
+						{tickSize === null
+							? "待核验"
+							: `${tickSize} ${instrument.currency}`}
 						{instrument.tick_rule === "HK" ? "（随价格区间变化）" : ""}
 					</dd>
 				</div>
 				<div>
 					<dt>模拟费用</dt>
-					<dd>买卖各 0.05%</dd>
+					<dd>{instrument.tradable ? "买卖各 0.05%" : "仅观察，暂不适用"}</dd>
 				</div>
 			</dl>
 			{instrument.rule_source && (
@@ -170,7 +178,16 @@ export function Detail({
 					</div>
 				</dl>
 			)}
-			<div className="button-row">
+			{toggle.isError && <ErrorNotice message={errorMessage(toggle.error)} />}
+			<div className="button-row discovery-detail-actions">
+				<button
+					type="button"
+					className="button"
+					disabled={pending || !online}
+					onClick={() => toggle.mutate(instrument)}
+				>
+					{contains(instrument.symbol) ? "移除自选" : "加入自选"}
+				</button>
 				<button
 					type="button"
 					className="button primary"

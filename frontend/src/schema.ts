@@ -6,9 +6,9 @@ export const instrumentSchema = z.object({
 	market: z.string(),
 	currency: z.string(),
 	kind: z.string(),
-	lot_size: z.number(),
-	tick_size: decimal,
-	tick_rule: z.enum(["fixed", "HK", "US"]).optional(),
+	lot_size: z.number().nullable(),
+	tick_size: decimal.nullable(),
+	tick_rule: z.enum(["fixed", "HK", "US"]).nullable().optional(),
 	min_buy_quantity: z.number().nullable().optional(),
 	quantity_step: z.number().nullable().optional(),
 	rule_source: z.string().optional(),
@@ -17,6 +17,11 @@ export const instrumentSchema = z.object({
 	restriction: z.string().nullable(),
 });
 export type Instrument = z.infer<typeof instrumentSchema>;
+export const instrumentSearchSchema = z.object({
+	items: z.array(instrumentSchema),
+	source: z.string(),
+	message: z.string(),
+});
 export const portfolioSchema = z.object({
 	round_id: z.string(),
 	initial_capital: decimal,
@@ -57,7 +62,7 @@ export const quoteSchema = z.object({
 	market_time: z.string(),
 	retrieved_at: z.string(),
 	source: z.string(),
-	tick_size: decimal.optional(),
+	tick_size: decimal.nullable().optional(),
 	status: z.string(),
 	message: z.string(),
 });

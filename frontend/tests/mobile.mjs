@@ -1,7 +1,8 @@
-import { launchBrowser } from "./browser.mjs";
-import { devices, expect } from "@playwright/test";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { devices, expect } from "@playwright/test";
+import { launchBrowser } from "./browser.mjs";
+
 const output = new URL("../../.omo/evidence/mobile-ui/", import.meta.url)
 	.pathname;
 await mkdir(output, { recursive: true });
@@ -62,7 +63,7 @@ try {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole("button", { name: "自选", exact: true }).tap();
 	await page.getByLabel("搜索代码或名称").fill("600519");
-	await page.locator(".security-main").tap();
+	await page.locator('[data-symbol="600519.SS"] .security-main').tap();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).tap();
 	await page.getByLabel("限价（CNY）").fill("100");
 	await page.getByLabel("数量（每手 100）").fill("9900");
@@ -179,7 +180,7 @@ try {
 	await page.getByRole("button", { name: "关闭" }).tap();
 	await page.getByRole("button", { name: "自选", exact: true }).tap();
 	await page.getByLabel("搜索代码或名称").fill("600519");
-	await page.locator(".security-main").tap();
+	await page.locator('[data-symbol="600519.SS"] .security-main').tap();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).tap();
 	await page.getByLabel("限价（CNY）").fill("100");
 	await page.getByRole("button", { name: "预览费用与资金占用" }).tap();

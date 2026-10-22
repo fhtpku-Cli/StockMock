@@ -1,6 +1,8 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { expect as baseExpect } from "@playwright/test";
 import { launchBrowser } from "./browser.mjs";
-import { expect } from "@playwright/test";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+
+const expect = baseExpect.configure({ timeout: 60000 });
 const out = new URL(
 	process.env.FRONTEND_TEST_OUTPUT ??
 		"../../.omo/evidence/completion-20261023/ui/production/",
@@ -49,18 +51,24 @@ try {
 			page.getByRole("heading", { name, exact: true }),
 		).toBeVisible();
 	}
-	await expect(page.getByText(/已接入 60 只/)).toBeVisible();
+	const catalogResponse = await page
+		.context()
+		.request.get(new URL("/api/instruments", page.url()).href);
+	const catalog = await catalogResponse.json();
+	expect(catalog.length).toBe(60);
+	await expect(page.locator(".security-main")).toHaveCount(catalog.length);
 	for (const symbol of ["COST", "VOO"]) {
 		await page.getByLabel("搜索代码或名称").fill(symbol);
-		await expect(page.locator(".security-main")).toHaveCount(1);
-		await expect(page.locator(".security-main")).toContainText(symbol);
+		const result = page.locator(`[data-symbol="${symbol}"] .security-main`);
+		await expect(result).toHaveCount(1);
+		await expect(result).toContainText(symbol);
 	}
 	const historyResponse = page.waitForResponse(
 		(response) =>
 			response.url().includes("/api/instruments/VOO/history") &&
 			response.request().method() === "GET",
 	);
-	await page.locator(".security-main").click();
+	await page.locator('[data-symbol="VOO"] .security-main').click();
 	await expect(page.getByRole("dialog")).toContainText("证券资料与规则来源");
 	await shot("voo-source-label");
 	const history = await (await historyResponse).json();
@@ -105,7 +113,7 @@ try {
 	const result = {
 		source: "部署后真实服务只读浏览器；只允许登录写请求",
 		views,
-		catalog: 60,
+		catalog: catalog.length,
 		searched: ["COST", "VOO"],
 		sourceLabel: true,
 		volumeDatesVerified: true,

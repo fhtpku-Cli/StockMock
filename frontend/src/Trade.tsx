@@ -1,12 +1,13 @@
-import { TradePreview } from "./TradePreview";
-import { z } from "zod";
-import { useOnline } from "./useOnline";
-import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { ApiError, api, errorMessage } from "./api";
-import { orderSchema, previewSchema } from "./schema";
 import type { Instrument } from "./schema";
+import { orderSchema, previewSchema } from "./schema";
+import { TradePreview } from "./TradePreview";
 import { ErrorNotice, Modal } from "./ui";
+import { useOnline } from "./useOnline";
+
 type Side = "buy" | "sell";
 type Draft = {
 	readonly quantity: string;
@@ -116,6 +117,19 @@ export function Trade({
 		preview.reset();
 		submit.reset();
 	};
+	if (
+		!instrument.tradable ||
+		instrument.lot_size === null ||
+		instrument.tick_size === null
+	) {
+		return (
+			<Modal title={instrument.name} onClose={onClose}>
+				<p className="notice">
+					该证券仅供观察，交易规则核验完成前不能提交模拟委托。
+				</p>
+			</Modal>
+		);
+	}
 	return (
 		<Modal
 			title={`${side === "buy" ? "模拟买入" : "模拟卖出"} · ${instrument.name}`}

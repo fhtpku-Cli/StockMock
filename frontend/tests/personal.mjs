@@ -1,7 +1,8 @@
-import { launchBrowser } from "./browser.mjs";
-import { expect } from "@playwright/test";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { expect } from "@playwright/test";
+import { launchBrowser } from "./browser.mjs";
+
 const output = new URL(
 	"../../.omo/evidence/frontend-personal/",
 	import.meta.url,
@@ -48,7 +49,7 @@ try {
 	await shot("daily-history-desktop");
 	await page.getByRole("button", { name: "自选", exact: true }).click();
 	await page.getByLabel("搜索代码或名称").fill("510300");
-	await page.locator(".security-main").click();
+	await page.locator('[data-symbol="510300.SS"] .security-main').click();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).click();
 	await page.getByLabel("限价（CNY）").fill("100");
 	const sizeReply = page.waitForResponse(
@@ -146,12 +147,12 @@ try {
 	await page.getByLabel("筛选市场").selectOption("CN");
 	await page.getByLabel("筛选交易状态").selectOption("tradable");
 	await page.getByLabel("搜索代码或名称").fill("600519");
-	await expect(page.locator(".security-row")).toHaveCount(1);
+	await expect(page.locator('[data-symbol="600519.SS"]')).toHaveCount(1);
 	await shot("catalog-filters-desktop");
 	await page.setViewportSize({ width: 390, height: 844 });
 	await shot("catalog-filters-phone");
 	await page.setViewportSize({ width: 1440, height: 1000 });
-	await page.locator(".security-main").click();
+	await page.locator('[data-symbol="600519.SS"] .security-main').click();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).click();
 	await page.getByLabel("限价（CNY）").fill("100");
 	await page.context().setOffline(true);

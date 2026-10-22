@@ -1,8 +1,9 @@
-import { verifyArchive } from "./completion-checks.mjs";
-import { expect } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
 import { readFile, writeFile } from "node:fs/promises";
+import AxeBuilder from "@axe-core/playwright";
+import { expect } from "@playwright/test";
+import { verifyArchive } from "./completion-checks.mjs";
 import { createCompletionFixture } from "./completion-helpers.mjs";
+
 const {
 	out,
 	url,
@@ -56,8 +57,9 @@ try {
 		expect(item).toBeTruthy();
 		for (const term of [item.symbol, item.name]) {
 			await page.getByLabel("搜索代码或名称").fill(term);
-			await expect(page.locator(".security-main")).toHaveCount(1);
-			await expect(page.locator(".security-main")).toContainText(symbol);
+			const result = page.locator(`[data-symbol="${symbol}"] .security-main`);
+			await expect(result).toHaveCount(1);
+			await expect(result).toContainText(symbol);
 		}
 	}
 	const voo = catalog.find((i) => i.symbol === "VOO");
