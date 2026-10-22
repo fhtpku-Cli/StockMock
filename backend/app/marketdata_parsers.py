@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
+from app.discovery_models import ObservationInstrument, observation_identity
 from app.instrument_registry import resolve_rule
 from app.marketdata_models import Bar, Currency, FxRate, MarketDataError, Quote
 
@@ -50,9 +51,9 @@ class _Fx(_Boundary):
     rate: Decimal = Field(gt=0)
 
 
-def instrument_config(symbol: str | InstrumentRule) -> tuple[str, Currency, ZoneInfo, str]:
+def instrument_config(symbol: str | InstrumentRule | ObservationInstrument) -> tuple[str, Currency, ZoneInfo, str]:
     """时区由已核验市场定义，证券映射由显式目录定义。"""
-    rule = resolve_rule(symbol)
+    rule = observation_identity(symbol)
     zone, pattern = {
         "CN": ("Asia/Shanghai", "%Y%m%d%H%M%S"),
         "HK": ("Asia/Hong_Kong", "%Y/%m/%d %H:%M:%S"),
@@ -61,10 +62,10 @@ def instrument_config(symbol: str | InstrumentRule) -> tuple[str, Currency, Zone
     return rule.provider_code, rule.currency, ZoneInfo(zone), pattern
 
 
-def parse_quote(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datetime) -> Quote:
+def parse_quote(raw: bytes, symbol: str | InstrumentRule | ObservationInstrument, retrieved_at: datetime) -> Quote:
     """腾讯字段 30 仅是供应商时间，始终不可作为成交依据。"""
     code, currency, zone, pattern = instrument_config(symbol)
-    symbol = resolve_rule(symbol).symbol
+    symbol = observation_identity(symbol).symbol
     try:
         text = raw.decode("gb18030").strip()
         prefix = f'v_{code}="'
@@ -121,10 +122,12 @@ def parse_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datet
         raise MarketDataError("invalid_response", symbol) from exc
 
 
-def parse_history(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datetime) -> tuple[Bar, ...]:
+def parse_history(
+    raw: bytes, symbol: str | InstrumentRule | ObservationInstrument, retrieved_at: datetime
+) -> tuple[Bar, ...]:
     """日线日期仅作图表标签；不推导具体成交时点，不用于撮合。"""
     code, currency, zone, _ = instrument_config(symbol)
-    symbol = resolve_rule(symbol).symbol
+    symbol = observation_identity(symbol).symbol
     try:
         payload = _History.model_validate_json(raw)
         if payload.code != 0 or code not in payload.data or not payload.data[code].day:

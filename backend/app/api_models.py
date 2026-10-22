@@ -56,7 +56,7 @@ class QuoteView(Model):
 
     symbol: str
     price: Decimal
-    tick_size: Decimal
+    tick_size: Decimal | None
     currency: Currency
     market_time: datetime
     retrieved_at: datetime

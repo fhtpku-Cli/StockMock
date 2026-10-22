@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import quickjs
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from app.instrument_registry import resolve_rule
+from app.discovery_models import ObservationInstrument, observation_identity
 from app.instrument_rules import InstrumentRule
 from app.marketdata_models import Bar, MarketDataError
 
@@ -73,9 +73,11 @@ class _DailyRow(BaseModel):
     volume: Decimal = Field(ge=0)
 
 
-def parse_daily(decoded: str, symbol: str | InstrumentRule, retrieved_at: datetime) -> tuple[Bar, ...]:
+def parse_daily(
+    decoded: str, symbol: str | InstrumentRule | ObservationInstrument, retrieved_at: datetime
+) -> tuple[Bar, ...]:
     """只保留已收市的日线；日期标签不作为撮合时间。"""
-    rule = resolve_rule(symbol)
+    rule = observation_identity(symbol)
     if rule.market != "US":
         raise MarketDataError("unsupported_market", rule.symbol)
     try:

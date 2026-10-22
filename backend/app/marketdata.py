@@ -7,10 +7,11 @@ import socket
 from datetime import UTC, datetime
 from threading import Lock
 from time import monotonic
-from typing import TYPE_CHECKING, Final, assert_never
+from typing import TYPE_CHECKING, ClassVar, Final, assert_never
 
 import httpx2
 
+from app.discovery_models import ObservationInstrument, observation_identity
 from app.instrument_registry import resolve_rule
 from app.marketdata_daily import SDK_URL, decode_daily, parse_daily
 from app.marketdata_futu import FutuOpenD
@@ -35,7 +36,7 @@ __all__ = [
     "parse_intraday",
     "parse_quote",
 ]
-_MAX_RESPONSE_BYTES: Final = 1_000_000
+_MAX_CACHE_ENTRIES: Final = 256
 
 
 def _log_response(response: httpx2.Response) -> None:
@@ -46,6 +47,8 @@ def _log_response(response: httpx2.Response) -> None:
 
 class MarketDataClient:
     """维护线程安全响应缓存，合并并发请求并保留最初取得时间。"""
+
+    response_limit: ClassVar[int] = 1_000_000
 
     def __init__(self) -> None:
         """每个客户端独立缓存，锁覆盖未命中请求以防并发重复访问。"""
@@ -63,6 +66,8 @@ class MarketDataClient:
                 except MarketDataError as error:
                     value, duration = error, 15
                 entry = (monotonic() + duration, datetime.now(UTC), value)
+                if len(self._cache) >= _MAX_CACHE_ENTRIES:
+                    del self._cache[next(iter(self._cache))]
                 self._cache[url] = entry
             _, retrieved_at, value = entry
             match value:
@@ -96,15 +101,15 @@ class MarketDataClient:
                 chunks = bytearray()
                 for chunk in response.iter_bytes():
                     chunks.extend(chunk)
-                    if len(chunks) > _MAX_RESPONSE_BYTES:
-                        raise MarketDataError("response_too_large", "limit=1000000")
+                    if len(chunks) > self.response_limit:
+                        raise MarketDataError("response_too_large", f"limit={self.response_limit}")
                 return bytes(chunks)
         except httpx2.HTTPStatusError as exc:
             raise MarketDataError("http_error", str(exc.response.status_code)) from exc
         except httpx2.RequestError as exc:
             raise MarketDataError("network_error", type(exc).__name__) from exc
 
-    def quote(self, symbol: str | InstrumentRule) -> Quote:
+    def quote(self, symbol: str | InstrumentRule | ObservationInstrument) -> Quote:
         """获取只供观察和估值的真实快照。"""
         code, _, _, _ = instrument_config(symbol)
         raw, retrieved_at = self._load(f"https://qt.gtimg.cn/q={code}", 60)
@@ -132,9 +137,9 @@ class MarketDataClient:
         raw, retrieved_at = self._load(url, 60)
         return parser(raw, rule, retrieved_at)
 
-    def history(self, symbol: str | InstrumentRule) -> tuple[Bar, ...]:
+    def history(self, symbol: str | InstrumentRule | ObservationInstrument) -> tuple[Bar, ...]:
         """美股最多 252 条、其余最多 30 条原始日线；实际数量由来源决定。"""
-        rule = resolve_rule(symbol)
+        rule = observation_identity(symbol)
         if rule.market == "US":
             sdk, _ = self._load(SDK_URL, 86400)
             url = f"https://finance.sina.com.cn/us_stock/company/hisdata/klc_kl_{rule.symbol}.js"
