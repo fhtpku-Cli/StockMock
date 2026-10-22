@@ -48,6 +48,8 @@ class ServiceTests(unittest.TestCase):
             previous_mask = os.umask(0o077)
             try:
                 with (
+                    # 此测试执行通用启动器；第三方依赖必须按真实系统导入。
+                    patch.object(sys, "platform", REAL_PLATFORM),
                     patch.object(sys, "path", [str(HERE.parent / "backend"), *sys.path]),
                     patch.object(runtime, "ROOT", root),
                     patch.object(runtime, "configure_logging"),
