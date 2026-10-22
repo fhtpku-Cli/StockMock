@@ -1,14 +1,17 @@
 """隔离验证后台启动配置，不调用真实 launchctl、不接触个人数据库。"""
 
 import importlib.util
+import io
 import json
 import logging
+import os
 import plistlib
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 REAL_PLATFORM = sys.platform
@@ -34,6 +37,32 @@ class ServiceTests(unittest.TestCase):
 
     def setUp(self):
         self.enterContext(patch.object(service.sys, "platform", "darwin"))
+
+    def test_runner_pins_loopback_proxy_trust(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "backend").mkdir()
+            password = root / "backend/.local-password"
+            password.write_text("isolated-test-password")
+            password.chmod(0o600)
+            previous_mask = os.umask(0o077)
+            try:
+                with (
+                    patch.object(sys, "path", [str(HERE.parent / "backend"), *sys.path]),
+                    patch.object(runtime, "ROOT", root),
+                    patch.object(runtime, "configure_logging"),
+                    patch.dict(os.environ, {"FORWARDED_ALLOW_IPS": "*"}),
+                    patch("app.main.create_app") as factory,
+                    patch("uvicorn.run") as run,
+                ):
+                    runtime.main()
+                    self.assertEqual(run.call_args.args, (factory.return_value,))
+                    self.assertEqual(run.call_args.kwargs["host"], "127.0.0.1")
+                    self.assertTrue(run.call_args.kwargs["proxy_headers"])
+                    self.assertEqual(run.call_args.kwargs["forwarded_allow_ips"], "127.0.0.1")
+                    self.assertEqual(run.call_args.kwargs["workers"], 1)
+            finally:
+                os.umask(previous_mask)
 
     def test_plist_is_portable_and_valid(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -82,6 +111,48 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(calls.call_args.args[0][1], "print")
             self.assertFalse((Path(temp) / "Library/LaunchAgents").exists())
 
+    def test_stop_waits_for_owned_job_to_disappear(self):
+        for action in ("stop", "uninstall"):
+            with self.subTest(action=action), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                agent = root / "Library/LaunchAgents" / f"{service.LABEL}.plist"
+                agent.parent.mkdir(parents=True)
+                agent.write_bytes(plistlib.dumps(service.plist(root)))
+                results = [subprocess.CompletedProcess([], code) for code in (0, 0, 0, 0, 113)]
+                with (
+                    patch.object(service, "ROOT", root),
+                    patch.object(service.Path, "home", return_value=root),
+                    patch.object(service, "invoke", side_effect=results) as calls,
+                    patch("sys.argv", ["service.py", action]),
+                ):
+                    service.main()
+                self.assertEqual(
+                    [call.args[0][1] for call in calls.call_args_list], ["print", "bootout", "print", "print", "print"]
+                )
+                self.assertEqual(agent.exists(), action == "stop")
+
+    def test_uninstall_preserves_plist_when_stop_cannot_be_confirmed(self):
+        for final_code in (0, 5):
+            with self.subTest(final_code=final_code), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                agent = root / "Library/LaunchAgents" / f"{service.LABEL}.plist"
+                agent.parent.mkdir(parents=True)
+                agent.write_bytes(plistlib.dumps(service.plist(root)))
+                results = [subprocess.CompletedProcess([], code) for code in (0, 0, final_code)]
+                output = io.StringIO()
+                with (
+                    patch.object(service, "ROOT", root),
+                    patch.object(service.Path, "home", return_value=root),
+                    patch.object(service, "invoke", side_effect=results),
+                    patch("time.monotonic", side_effect=[0, 11]),
+                    patch("sys.argv", ["service.py", "uninstall"]),
+                    redirect_stdout(output),
+                ):
+                    with self.assertRaises(SystemExit):
+                        service.main()
+                self.assertTrue(agent.exists())
+                self.assertNotIn("服务已停止", output.getvalue())
+
     def test_uninstall_preserves_database_and_password(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -95,14 +166,16 @@ class ServiceTests(unittest.TestCase):
             with (
                 patch.object(service, "ROOT", root),
                 patch.object(service.Path, "home", return_value=root),
-                patch.object(service, "invoke", return_value=subprocess.CompletedProcess([], 0)) as calls,
+                patch.object(
+                    service, "invoke", side_effect=[subprocess.CompletedProcess([], code) for code in (0, 0, 113)]
+                ) as calls,
                 patch("sys.argv", ["service.py", "uninstall"]),
             ):
                 service.main()
             self.assertFalse(agent.exists())
             self.assertTrue(database.exists())
             self.assertTrue(password.exists())
-            self.assertEqual(calls.call_args.args[0][1], "bootout")
+            self.assertEqual([call.args[0][1] for call in calls.call_args_list], ["print", "bootout", "print"])
 
     def test_foreign_checkout_service_cannot_be_removed(self):
         with tempfile.TemporaryDirectory() as temp:

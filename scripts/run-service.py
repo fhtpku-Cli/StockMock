@@ -84,7 +84,16 @@ def main() -> None:
     if "--check-config" in sys.argv:
         print("运行配置、密码权限与依赖检查通过；未启动服务。")
         return
-    uvicorn.run(app, host="127.0.0.1", port=8000, workers=1, log_config=None, access_log=False)
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=8000,
+        workers=1,
+        log_config=None,
+        access_log=False,
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
+    )
 
 
 if __name__ == "__main__":

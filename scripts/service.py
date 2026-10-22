@@ -10,6 +10,7 @@ import re
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from pydantic import TypeAdapter
 
@@ -49,9 +50,9 @@ def port_busy() -> bool:
         return probe.connect_ex(("127.0.0.1", 8000)) == 0
 
 
-def invoke(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+def invoke(args: list[str], *, check: bool = True, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
     """仅执行固定程序与参数，不启用 shell。"""
-    return subprocess.run(args, check=check, text=True, capture_output=True)
+    return subprocess.run(args, check=check, text=True, capture_output=True, timeout=timeout)
 
 
 def main() -> None:
@@ -112,6 +113,20 @@ def main() -> None:
     if args.action in {"stop", "uninstall"}:
         if loaded:
             _ = invoke(["launchctl", "bootout", target])
+            # bootout 接受请求后仍可能短暂保留任务；只查询已核对归属的精确任务。
+            deadline = time.monotonic() + 10
+            while True:
+                try:
+                    remaining = invoke(["launchctl", "print", target], check=False, timeout=1)
+                except subprocess.TimeoutExpired:
+                    parser.error("停止状态查询超时；未确认卸载完成，保留服务文件，请稍后运行 status")
+                if remaining.returncode == 113:
+                    break
+                if remaining.returncode != 0:
+                    parser.error("停止状态查询失败；未确认卸载完成，保留服务文件，请稍后运行 status")
+                if time.monotonic() >= deadline:
+                    parser.error("服务仍在停止，等待超过 10 秒；保留服务文件，请稍后运行 status")
+                time.sleep(0.1)
         if args.action == "uninstall":
             path.unlink(missing_ok=True)
         print("服务已停止；数据库、密码和日志均保留。")
