@@ -1,9 +1,10 @@
-import { useOnline } from "./useOnline";
 import { useQuery } from "@tanstack/react-query";
 import { api, errorMessage, money, price, time } from "./api";
-import { historySchema, quoteSchema, portfolioSchema } from "./schema";
 import type { Instrument } from "./schema";
+import { historySchema, portfolioSchema, quoteSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
+import { useOnline } from "./useOnline";
+import { VolumeHistory } from "./VolumeHistory";
 export function Detail({
 	instrument,
 	onClose,
@@ -90,7 +91,7 @@ export function Detail({
 				<Loading />
 			) : history.isError ? (
 				<ErrorNotice
-					message="历史行情暂不可用。"
+					message="历史价格与成交量暂不可用。"
 					retry={() => void history.refetch()}
 				/>
 			) : prices.length < 2 ? (
@@ -116,6 +117,13 @@ export function Detail({
 						<span>{history.data?.at(-1)?.time.slice(0, 10)}</span>
 					</figcaption>
 				</figure>
+			)}
+			{history.isSuccess && (
+				<VolumeHistory
+					key={instrument.symbol}
+					rows={history.data}
+					market={instrument.market}
+				/>
 			)}
 			<dl className="summary-list">
 				<div>

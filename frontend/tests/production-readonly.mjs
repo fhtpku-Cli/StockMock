@@ -2,7 +2,8 @@ import { launchBrowser } from "./browser.mjs";
 import { expect } from "@playwright/test";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 const out = new URL(
-	"../../.omo/evidence/completion-20261023/ui/production/",
+	process.env.FRONTEND_TEST_OUTPUT ??
+		"../../.omo/evidence/completion-20261023/ui/production/",
 	import.meta.url,
 ).pathname;
 await mkdir(out, { recursive: true });
@@ -27,7 +28,7 @@ const shot = async (name) => {
 	views.push(name);
 };
 try {
-	await page.goto("http://127.0.0.1:8000");
+	await page.goto(process.env.FRONTEND_TEST_URL ?? "http://127.0.0.1:8000");
 	await page
 		.getByLabel("访问密码")
 		.fill(
@@ -54,9 +55,41 @@ try {
 		await expect(page.locator(".security-main")).toHaveCount(1);
 		await expect(page.locator(".security-main")).toContainText(symbol);
 	}
+	const historyResponse = page.waitForResponse(
+		(response) =>
+			response.url().includes("/api/instruments/VOO/history") &&
+			response.request().method() === "GET",
+	);
 	await page.locator(".security-main").click();
 	await expect(page.getByRole("dialog")).toContainText("证券资料与规则来源");
 	await shot("voo-source-label");
+	const history = await (await historyResponse).json();
+	expect(Array.isArray(history)).toBe(true);
+	expect(history.length).toBeGreaterThan(1);
+	const days = [...history].sort((a, b) => a.time.localeCompare(b.time));
+	const latest = days.at(-1);
+	const earlier = days.find(
+		(row) =>
+			row.time !== latest.time && String(row.volume) !== String(latest.volume),
+	);
+	expect(earlier).toBeTruthy();
+	const volume = page.getByRole("region", { name: "日成交量", exact: true });
+	const selection = volume.getByLabel(/市场日期/);
+	await expect(selection).toHaveValue(latest.time);
+	expect((await volume.locator("dd").innerText()).replaceAll(",", "")).toBe(
+		String(latest.volume),
+	);
+	await shot("voo-volume-latest");
+	await selection.selectOption(earlier.time);
+	await expect(selection).toHaveValue(earlier.time);
+	expect((await volume.locator("dd").innerText()).replaceAll(",", "")).toBe(
+		String(earlier.volume),
+	);
+	await shot("voo-volume-earlier");
+	await writeFile(
+		out + "volume-response.json",
+		JSON.stringify({ latest, earlier, count: days.length }, null, 2),
+	);
 	await page.getByRole("button", { name: "关闭", exact: true }).click();
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole("button", { name: "资产", exact: true }).click();
@@ -75,6 +108,7 @@ try {
 		catalog: 60,
 		searched: ["COST", "VOO"],
 		sourceLabel: true,
+		volumeDatesVerified: true,
 		errors,
 		blockedWrites: writes,
 	};
