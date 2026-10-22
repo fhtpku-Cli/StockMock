@@ -7,7 +7,5 @@ from app.instrument_rules import InstrumentRule
 
 
 def tencent_history_url(item: InstrumentRule | ObservationInstrument, count: Literal[30, 252]) -> str:
-    """境内证券使用原始kline接口，其余保留已有未复权day请求。"""
-    if item.market == "CN":
-        return f"https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param={item.provider_code},day,,,{count}"
-    return f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={item.provider_code},day,,,{count},"
+    """境内及港股观察日线统一原始kline接口；美股历史由独立适配器处理。"""
+    return f"https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param={item.provider_code},day,,,{count}"
