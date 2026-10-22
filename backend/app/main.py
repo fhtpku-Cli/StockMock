@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.activated_registry import RuleProvider
 from app.admission_routes import register as register_admission_routes
+from app.archive_routes import register as register_archive_routes
 from app.asset_routes import register as register_asset_routes
 from app.auth import Auth
 from app.auth_routes import register as register_auth_routes
@@ -23,7 +24,10 @@ from app.models import (
     DomainError,
 )
 from app.personal_routes import register as register_personal_routes
+from app.plan_routes import register as register_plan_routes
+from app.plan_worker import PlanWorker
 from app.record_routes import register as register_record_routes
+from app.review_routes import register as register_review_routes
 from app.security import AccessConfig
 from app.security import register as register_security
 from app.storage import Store
@@ -40,6 +44,7 @@ def configured_engine() -> Engine:
         _ = instrument(symbol, engine.catalog)
     engine.paused = paused
     engine.provider = RuleProvider(engine.registry, client)
+    engine.plan_provider = RuleProvider(engine.registry, MarketDataClient())
     return engine
 
 
@@ -56,18 +61,21 @@ def create_app(
         secure=os.getenv("PAPER_SECURE_COOKIE") == "1",
     )
     worker = Worker(engine)
+    plan_worker = PlanWorker(engine)
 
     @asynccontextmanager
     async def lifespan(_application: FastAPI) -> AsyncGenerator[None]:
         async with anyio.create_task_group() as group:
             if run_worker:
                 _ = group.start_soon(worker.run)
+                _ = group.start_soon(plan_worker.run)
             yield
             group.cancel_scope.cancel()
 
-    app = FastAPI(title="个人模拟投资", version="0.1.3", lifespan=lifespan)
+    app = FastAPI(title="个人模拟投资", version="0.2.0", lifespan=lifespan)
     app.state.engine = engine
     app.state.worker = worker
+    app.state.plan_worker = plan_worker
 
     register_security(app, AccessConfig.from_env())
 
@@ -97,6 +105,9 @@ def create_app(
     register_record_routes(app, engine, auth)
     register_asset_routes(app, engine, auth, worker)
     register_personal_routes(app, engine, auth)
+    register_plan_routes(app, engine, auth)
+    register_review_routes(app, engine, auth)
+    register_archive_routes(app, engine, auth)
 
     frontend = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if frontend.exists():

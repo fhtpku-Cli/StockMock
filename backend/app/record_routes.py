@@ -18,12 +18,14 @@ from app.api_models import (
 from app.auth import Auth
 from app.engine import Engine
 from app.models import (
-    DomainError,
     Entry,
     Journal,
     State,
 )
 from app.operations import reset
+from app.plan_exports import safe_cell
+from app.plan_reviews import attach_note
+from app.plans import load_plan
 from app.storage import read_rows
 
 DETAIL_LIMIT: Final = 500
@@ -35,7 +37,7 @@ def ledger_csv(state: State) -> Response:
     writer = csv.writer(output)
     writer.writerow(["编号", "类型", "币种", "金额", "确认时间", "委托编号", "说明"])
     for row in state.ledger:
-        note = "'" + row.note if row.note.startswith(("=", "+", "-", "@")) else row.note
+        note = safe_cell(row.note)
         writer.writerow(
             [
                 row.id,
@@ -67,13 +69,13 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
             id=str(uuid4()),
             text=body.text,
             order_id=body.order_id,
+            plan_id=body.plan_id,
             created_at=datetime.now(UTC),
         )
         with engine.store.transaction() as connection:
             state = engine.store.load(connection)
-            if body.order_id is not None and not any(o.id == body.order_id for o in state.orders):
-                raise DomainError("order_missing", "关联委托不存在", 404)
-            state.journal.append(note)
+            plan = load_plan(connection, body.plan_id) if body.plan_id else None
+            attach_note(state, note, plan)
             engine.store.save(connection, state)
         return note
 

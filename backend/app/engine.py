@@ -13,6 +13,8 @@ from app.marketdata import Bar, FxRate, MarketDataError, Quote
 from app.matching import advance
 from app.models import DomainError, Instrument, Order, OrderInput, Preview
 from app.order_builder import OrderContext, build_order
+from app.order_requests import same_request
+from app.plans import order_snapshot
 from app.storage import Store, read_rows
 
 
@@ -49,6 +51,7 @@ class Engine:
         """保存依赖并初始化本实例的状态。"""
         self.store = store
         self.provider = provider
+        self.plan_provider: Provider = provider
         self.registry = ActivatedRegistry(store, catalog)
         self._catalog = catalog
         self.paused: frozenset[str] = frozenset()
@@ -126,6 +129,8 @@ class Engine:
 
     def preview(self, request: OrderInput, now: datetime) -> Preview:
         """检查委托资源并返回预览，不改变账户。"""
+        with self.store.transaction() as connection:
+            _ = order_snapshot(connection, self.store.load(connection), request)
         quote, rate, reference = self.prepare(request, now)
         order = build_order(
             instrument(request.symbol, self.catalog),
@@ -156,7 +161,7 @@ class Engine:
             )
             if rows:
                 row = rows[0]
-                if row[0] != request.model_dump_json():
+                if not same_request(row[0], request):
                     raise DomainError("idempotency_conflict", "相同请求编号不能用于不同操作")
                 saved = Order.model_validate_json(row[1])
                 return next(
@@ -173,7 +178,7 @@ class Engine:
             )
             if rows:
                 row = rows[0]
-                if row[0] != request.model_dump_json():
+                if not same_request(row[0], request):
                     raise DomainError("idempotency_conflict", "相同请求编号不能用于不同操作")
                 saved = Order.model_validate_json(row[1])
                 return next((o for o in state.orders if o.id == saved.id), saved)
@@ -183,6 +188,10 @@ class Engine:
                 state,
                 request,
                 OrderContext(quote, rate, now, reference),
+            )
+            snapshot = order_snapshot(connection, state, request)
+            order = order.model_copy(
+                update={"plan_id": request.plan_id, "plan_version": request.plan_version, "plan_snapshot": snapshot}
             )
             state.orders.append(order)
             self.store.save(connection, state)

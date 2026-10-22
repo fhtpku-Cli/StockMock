@@ -20,6 +20,7 @@ class NoteInput(Model):
 
     text: str = Field(min_length=1, max_length=10000)
     order_id: str | None = None
+    plan_id: str | None = None
 
 
 class ConvertInput(Model):

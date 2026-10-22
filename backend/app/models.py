@@ -1,6 +1,6 @@
 """交易边界与持久账本模型。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import ClassVar, Literal
 
@@ -36,9 +36,30 @@ class Instrument(Model):
     verified_on: str = ""
 
 
+class PlanSnapshot(Model):
+    """委托受理时的完整计划内容，不随以后编辑变化。"""
+
+    id: str
+    round_id: str
+    symbol: str
+    currency: Currency
+    direction: Literal["watch", "buy", "sell"]
+    status: Literal["draft", "active", "ended"]
+    reason: str
+    target_price: Decimal | None
+    stop_price: Decimal | None
+    review_date: date | None
+    invalidation: str
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+
 class OrderInput(Model):
     """验证数量、价格与重复请求编号。"""
 
+    plan_id: str | None = Field(default=None, max_length=36)
+    plan_version: int | None = Field(default=None, ge=1, strict=True)
     request_id: str = Field(min_length=8, max_length=100)
     symbol: str = Field(max_length=30)
     side: Literal["buy", "sell"]
@@ -54,6 +75,7 @@ class Order(OrderInput):
     """持久化委托，保留市场时间和服务器确认时间。"""
 
     id: str
+    plan_snapshot: PlanSnapshot | None = None
     price_bound: Decimal
     status: Literal["accepted", "cancel_pending", "filled", "cancelled", "expired", "terminated"] = "accepted"
     status_reason: str = "等待下单后的有效市场样本"
@@ -105,6 +127,7 @@ class Journal(Model):
 
     id: str
     order_id: str | None = None
+    plan_id: str | None = None
     text: str
     created_at: datetime
 

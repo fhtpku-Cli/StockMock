@@ -11,6 +11,7 @@ from uuid import uuid4
 from pydantic import TypeAdapter
 
 from app.models import DomainError, State
+from app.plan_schema import initialize
 
 
 def read_rows(connection: sqlite3.Connection, sql: str, params: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
@@ -27,6 +28,7 @@ class Store:
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
         with self.transaction() as connection:
+            initialize(connection)
             _ = connection.execute(
                 "CREATE TABLE IF NOT EXISTS rounds(id TEXT PRIMARY KEY, active INTEGER NOT NULL, data TEXT NOT NULL)"
             )
