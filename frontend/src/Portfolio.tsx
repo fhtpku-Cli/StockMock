@@ -1,3 +1,4 @@
+import { AssetHistory } from "./AssetHistory";
 import { useQuery } from "@tanstack/react-query";
 import {
 	ArrowUpRight,
@@ -58,6 +59,16 @@ export function PortfolioView({
 					<span className="muted">初始本金 {money(p.initial_capital)}</span>
 				</div>
 			</section>
+			<p className="footnote">
+				估值状态：
+				{p.valuation_status === "complete"
+					? "完整"
+					: p.valuation_status === "stale"
+						? "行情过时，仅供参考"
+						: p.valuation_status === "missing"
+							? "数据缺失，不能确认总收益"
+							: p.valuation_status}
+			</p>
 			{p.warnings.map((w) => (
 				<div className="notice" key={w}>
 					{w}
@@ -163,15 +174,7 @@ export function PortfolioView({
 							</div>
 						)}
 					</Panel>
-					<Panel title="资产轨迹">
-						<div className="chart-empty">
-							<div className="chart-rule" />
-							<span>每一轮练习，都值得留下轨迹</span>
-							<p>
-								当前尚无可展示的资产历史快照。成交与资金记录可在复盘中查看。
-							</p>
-						</div>
-					</Panel>
+					<AssetHistory />
 				</div>
 				<div className="stack">
 					<Panel

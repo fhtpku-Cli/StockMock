@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { z } from "zod";
+import { useOnline } from "./useOnline";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage, money, price, time } from "./api";
 import { orderSchema, previewSchema } from "./schema";
@@ -25,8 +27,13 @@ export function Trade({
 	readonly onClose: () => void;
 	readonly onSuccess: () => void;
 }) {
+	const online = useOnline();
 	const [draft, setDraft] = useState<Draft>({
-		quantity: String(instrument.lot_size),
+		quantity: String(
+			side === "buy"
+				? (instrument.min_buy_quantity ?? instrument.lot_size)
+				: (instrument.quantity_step ?? instrument.lot_size),
+		),
 		price: "",
 		type: "limit",
 		reason: "",
@@ -49,6 +56,22 @@ export function Trade({
 	const preview = useMutation({
 		mutationFn: () => api("orders/preview", previewSchema, payload),
 	});
+	const sizing = useMutation({
+		mutationFn: (percent: number) =>
+			api(
+				`orders/size?percent=${percent}`,
+				z.object({
+					max_quantity: z.number().int(),
+					suggested_quantity: z.number().int(),
+					quantity_step: z.number().int(),
+					minimum_quantity: z.number().int(),
+				}),
+				{ ...payload, quantity: 1 },
+			),
+		onSuccess: (result) => {
+			change({ quantity: String(result.suggested_quantity) });
+		},
+	});
 	const submit = useMutation({
 		mutationFn: () => api("orders", orderSchema, payload),
 		onSuccess: async () => {
@@ -59,6 +82,9 @@ export function Trade({
 			onSuccess();
 		},
 	});
+	useEffect(() => {
+		if (!online) preview.reset();
+	}, [online]);
 	const change = (patch: Partial<Draft>) => {
 		setDraft((previous) => ({
 			...previous,
@@ -76,11 +102,16 @@ export function Trade({
 			<form
 				onSubmit={(e) => {
 					e.preventDefault();
+					if (!online) return;
 					if (preview.isSuccess) submit.mutate();
 					else preview.mutate();
 				}}
 			>
-				<fieldset disabled={preview.isPending || submit.isPending}>
+				<fieldset
+					disabled={
+						!online || sizing.isPending || preview.isPending || submit.isPending
+					}
+				>
 					<div className="field">
 						<label htmlFor="order-type">委托方式</label>
 						<select
@@ -105,8 +136,16 @@ export function Trade({
 								id="quantity"
 								inputMode="numeric"
 								type="number"
-								min={instrument.lot_size}
-								step={instrument.lot_size}
+								min={
+									side === "buy"
+										? (instrument.min_buy_quantity ?? instrument.lot_size)
+										: 1
+								}
+								step={
+									side === "buy"
+										? (instrument.quantity_step ?? instrument.lot_size)
+										: 1
+								}
 								required
 								value={draft.quantity}
 								onChange={(e) => change({ quantity: e.target.value })}
@@ -120,7 +159,12 @@ export function Trade({
 									inputMode="decimal"
 									type="number"
 									min={instrument.tick_size}
-									step={instrument.tick_size}
+									step={
+										instrument.tick_rule === "HK" ||
+										instrument.tick_rule === "US"
+											? "any"
+											: instrument.tick_size
+									}
 									required
 									value={draft.price}
 									onChange={(e) => change({ price: e.target.value })}
@@ -128,6 +172,35 @@ export function Trade({
 							</div>
 						)}
 					</div>
+					<p className="footnote">
+						{instrument.market} · 每手 {instrument.lot_size} ·{" "}
+						{instrument.tick_rule === "HK"
+							? "港股价位随价格区间与证券类型变化，以预览校验为准。"
+							: instrument.tick_rule === "US"
+								? "美股低于 1 美元的报价可保留四位小数，以预览校验为准。"
+								: `最小价位 ${instrument.tick_size} ${instrument.currency}`}{" "}
+						数量快捷选择由账户可用资金或可卖份额计算，含费用与换汇，仍需预览。
+					</p>
+					<div className="button-row">
+						{[25, 50, 100].map((percent) => (
+							<button
+								key={percent}
+								type="button"
+								className="button small"
+								disabled={
+									sizing.isPending ||
+									!online ||
+									(draft.type === "limit" && !draft.price)
+								}
+								onClick={() => sizing.mutate(percent)}
+							>
+								{percent}%
+							</button>
+						))}
+					</div>
+					{sizing.isError && (
+						<ErrorNotice message={errorMessage(sizing.error)} />
+					)}
 					<div className="field">
 						<label htmlFor="reason">
 							这次交易的理由 <span>选填</span>
@@ -150,7 +223,12 @@ export function Trade({
 									id="target"
 									type="number"
 									min={instrument.tick_size}
-									step={instrument.tick_size}
+									step={
+										instrument.tick_rule === "HK" ||
+										instrument.tick_rule === "US"
+											? "any"
+											: instrument.tick_size
+									}
 									value={draft.target}
 									onChange={(e) => change({ target: e.target.value })}
 								/>
@@ -161,7 +239,12 @@ export function Trade({
 									id="stop"
 									type="number"
 									min={instrument.tick_size}
-									step={instrument.tick_size}
+									step={
+										instrument.tick_rule === "HK" ||
+										instrument.tick_rule === "US"
+											? "any"
+											: instrument.tick_size
+									}
 									value={draft.stop}
 									onChange={(e) => change({ stop: e.target.value })}
 								/>
@@ -183,7 +266,7 @@ export function Trade({
 									{price(
 										preview.data.price_bound,
 										instrument.currency,
-										instrument.tick_size,
+										undefined,
 									)}
 								</dd>
 							</div>
@@ -229,7 +312,9 @@ export function Trade({
 				<button
 					className="button primary full"
 					type="submit"
-					disabled={preview.isPending || submit.isPending}
+					disabled={
+						!online || sizing.isPending || preview.isPending || submit.isPending
+					}
 				>
 					{submit.isPending
 						? "正在提交…"

@@ -1,3 +1,10 @@
+import { z } from "zod";
+import { orderSchema } from "./schema";
+import {
+	RecordFilters,
+	initialRecordFilter,
+	recordMatches,
+} from "./RecordFilters";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Notebook, DownloadSimple } from "@phosphor-icons/react";
@@ -11,6 +18,11 @@ export function Journal({
 	readonly orderId: string | null;
 	readonly onSaved: () => void;
 }) {
+	const [recordFilter, setRecordFilter] = useState(initialRecordFilter);
+	const orders = useQuery({
+		queryKey: ["orders"],
+		queryFn: () => api("orders", z.array(orderSchema)),
+	});
 	const [text, setText] = useState("");
 	const client = useQueryClient();
 	const journal = useQuery({
@@ -42,6 +54,16 @@ export function Journal({
 					<p>记录当时的理由，也记录后来改变的看法。</p>
 				</div>
 			</div>
+			<RecordFilters value={recordFilter} onChange={setRecordFilter} />
+			<p className="footnote">
+				市场按关联委托币种筛选；未关联笔记仅在“全部”显示。资金流水按币种筛选。
+			</p>
+			{orders.isError && recordFilter.market !== "all" && (
+				<ErrorNotice
+					message="关联委托读取失败，无法准确筛选笔记，请重试。"
+					retry={() => void orders.refetch()}
+				/>
+			)}
 			<div className="dashboard-grid">
 				<div className="stack">
 					<Panel title="写下这一刻的判断">
@@ -100,15 +122,23 @@ export function Journal({
 							</Empty>
 						) : (
 							<div className="journal-list">
-								{journal.data.map((j) => (
-									<article key={j.id}>
-										<small>
-											{time(j.created_at)}（北京时间）
-											{j.order_id ? " · 关联交易" : ""}
-										</small>
-										<p>{j.text}</p>
-									</article>
-								))}
+								{journal.data
+									.filter((j) =>
+										recordMatches(
+											j.created_at,
+											orders.data?.find((o) => o.id === j.order_id)?.currency,
+											recordFilter,
+										),
+									)
+									.map((j) => (
+										<article key={j.id}>
+											<small>
+												{time(j.created_at)}（北京时间）
+												{j.order_id ? " · 关联交易" : ""}
+											</small>
+											<p>{j.text}</p>
+										</article>
+									))}
 							</div>
 						)}
 					</Panel>
@@ -137,15 +167,19 @@ export function Journal({
 						<p className="muted">暂无资金流水。</p>
 					) : (
 						<div className="ledger-list">
-							{ledger.data.map((l) => (
-								<article key={l.id}>
-									<div>
-										<strong>{l.note || l.kind}</strong>
-										<small>{time(l.created_at)}</small>
-									</div>
-									<b>{money(l.amount, l.currency)}</b>
-								</article>
-							))}
+							{ledger.data
+								.filter((l) =>
+									recordMatches(l.created_at, l.currency, recordFilter),
+								)
+								.map((l) => (
+									<article key={l.id}>
+										<div>
+											<strong>{l.note || l.kind}</strong>
+											<small>{time(l.created_at)}</small>
+										</div>
+										<b>{money(l.amount, l.currency)}</b>
+									</article>
+								))}
 						</div>
 					)}
 				</Panel>

@@ -1,3 +1,5 @@
+import { Adjustments } from "./Adjustments";
+import { useOnline } from "./useOnline";
 import { Archive } from "./Archive";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +19,8 @@ export function Settings({
 	readonly onClose: () => void;
 	readonly onLogout: () => void;
 }) {
+	const online = useOnline();
+	const [adjusting, setAdjusting] = useState(false);
 	const [archiveId, setArchiveId] = useState<string | null>(null);
 	const [confirmation, setConfirmation] = useState("");
 	const [resetId] = useState(() => crypto.randomUUID());
@@ -62,6 +66,15 @@ export function Settings({
 					)}
 				</div>
 				<div className="settings-section">
+					<h3>公司行动</h3>
+					<p>核对公告后，人工登记分红、拆股或合股，保留完整账本依据。</p>
+					<button
+						type="button"
+						className="button"
+						onClick={() => setAdjusting(true)}
+					>
+						分红与拆股
+					</button>
 					<h3>练习轮次</h3>
 					{rounds.isPending ? (
 						<Loading />
@@ -103,7 +116,7 @@ export function Settings({
 					<button
 						type="button"
 						className="button danger"
-						disabled={confirmation !== "重新开始" || reset.isPending}
+						disabled={!online || confirmation !== "重新开始" || reset.isPending}
 						onClick={() => reset.mutate()}
 					>
 						{reset.isPending ? "正在归档…" : "归档本轮，开始新练习"}
@@ -111,9 +124,12 @@ export function Settings({
 					{reset.isError && <ErrorNotice message={errorMessage(reset.error)} />}
 				</div>
 				<p className="footnote">
-					手机可通过浏览器“添加到主屏幕”保存入口。交易需要联网，关闭页面不影响服务运行时的后台处理。
+					手机需先打开已配置的私人访问地址并登录；不能使用手机自己的
+					localhost。iPhone 在 Safari 分享菜单选择“添加到主屏幕”，Android
+					在浏览器菜单选择安装。交易需要联网，账户不做离线缓存。后台处理依赖电脑服务保持运行，电脑休眠或服务停止时不会继续处理。
 				</p>
 			</Modal>
+			{adjusting && <Adjustments onClose={() => setAdjusting(false)} />}
 			{archiveId && (
 				<Archive roundId={archiveId} onClose={() => setArchiveId(null)} />
 			)}
@@ -121,6 +137,7 @@ export function Settings({
 	);
 }
 export function Cash({ onClose }: { readonly onClose: () => void }) {
+	const online = useOnline();
 	const [currency, setCurrency] = useState<"USD" | "HKD">("USD");
 	const [amount, setAmount] = useState("");
 	const [requestId, setRequestId] = useState(() => crypto.randomUUID());
@@ -191,7 +208,7 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 					convert.mutate();
 				}}
 			>
-				<fieldset disabled={convert.isPending}>
+				<fieldset disabled={!online || convert.isPending}>
 					<div className="form-grid">
 						<div className="field">
 							<label htmlFor="fx-currency">卖出币种</label>

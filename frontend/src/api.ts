@@ -27,6 +27,8 @@ export async function api<T>(
 	body?: Readonly<Record<string, unknown>>,
 ): Promise<T> {
 	try {
+		if (body && !navigator.onLine)
+			throw new ApiError("offline", "当前离线，操作未提交。请联网后重新确认。");
 		const response = body
 			? await http.post(path, { json: body })
 			: await http.get(path);

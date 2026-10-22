@@ -1,3 +1,9 @@
+import {
+	RecordFilters,
+	initialRecordFilter,
+	recordMatches,
+} from "./RecordFilters";
+import { useOnline } from "./useOnline";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -18,6 +24,8 @@ export function Orders({
 }: {
 	readonly onJournal: (id: string) => void;
 }) {
+	const online = useOnline();
+	const [recordFilter, setRecordFilter] = useState(initialRecordFilter);
 	const [filter, setFilter] = useState("all");
 	const client = useQueryClient();
 	const query = useQuery({
@@ -37,10 +45,11 @@ export function Orders({
 	});
 	const orders = query.data?.filter(
 		(o) =>
-			filter === "all" ||
-			(filter === "active"
-				? o.status === "accepted" || o.status === "cancel_pending"
-				: o.status === "filled"),
+			recordMatches(o.created_at, o.currency, recordFilter) &&
+			(filter === "all" ||
+				(filter === "active"
+					? o.status === "accepted" || o.status === "cancel_pending"
+					: o.status === "filled")),
 	);
 	return (
 		<div className="stack">
@@ -55,6 +64,7 @@ export function Orders({
 					</a>
 				}
 			>
+				<RecordFilters value={recordFilter} onChange={setRecordFilter} />
 				<div className="segmented" aria-label="筛选委托">
 					{[
 						{ id: "all", label: "全部" },
@@ -89,7 +99,7 @@ export function Orders({
 							<OrderRow
 								key={o.id}
 								order={o}
-								busy={cancel.isPending}
+								busy={!online || cancel.isPending}
 								cancel={() => cancel.mutate(o.id)}
 								onJournal={() => onJournal(o.id)}
 							/>

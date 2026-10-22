@@ -1,3 +1,5 @@
+import { AdjustmentRecords } from "./Adjustments";
+import { AssetHistory } from "./AssetHistory";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { api, errorMessage, money, price, time } from "./api";
@@ -35,6 +37,8 @@ export function Archive({
 				/>
 			) : (
 				<div className="stack">
+					<AssetHistory roundId={roundId} />
+					<AdjustmentRecords roundId={roundId} />
 					<div>
 						<Badge>历史轮次</Badge>
 						<p className="footnote">

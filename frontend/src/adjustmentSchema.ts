@@ -1,0 +1,25 @@
+import { z } from "zod";
+import { decimal } from "./schema";
+export const adjustmentSchema = z.object({
+	id: z.string(),
+	request_id: z.string(),
+	round_id: z.string(),
+	symbol: z.string(),
+	kind: z.enum(["dividend", "split"]),
+	effective_date: z.string(),
+	expected_quantity: z.number(),
+	note: z.string(),
+	cash_per_share: decimal.nullable(),
+	payment_status: z.enum(["receivable", "paid"]),
+	numerator: z.number().nullable(),
+	denominator: z.number().nullable(),
+	created_at: z.string(),
+	quantity_before: z.number(),
+	quantity_after: z.number(),
+	cash_delta: decimal,
+	receivable_amount: decimal,
+	currency: z.string(),
+	cost_before: decimal,
+	cost_after: decimal,
+	paid_at: z.string().nullable(),
+});

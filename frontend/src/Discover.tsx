@@ -18,6 +18,8 @@ export function Discover({
 	readonly onSelect: (i: Instrument) => void;
 }) {
 	const [search, setSearch] = useState("");
+	const [kind, setKind] = useState("all");
+	const [availability, setAvailability] = useState("all");
 	const [market, setMarket] = useState("all");
 	const client = useQueryClient();
 	const instruments = useQuery({
@@ -39,6 +41,9 @@ export function Discover({
 	const filtered = instruments.data?.filter(
 		(i) =>
 			(market === "all" || i.market === market) &&
+			(kind === "all" || i.kind === kind) &&
+			(availability === "all" ||
+				(availability === "tradable" ? i.tradable : !i.tradable)) &&
 			`${i.symbol} ${i.name}`.toLowerCase().includes(search.toLowerCase()),
 	);
 	return (
@@ -85,6 +90,24 @@ export function Discover({
 			</Panel>
 			<Panel title="发现市场">
 				<div className="filters">
+					<select
+						aria-label="筛选证券类型"
+						value={kind}
+						onChange={(e) => setKind(e.target.value)}
+					>
+						<option value="all">全部类型</option>
+						<option value="stock">股票</option>
+						<option value="ETF">ETF</option>
+					</select>
+					<select
+						aria-label="筛选交易状态"
+						value={availability}
+						onChange={(e) => setAvailability(e.target.value)}
+					>
+						<option value="all">全部状态</option>
+						<option value="tradable">可模拟交易</option>
+						<option value="observe">仅观察</option>
+					</select>
 					<label className="search-box">
 						<MagnifyingGlass size={20} />
 						<input
@@ -120,44 +143,55 @@ export function Discover({
 						试试证券代码，或切换市场。首版仅展示已接入的证券。
 					</Empty>
 				) : (
-					<div className="security-list">
-						{filtered?.map((i) => (
-							<div className="security-row" key={i.symbol}>
-								<button
-									type="button"
-									className="security-main"
-									onClick={() => onSelect(i)}
-								>
-									<span className="security-avatar">{i.name.slice(0, 1)}</span>
-									<span>
-										<strong>{i.name}</strong>
-										<small>
-											{i.symbol} · {i.market} ·{" "}
-											{i.kind === "ETF" ? "ETF" : "股票"}
-										</small>
-									</span>
-								</button>
-								<Badge tone={i.tradable ? "good" : "warn"}>
-									{i.tradable ? "可交易" : "仅观察"}
-								</Badge>
-								<button
-									type="button"
-									className="icon-button"
-									aria-label={`${watch.data?.some((w) => w.symbol === i.symbol) ? "移除" : "添加"}自选 ${i.name}`}
-									disabled={
-										mutate.isPending || watch.isError || watch.isPending
-									}
-									onClick={() => mutate.mutate(i)}
-								>
-									{watch.data?.some((w) => w.symbol === i.symbol) ? (
-										<Star weight="fill" className="star" size={20} />
-									) : (
-										<Plus size={20} />
-									)}
-								</button>
-							</div>
-						))}
-					</div>
+					<>
+						<p className="footnote">
+							找到 {filtered?.length ?? 0} 只标的 · 已接入{" "}
+							{instruments.data.length} 只
+						</p>
+						<div className="security-list">
+							{filtered?.map((i) => (
+								<div className="security-row" key={i.symbol}>
+									<button
+										type="button"
+										className="security-main"
+										onClick={() => onSelect(i)}
+									>
+										<span className="security-avatar">
+											{i.name.slice(0, 1)}
+										</span>
+										<span>
+											<strong>{i.name}</strong>
+											<small>
+												{i.symbol} · {i.market} ·{" "}
+												{i.kind === "ETF" ? "ETF" : "股票"}
+											</small>
+											<small>
+												{i.restriction || "交易仍需通过实时行情与规则校验"}
+											</small>
+										</span>
+									</button>
+									<Badge tone={i.tradable ? "good" : "warn"}>
+										{i.tradable ? "可交易" : "仅观察"}
+									</Badge>
+									<button
+										type="button"
+										className="icon-button"
+										aria-label={`${watch.data?.some((w) => w.symbol === i.symbol) ? "移除" : "添加"}自选 ${i.name}`}
+										disabled={
+											mutate.isPending || watch.isError || watch.isPending
+										}
+										onClick={() => mutate.mutate(i)}
+									>
+										{watch.data?.some((w) => w.symbol === i.symbol) ? (
+											<Star weight="fill" className="star" size={20} />
+										) : (
+											<Plus size={20} />
+										)}
+									</button>
+								</div>
+							))}
+						</div>
+					</>
 				)}
 			</Panel>
 			<p className="footnote">

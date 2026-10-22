@@ -1,6 +1,7 @@
+import { useOnline } from "./useOnline";
 import { useQuery } from "@tanstack/react-query";
-import { api, errorMessage, price, time } from "./api";
-import { historySchema, quoteSchema } from "./schema";
+import { api, errorMessage, money, price, time } from "./api";
+import { historySchema, quoteSchema, portfolioSchema } from "./schema";
 import type { Instrument } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 export function Detail({
@@ -12,6 +13,14 @@ export function Detail({
 	readonly onClose: () => void;
 	readonly onTrade: (side: "buy" | "sell") => void;
 }) {
+	const online = useOnline();
+	const portfolio = useQuery({
+		queryKey: ["portfolio"],
+		queryFn: () => api("portfolio", portfolioSchema),
+	});
+	const position = portfolio.data?.positions.find(
+		(p) => p.symbol === instrument.symbol,
+	);
 	const quote = useQuery({
 		queryKey: ["quote", instrument.symbol],
 		queryFn: () =>
@@ -58,7 +67,11 @@ export function Detail({
 			) : (
 				<>
 					<div className="quote-price">
-						{price(quote.data.price, quote.data.currency, instrument.tick_size)}
+						{price(
+							quote.data.price,
+							quote.data.currency,
+							quote.data.tick_size ?? instrument.tick_size,
+						)}
 					</div>
 					<p className="footnote">
 						报价时间 {time(quote.data.market_time)}（北京时间） ·{" "}
@@ -112,7 +125,9 @@ export function Detail({
 				<div>
 					<dt>最小价位</dt>
 					<dd>
-						{instrument.tick_size} {instrument.currency}
+						{quote.data?.tick_size ?? instrument.tick_size}{" "}
+						{instrument.currency}
+						{instrument.tick_rule === "HK" ? "（随价格区间变化）" : ""}
 					</dd>
 				</div>
 				<div>
@@ -120,14 +135,38 @@ export function Detail({
 					<dd>买卖各 0.05%</dd>
 				</div>
 			</dl>
+			{instrument.rule_source && (
+				<p className="footnote">
+					交易规则来源：{instrument.rule_source} · 核对日期{" "}
+					{instrument.verified_on ?? "未注明"}
+				</p>
+			)}
 			{instrument.restriction && (
 				<p className="notice">{instrument.restriction}</p>
+			)}
+			{position && (
+				<dl className="summary-list">
+					<div>
+						<dt>当前持仓 / 可卖</dt>
+						<dd>
+							{position.quantity} / {position.sellable}
+						</dd>
+					</div>
+					<div>
+						<dt>每股成本（含费用）</dt>
+						<dd>{price(position.average_cost, position.currency)}</dd>
+					</div>
+					<div>
+						<dt>参考浮动收益</dt>
+						<dd>{money(position.pnl, position.currency)}</dd>
+					</div>
+				</dl>
 			)}
 			<div className="button-row">
 				<button
 					type="button"
 					className="button primary"
-					disabled={!instrument.tradable || !quote.isSuccess}
+					disabled={!online || !instrument.tradable || !quote.isSuccess}
 					onClick={() => onTrade("buy")}
 				>
 					模拟买入
@@ -135,7 +174,7 @@ export function Detail({
 				<button
 					type="button"
 					className="button"
-					disabled={!instrument.tradable || !quote.isSuccess}
+					disabled={!online || !instrument.tradable || !quote.isSuccess}
 					onClick={() => onTrade("sell")}
 				>
 					模拟卖出

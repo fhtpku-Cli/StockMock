@@ -48,3 +48,20 @@ backend/.venv/bin/python frontend/tests/controlled_server.py
 - `DESIGN.md` 定义设计方向，`src/styles/` 按基础、布局、组件和响应式拆分；源代码通过 Biome 保持可读。
 - 所有修改后至少执行构建与对应行为测试。格式化命令：`bunx biome format --write src tests vite.config.ts package.json tsconfig.json`。
 - PWA 清单只提供安装入口，不缓存账户数据、不离线提交交易。手机外网访问与真实设备安装需独立验证。
+
+## 完整个人功能验证
+
+当前目录支持市场、股票/ETF、可交易状态及代码名称筛选。订单数量 25%/50%/100% 由服务端考虑费用、币种与占用计算，必须继续预览才能提交。设置内可登记税前现金分红、应收股息到账及整数拆并股；账户与归档均可查看记录。资产历史按实际日期展示，不连过缺失、过时或未采集日期。计划持有期可写在交易理由或复盘中，本轮不增加独立字段或自动止盈止损。
+
+新增隔离浏览器场景使用临时 SQLite 与显式种子持仓；不会改写真实账户。先在项目根目录启动测试服务，再在另一终端执行浏览器脚本：
+
+```bash
+backend/.venv/bin/python frontend/tests/personal_server.py
+# 另一终端，从项目根目录运行
+cd frontend
+bun tests/personal.mjs
+```
+
+默认 `8002`，测试完成后 Ctrl+C 停止，临时库自动清理。测试行情固定在 2026-10-22 北京时间 08:00，上一交易日报价固定为 2026-10-21；不得将此数据用于真实行情验收。
+
+真实本机只读检查使用 `bun tests/personal-live.mjs`，默认访问 `http://127.0.0.1:8000`，通过 `FRONTEND_TEST_URL` 可选择同源入口。它验证真实目录、限制提示与手机布局，不提交交易或调整。两种浏览器脚本使用系统 Chrome（可设 `CHROME_PATH`）或已安装的 Playwright Chromium。测试证据写入私有 `.omo/evidence/frontend-personal/`。

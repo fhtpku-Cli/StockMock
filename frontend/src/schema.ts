@@ -8,6 +8,11 @@ export const instrumentSchema = z.object({
 	kind: z.string(),
 	lot_size: z.number(),
 	tick_size: decimal,
+	tick_rule: z.enum(["fixed", "HK", "US"]).optional(),
+	min_buy_quantity: z.number().nullable().optional(),
+	quantity_step: z.number().nullable().optional(),
+	rule_source: z.string().optional(),
+	verified_on: z.string().nullable().optional(),
 	tradable: z.boolean(),
 	restriction: z.string().nullable(),
 });
@@ -52,6 +57,7 @@ export const quoteSchema = z.object({
 	market_time: z.string(),
 	retrieved_at: z.string(),
 	source: z.string(),
+	tick_size: decimal.optional(),
 	status: z.string(),
 	message: z.string(),
 });
