@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import type { Order } from "./schema";
 import { money, price, time } from "./api";
-import { Badge } from "./ui";
 import { OrderDetails } from "./OrderDetails";
+import type { Order } from "./schema";
+import { Badge } from "./ui";
+
 const statuses = {
 	accepted: "等待成交",
 	cancel_pending: "撤单确认中",

@@ -60,3 +60,38 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+.coverage-summary {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+	margin-bottom: 20px;
+}
+.coverage-summary > div {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 12px;
+	background: var(--canvas);
+	border-radius: 8px;
+}
+.coverage-summary span {
+	color: var(--muted);
+	font-size: 12px;
+}
+.coverage-summary strong {
+	font-size: 24px;
+	font-variant-numeric: tabular-nums;
+}
+.list-pagination {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin-top: 16px;
+}
+@media (max-width: 540px) {
+	.coverage-summary {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}

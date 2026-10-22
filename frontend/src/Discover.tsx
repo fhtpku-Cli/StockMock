@@ -1,4 +1,4 @@
-import { ArrowUpRight, MagnifyingGlass } from "@phosphor-icons/react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
@@ -9,15 +9,64 @@ import { instrumentSchema, instrumentSearchSchema } from "./schema";
 import { Badge, Empty, ErrorNotice, Loading, Panel } from "./ui";
 import { useWatchlist } from "./useWatchlist";
 
+const PAGE_SIZE = 24;
+const coverageGroups = [
+	{ market: "CN", kind: "stock", label: "A 股" },
+	{ market: "CN", kind: "ETF", label: "境内 ETF" },
+	{ market: "US", kind: "stock", label: "美股" },
+	{ market: "US", kind: "ETF", label: "美股 ETF" },
+] as const;
+
+function InstrumentList({
+	items,
+	onSelect,
+	empty,
+	...actions
+}: {
+	readonly items: readonly Instrument[];
+	readonly onSelect: (i: Instrument) => void;
+	readonly empty: string;
+	readonly onToggle: (i: Instrument) => void;
+	readonly contains: (symbol: string) => boolean;
+	readonly pending: boolean;
+}) {
+	const [visible, setVisible] = useState(PAGE_SIZE);
+	return items.length === 0 ? (
+		<Empty title={empty}>可调整筛选，或在在线搜索中查找目录外的证券。</Empty>
+	) : (
+		<>
+			<DiscoveryResults
+				items={items.slice(0, visible)}
+				onSelect={onSelect}
+				{...actions}
+			/>
+			<div className="list-pagination">
+				<span className="footnote">
+					已显示 {Math.min(visible, items.length)} / {items.length} 只
+				</span>
+				{visible < items.length && (
+					<button
+						className="button small"
+						type="button"
+						onClick={() => setVisible((count) => count + PAGE_SIZE)}
+					>
+						再显示 {Math.min(PAGE_SIZE, items.length - visible)} 只
+					</button>
+				)}
+			</div>
+		</>
+	);
+}
+
 export function Discover({
 	onSelect,
 }: {
 	readonly onSelect: (i: Instrument) => void;
 }) {
+	const [localSearch, setLocalSearch] = useState("");
 	const [search, setSearch] = useState("");
 	const [query, setQuery] = useState("");
 	const [kind, setKind] = useState("all");
-	const [availability, setAvailability] = useState("all");
 	const [market, setMarket] = useState("all");
 	const { watch, toggle, contains, pending } = useWatchlist();
 	const trimmed = search.trim();
@@ -40,78 +89,83 @@ export function Discover({
 		retry: false,
 		staleTime: 60_000,
 	});
-	const searching = trimmed.length > 0;
-	const waiting = searching && (trimmed !== query || onlineSearch.isPending);
-	const active = searching ? onlineSearch : instruments;
-	const items = searching ? onlineSearch.data?.items : instruments.data;
-	const filtered =
-		items?.filter(
-			(instrument) =>
-				(market === "all" || instrument.market === market) &&
-				(kind === "all" || instrument.kind === kind) &&
-				(availability === "all" ||
-					(availability === "tradable"
-						? instrument.tradable
-						: !instrument.tradable)),
-		) ?? [];
+	const enabled = instruments.data?.filter((item) => item.tradable) ?? [];
+	const filtered = enabled.filter(
+		(item) =>
+			(market === "all" || item.market === market) &&
+			(kind === "all" || item.kind === kind) &&
+			`${item.symbol} ${item.name}`
+				.toLocaleLowerCase()
+				.includes(localSearch.trim().toLocaleLowerCase()),
+	);
+	const listActions = {
+		onSelect,
+		onToggle: (item: Instrument) => toggle.mutate(item),
+		contains,
+		pending,
+	};
+	const waiting =
+		trimmed.length > 0 && (trimmed !== query || onlineSearch.isPending);
 	return (
 		<div className="stack discovery">
+			{toggle.isError && <ErrorNotice message={errorMessage(toggle.error)} />}
 			<Panel
 				title="我的自选"
 				action={<Badge>{watch.data?.length ?? "—"} 只标的</Badge>}
 			>
-				{watch.isError ? (
+				{watch.isError && (
 					<ErrorNotice
 						message={errorMessage(watch.error)}
 						retry={() => void watch.refetch()}
 					/>
-				) : watch.isPending ? (
+				)}
+				{watch.isPending ? (
 					<Loading />
-				) : watch.data.length === 0 ? (
-					<Empty title="让观察有一个起点">
-						在下方搜索公司或 ETF，点选星标加入自选。
-					</Empty>
 				) : (
-					<div className="watch-grid">
-						{watch.data.map((instrument) => (
-							<button
-								type="button"
-								className="watch-card"
-								key={instrument.symbol}
-								onClick={() => onSelect(instrument)}
-							>
-								<div>
-									<span className="security-avatar">
-										{instrument.name.slice(0, 1)}
-									</span>
-									<ArrowUpRight size={18} />
-								</div>
-								<strong>{instrument.name}</strong>
-								<span>
-									{instrument.symbol} · {instrument.market}
-								</span>
-								<Badge tone={instrument.tradable ? "good" : "warn"}>
-									{instrument.tradable ? "可模拟交易" : "仅观察"}
-								</Badge>
-							</button>
-						))}
-					</div>
+					watch.data && (
+						<InstrumentList
+							items={watch.data}
+							empty="自选还是空的"
+							{...listActions}
+						/>
+					)
 				)}
 			</Panel>
-			<Panel title="发现市场 · 在线搜索">
+			<Panel
+				title="已可交易"
+				action={
+					<Badge tone="good">
+						{instruments.data ? enabled.length : "—"} 只已启用
+					</Badge>
+				}
+			>
 				<p className="footnote discovery-intro">
-					按名称或代码查询 A 股、港股、美股与 ETF。常用清单不代表全部范围；A
-					股与美股可在详情申请启用模拟交易，核验通过后开放，港股继续仅观察。
+					这些标的已通过交易规则核验，可进入详情练习；能否下单仍取决于当前行情、交易时间和可用资金。港股继续仅观察。
 				</p>
+				<section className="coverage-summary" aria-label="已启用数量汇总">
+					{coverageGroups.map((group) => (
+						<div key={`${group.market}-${group.kind}`}>
+							<span>{group.label}</span>
+							<strong>
+								{instruments.data
+									? enabled.filter(
+											(item) =>
+												item.market === group.market &&
+												item.kind === group.kind,
+										).length
+									: "—"}
+							</strong>
+						</div>
+					))}
+				</section>
 				<div className="discovery-filters">
 					<label className="search-box">
 						<MagnifyingGlass size={20} />
 						<input
-							aria-label="搜索代码或名称"
-							placeholder="输入名称或代码，在线查询"
-							value={search}
-							maxLength={80}
-							onChange={(event) => setSearch(event.target.value)}
+							aria-label="筛选已可交易证券"
+							placeholder="在已可交易中按名称或代码筛选"
+							value={localSearch}
+							onChange={(event) => setLocalSearch(event.target.value)}
 						/>
 					</label>
 					<select
@@ -120,9 +174,8 @@ export function Discover({
 						onChange={(event) => setMarket(event.target.value)}
 					>
 						<option value="all">全部市场</option>
-						<option value="CN">A 股</option>
-						<option value="HK">港股</option>
-						<option value="US">美股</option>
+						<option value="CN">A 股及境内 ETF</option>
+						<option value="US">美股及 ETF</option>
 					</select>
 					<select
 						aria-label="筛选证券类型"
@@ -133,63 +186,69 @@ export function Discover({
 						<option value="stock">股票</option>
 						<option value="ETF">ETF</option>
 					</select>
-					<select
-						aria-label="筛选交易状态"
-						value={availability}
-						onChange={(event) => setAvailability(event.target.value)}
-					>
-						<option value="all">全部状态</option>
-						<option value="tradable">可模拟交易</option>
-						<option value="observe">仅观察</option>
-					</select>
 				</div>
-				{toggle.isError && <ErrorNotice message={errorMessage(toggle.error)} />}
-				<div aria-live="polite" aria-busy={waiting || active.isFetching}>
-					{waiting || (!searching && instruments.isPending) ? (
+				{instruments.isError && (
+					<ErrorNotice
+						message={errorMessage(instruments.error)}
+						retry={() => void instruments.refetch()}
+					/>
+				)}
+				{instruments.isPending ? (
+					<Loading />
+				) : (
+					instruments.data && (
+						<InstrumentList
+							key={`${market}-${kind}-${localSearch}`}
+							items={filtered}
+							empty="已可交易目录中没有匹配项"
+							{...listActions}
+						/>
+					)
+				)}
+			</Panel>
+			<Panel title="在线搜索">
+				<p className="footnote discovery-intro">
+					查找目录之外的证券。查到不代表已可交易；可在详情核验启用，失败原因会保留显示。在线服务失败不会移除已加载的自选和目录。
+				</p>
+				<label className="search-box">
+					<MagnifyingGlass size={20} />
+					<input
+						aria-label="搜索代码或名称"
+						placeholder="输入名称或代码，在线查询"
+						value={search}
+						maxLength={80}
+						onChange={(event) => setSearch(event.target.value)}
+					/>
+				</label>
+				<div aria-live="polite" aria-busy={waiting || onlineSearch.isFetching}>
+					{!trimmed ? (
+						<p className="footnote">
+							输入关键词后查询在线来源，结果可能不完整。
+						</p>
+					) : waiting ? (
 						<Loading />
-					) : active.isError ? (
+					) : onlineSearch.isError ? (
 						<ErrorNotice
-							message={errorMessage(active.error)}
-							retry={() => void active.refetch()}
+							message={`在线结果当前不可用：${errorMessage(onlineSearch.error)} 已加载的自选和已可交易目录仍可查看。`}
+							retry={() => void onlineSearch.refetch()}
 						/>
 					) : (
-						<>
-							<p className="footnote discovery-result-count">
-								{searching
-									? `在线查询结果 · 当前筛选 ${filtered.length} 只`
-									: `常用已接入证券 · 当前筛选 ${filtered.length} 只（非全市场清单）`}
-							</p>
-							{searching && onlineSearch.data && (
+						onlineSearch.data && (
+							<>
 								<p className="footnote">
 									{onlineSearch.data.message} · 来源：{onlineSearch.data.source}
 								</p>
-							)}
-							{filtered.length === 0 ? (
-								<Empty
-									title={
-										searching
-											? "当前查询结果中没有匹配标的"
-											: "常用证券中没有匹配标的"
-									}
-								>
-									试试更完整的证券代码或公司名称，或放宽筛选。搜索结果可能不完整。
-								</Empty>
-							) : (
-								<DiscoveryResults
-									items={filtered}
-									onSelect={onSelect}
-									onToggle={(instrument) => toggle.mutate(instrument)}
-									contains={contains}
-									pending={pending}
+								<InstrumentList
+									key={query}
+									items={onlineSearch.data.items}
+									empty="当前在线查询没有匹配标的"
+									{...listActions}
 								/>
-							)}
-						</>
+							</>
+						)
 					)}
 				</div>
 			</Panel>
-			<p className="footnote">
-				搜索结果不是完整证券清单。可观察不代表可交易；行情时间与来源请在标的详情核对。
-			</p>
 		</div>
 	);
 }

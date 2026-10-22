@@ -75,6 +75,9 @@ textarea {
 	min-width: 0;
 	width: 100%;
 }
+select {
+	height: 44px;
+}
 textarea {
 	resize: vertical;
 	min-height: 100px;

@@ -1,25 +1,26 @@
-import { Login } from "./Login";
-import { Sidebar, navigation } from "./Sidebar";
-import type { Page } from "./Sidebar";
-import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
 import {
-	GearSix,
 	ArrowClockwise,
+	GearSix,
 	MagnifyingGlass,
 } from "@phosphor-icons/react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { api, errorMessage, SESSION_EXPIRED } from "./api";
-import { instrumentSchema, sessionSchema } from "./schema";
-import type { Instrument } from "./schema";
-import { ErrorNotice, Loading } from "./ui";
-import { PortfolioView } from "./Portfolio";
-import { Discover } from "./Discover";
 import { Detail } from "./Detail";
-import { Trade } from "./Trade";
-import { Orders } from "./Orders";
+import { Discover } from "./Discover";
 import { Journal } from "./Journal";
+import { Login } from "./Login";
+import { Orders } from "./Orders";
+import { PortfolioView } from "./Portfolio";
 import { Cash, Settings } from "./Settings";
+import type { Page } from "./Sidebar";
+import { navigation, Sidebar } from "./Sidebar";
+import type { Instrument } from "./schema";
+import { instrumentSchema, sessionSchema } from "./schema";
+import { Trade } from "./Trade";
+import { ErrorNotice, Loading } from "./ui";
+
 type Overlay =
 	| { readonly kind: "none" }
 	| { readonly kind: "settings" }
@@ -55,7 +56,7 @@ export function App() {
 			window.removeEventListener("online", up);
 			window.removeEventListener("offline", down);
 		};
-	}, []);
+	}, [client]);
 	useEffect(() => {
 		const expire = () => {
 			setSessionExpired(true);

@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { api } from "./api";
-import { instrumentSchema } from "./schema";
 import type { Instrument } from "./schema";
+import { instrumentSchema } from "./schema";
 
 export function useEnableInstrument(
 	onEnabled: (instrument: Instrument) => void,

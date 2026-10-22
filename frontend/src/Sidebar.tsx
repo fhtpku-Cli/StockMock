@@ -1,11 +1,11 @@
 import {
-	ChartPieSlice,
-	Star,
 	ArrowsLeftRight,
-	Notebook,
 	ChartBar,
-	LockKey,
+	ChartPieSlice,
 	GearSix,
+	LockKey,
+	Notebook,
+	Star,
 } from "@phosphor-icons/react";
 export const navigation = [
 	{

@@ -1,16 +1,21 @@
+import { DownloadSimple, Notebook } from "@phosphor-icons/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { z } from "zod";
+import { api, errorMessage, money, time } from "./api";
 import { LinkedTrade } from "./OrderRecord";
-import { orderSchema } from "./schema";
 import {
-	RecordFilters,
 	initialRecordFilter,
+	RecordFilters,
 	recordMatches,
 } from "./RecordFilters";
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Notebook, DownloadSimple } from "@phosphor-icons/react";
-import { api, errorMessage, money, time } from "./api";
-import { acknowledgmentSchema, journalSchema, ledgerSchema } from "./schema";
+import { Reviews } from "./Reviews";
+import {
+	acknowledgmentSchema,
+	journalSchema,
+	ledgerSchema,
+	orderSchema,
+} from "./schema";
 import { Empty, ErrorNotice, Loading, Panel } from "./ui";
 export function Journal({
 	orderId,
@@ -55,6 +60,7 @@ export function Journal({
 					<p>记录当时的理由，也记录后来改变的看法。</p>
 				</div>
 			</div>
+			<Reviews />
 			<RecordFilters value={recordFilter} onChange={setRecordFilter} />
 			<p className="footnote">
 				市场按关联委托币种筛选；未关联笔记仅在“全部”显示。资金流水按币种筛选。
@@ -135,7 +141,11 @@ export function Journal({
 										<article key={j.id}>
 											<small>
 												{time(j.created_at)}（北京时间）
-												{j.order_id ? " · 关联交易" : ""}
+												{j.plan_id
+													? " · 关联计划"
+													: j.order_id
+														? " · 关联交易"
+														: ""}
 											</small>
 											<p>{j.text}</p>
 											<LinkedTrade

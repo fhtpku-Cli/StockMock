@@ -1,13 +1,14 @@
-import { AssetHistory } from "./AssetHistory";
-import { useQuery } from "@tanstack/react-query";
 import {
-	ArrowUpRight,
-	Wallet,
 	ArrowRight,
+	ArrowUpRight,
 	Clock,
 	LockSimple,
+	Wallet,
 } from "@phosphor-icons/react";
-import { api, errorMessage, money, price, number, time } from "./api";
+import { useQuery } from "@tanstack/react-query";
+import { Alerts } from "./Alerts";
+import { AssetHistory } from "./AssetHistory";
+import { api, errorMessage, money, number, price, time } from "./api";
 import { portfolioSchema } from "./schema";
 import { Badge, Empty, ErrorNotice, Loading, Panel } from "./ui";
 export function PortfolioView({
@@ -74,6 +75,7 @@ export function PortfolioView({
 					{w}
 				</div>
 			))}
+			<Alerts onSymbol={onSymbol} compact />
 			<div className="metric-grid">
 				<div className="metric">
 					<span>

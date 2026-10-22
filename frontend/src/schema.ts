@@ -87,6 +87,22 @@ export const previewSchema = z.object({
 	expires_at: z.string(),
 	warnings: z.array(z.string()),
 });
+export const planSnapshotSchema = z.object({
+	id: z.string(),
+	round_id: z.string(),
+	symbol: z.string(),
+	currency: z.string(),
+	direction: z.enum(["watch", "buy", "sell"]),
+	status: z.enum(["draft", "active", "ended"]),
+	reason: z.string(),
+	target_price: decimal.nullable(),
+	stop_price: decimal.nullable(),
+	review_date: z.string().nullable(),
+	invalidation: z.string(),
+	version: z.number().int(),
+	created_at: z.string(),
+	updated_at: z.string(),
+});
 export const orderSchema = z.object({
 	id: z.string(),
 	request_id: z.string(),
@@ -125,12 +141,16 @@ export const orderSchema = z.object({
 	reason: z.string(),
 	target_price: decimal.nullable(),
 	stop_price: decimal.nullable(),
+	plan_id: z.string().nullable().optional(),
+	plan_version: z.number().int().nullable().optional(),
+	plan_snapshot: planSnapshotSchema.nullable().optional(),
 });
 export type Order = z.infer<typeof orderSchema>;
 export const journalSchema = z.array(
 	z.object({
 		id: z.string(),
 		order_id: z.string().nullable(),
+		plan_id: z.string().nullable().optional(),
 		text: z.string(),
 		created_at: z.string(),
 	}),

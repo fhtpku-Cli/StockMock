@@ -1,9 +1,8 @@
-import { Adjustments } from "./Adjustments";
-import { useOnline } from "./useOnline";
-import { Archive } from "./Archive";
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { z } from "zod";
+import { Adjustments } from "./Adjustments";
+import { Archive } from "./Archive";
 import { api, errorMessage, money, time } from "./api";
 import {
 	acknowledgmentSchema,
@@ -12,6 +11,7 @@ import {
 	roundsSchema,
 } from "./schema";
 import { ErrorNotice, Loading, Modal } from "./ui";
+import { useOnline } from "./useOnline";
 export function Settings({
 	onClose,
 	onLogout,

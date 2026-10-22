@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { Alerts } from "./Alerts";
 import { api, errorMessage, money, price, time } from "./api";
+import { Plans } from "./Plans";
 import type { Instrument } from "./schema";
 import { historySchema, portfolioSchema, quoteSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
+import { useEnableInstrument } from "./useEnableInstrument";
 import { useOnline } from "./useOnline";
 import { useWatchlist } from "./useWatchlist";
 import { VolumeHistory } from "./VolumeHistory";
-import { useEnableInstrument } from "./useEnableInstrument";
 export function Detail({
 	instrument,
 	onClose,
@@ -92,6 +94,8 @@ export function Detail({
 					</p>
 				</>
 			)}
+			<Plans symbol={instrument.symbol} currency={instrument.currency} />
+			<Alerts symbol={instrument.symbol} />
 			<div className="section-heading">
 				<h3>历史收盘价</h3>
 				<span className="muted">日线</span>

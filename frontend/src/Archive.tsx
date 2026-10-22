@@ -1,20 +1,23 @@
-import { OrderRecord, LinkedTrade } from "./OrderRecord";
-import { AdjustmentRecords } from "./Adjustments";
-import { AssetHistory } from "./AssetHistory";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
+import { AdjustmentRecords } from "./Adjustments";
+import { Alerts } from "./Alerts";
+import { AssetHistory } from "./AssetHistory";
 import { api, errorMessage, money, time } from "./api";
+import { LinkedTrade, OrderRecord } from "./OrderRecord";
+import { Pagination } from "./Pagination";
+import { PlanSummary } from "./PlanSummary";
+import { planSchema } from "./planSchema";
+import { Reviews } from "./Reviews";
 import { decimal, journalSchema, ledgerSchema, orderSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
+import { usePages } from "./usePages";
+
 const archiveSchema = z.object({
 	id: z.string(),
 	created_at: z.string(),
 	archived_at: z.string().nullable(),
 	cash: z.record(z.string(), decimal),
-	orders: z.array(orderSchema),
-	journal: journalSchema,
-	ledger: ledgerSchema,
-	truncated: z.boolean(),
 });
 export function Archive({
 	roundId,
@@ -23,10 +26,31 @@ export function Archive({
 	readonly roundId: string;
 	readonly onClose: () => void;
 }) {
+	const base = `rounds/${encodeURIComponent(roundId)}`;
 	const query = useQuery({
 		queryKey: ["round", roundId],
-		queryFn: () => api(`rounds/${encodeURIComponent(roundId)}`, archiveSchema),
+		queryFn: () => api(base, archiveSchema),
 	});
+	const orders = usePages(
+		["archive-orders", roundId],
+		`${base}/orders`,
+		orderSchema,
+	);
+	const notes = usePages(
+		["archive-journal", roundId],
+		`${base}/journal`,
+		journalSchema.element,
+	);
+	const ledger = usePages(
+		["archive-ledger", roundId],
+		`${base}/ledger`,
+		ledgerSchema.element,
+	);
+	const plans = usePages(
+		["plans", "archive", roundId],
+		`plans?round_id=${encodeURIComponent(roundId)}`,
+		planSchema,
+	);
 	return (
 		<Modal title="已归档练习 · 只读" onClose={onClose} wide>
 			{query.isPending ? (
@@ -38,8 +62,6 @@ export function Archive({
 				/>
 			) : (
 				<div className="stack">
-					<AssetHistory roundId={roundId} />
-					<AdjustmentRecords roundId={roundId} />
 					<div>
 						<Badge>历史轮次</Badge>
 						<p className="footnote">
@@ -47,21 +69,14 @@ export function Archive({
 							{time(query.data.archived_at)}（北京时间）
 						</p>
 						<p className="notice">
-							这是此前练习的历史记录，不影响当前账户，也不能在此修改或交易。
+							这是此前练习的历史记录，不影响当前账户，也不能在此修改或交易。各类记录可分批加载至全部，导出包含完整历史。
 						</p>
 					</div>
-					<a
-						className="text-button"
-						href={`/api/rounds/${encodeURIComponent(roundId)}/export.csv`}
-						download
-					>
+					<AssetHistory roundId={roundId} />
+					<AdjustmentRecords roundId={roundId} />
+					<a className="text-button" href={`/api/${base}/export.csv`} download>
 						导出本轮完整资金流水
 					</a>
-					{query.data.truncated && (
-						<p className="notice">
-							记录较多，每类最多展示最近 500 条；完整资金流水可导出查看。
-						</p>
-					)}
 					<section>
 						<h3>归档时现金余额</h3>
 						<dl className="summary-list">
@@ -73,53 +88,141 @@ export function Archive({
 							))}
 						</dl>
 					</section>
-					<section>
-						<h3>历史委托（{query.data.orders.length}）</h3>
-						{query.data.orders.length === 0 ? (
-							<p className="footnote">本轮没有委托。</p>
+					<Reviews roundId={roundId} />
+					<details>
+						<summary>全部历史计划（含草稿）</summary>
+						{plans.isPending ? (
+							<Loading />
 						) : (
-							query.data.orders.map((o) => <OrderRecord key={o.id} order={o} />)
+							plans.isError && (
+								<ErrorNotice
+									message={errorMessage(plans.error)}
+									retry={() => void plans.refetch()}
+								/>
+							)
+						)}
+						<div className="plan-list">
+							{plans.items.map((plan) => (
+								<article className="plan-record" key={plan.id}>
+									<PlanSummary plan={plan} />
+								</article>
+							))}
+						</div>
+						{plans.data && (
+							<Pagination
+								count={plans.items.length}
+								total={plans.total}
+								pending={plans.isFetchingNextPage}
+								more={plans.hasNextPage}
+								onMore={() => void plans.fetchNextPage()}
+							/>
+						)}
+					</details>
+					<Alerts roundId={roundId} />
+					<section>
+						<h3>历史委托（{orders.total}）</h3>
+						{orders.isPending ? (
+							<Loading />
+						) : orders.isError ? (
+							<ErrorNotice
+								message={errorMessage(orders.error)}
+								retry={() => void orders.refetch()}
+							/>
+						) : (
+							orders.total === 0 && <p className="footnote">本轮没有委托。</p>
+						)}
+						{orders.items.map((order) => (
+							<OrderRecord key={order.id} order={order} />
+						))}
+						{orders.data && (
+							<Pagination
+								count={orders.items.length}
+								total={orders.total}
+								pending={orders.isFetchingNextPage}
+								more={orders.hasNextPage}
+								onMore={() => void orders.fetchNextPage()}
+							/>
 						)}
 					</section>
 					<section>
-						<h3>历史复盘（{query.data.journal.length}）</h3>
-						<div className="journal-list">
-							{query.data.journal.length === 0 ? (
+						<h3>历史复盘笔记（{notes.total}）</h3>
+						{notes.isPending ? (
+							<Loading />
+						) : notes.isError ? (
+							<ErrorNotice
+								message={errorMessage(notes.error)}
+								retry={() => void notes.refetch()}
+							/>
+						) : (
+							notes.total === 0 && (
 								<p className="footnote">本轮没有复盘笔记。</p>
-							) : (
-								query.data.journal.map((j) => (
-									<article key={j.id}>
-										<small>
-											{time(j.created_at)}
-											{j.order_id ? " · 关联交易" : ""}
-										</small>
-										<p>{j.text}</p>
-										<LinkedTrade
-											linked={j.order_id !== null}
-											order={query.data.orders.find((o) => o.id === j.order_id)}
-										/>
-									</article>
-								))
-							)}
+							)
+						)}
+						<div className="journal-list">
+							{notes.items.map((entry) => (
+								<article key={entry.id}>
+									<small>
+										{time(entry.created_at)}（北京时间）
+										{entry.plan_id
+											? " · 关联计划"
+											: entry.order_id
+												? " · 关联委托"
+												: " · 独立笔记"}
+									</small>
+									<p className="review-notes">{entry.text}</p>
+									<LinkedTrade
+										linked={entry.order_id !== null}
+										order={orders.items.find(
+											(order) => order.id === entry.order_id,
+										)}
+									/>
+								</article>
+							))}
 						</div>
+						{notes.data && (
+							<Pagination
+								count={notes.items.length}
+								total={notes.total}
+								pending={notes.isFetchingNextPage}
+								more={notes.hasNextPage}
+								onMore={() => void notes.fetchNextPage()}
+							/>
+						)}
 					</section>
 					<section>
-						<h3>历史资金流水（{query.data.ledger.length}）</h3>
-						<div className="ledger-list">
-							{query.data.ledger.length === 0 ? (
+						<h3>历史资金流水（{ledger.total}）</h3>
+						{ledger.isPending ? (
+							<Loading />
+						) : ledger.isError ? (
+							<ErrorNotice
+								message={errorMessage(ledger.error)}
+								retry={() => void ledger.refetch()}
+							/>
+						) : (
+							ledger.total === 0 && (
 								<p className="footnote">本轮没有资金变动。</p>
-							) : (
-								query.data.ledger.map((l) => (
-									<article key={l.id}>
-										<div>
-											<strong>{l.note}</strong>
-											<small>{time(l.created_at)}</small>
-										</div>
-										<b>{money(l.amount, l.currency)}</b>
-									</article>
-								))
-							)}
+							)
+						)}
+						<div className="ledger-list">
+							{ledger.items.map((entry) => (
+								<article key={entry.id}>
+									<div>
+										<strong>{entry.note}</strong>
+										<small>{time(entry.created_at)}</small>
+									</div>
+									<b>{money(entry.amount, entry.currency)}</b>
+								</article>
+							))}
 						</div>
+						{ledger.data && (
+							<Pagination
+								count={ledger.items.length}
+								total={ledger.total}
+								pending={ledger.isFetchingNextPage}
+								more={ledger.hasNextPage}
+								onMore={() => void ledger.fetchNextPage()}
+							/>
+						)}
 					</section>
 				</div>
 			)}

@@ -1,16 +1,16 @@
-import {
-	RecordFilters,
-	initialRecordFilter,
-	recordMatches,
-} from "./RecordFilters";
-import { OrderRecord } from "./OrderRecord";
-import { useOnline } from "./useOnline";
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { z } from "zod";
 import { api, errorMessage } from "./api";
+import { OrderRecord } from "./OrderRecord";
+import {
+	initialRecordFilter,
+	RecordFilters,
+	recordMatches,
+} from "./RecordFilters";
 import { orderSchema } from "./schema";
 import { Empty, ErrorNotice, Loading, Panel } from "./ui";
+import { useOnline } from "./useOnline";
 export function Orders({
 	onJournal,
 }: {
@@ -57,7 +57,7 @@ export function Orders({
 				}
 			>
 				<RecordFilters value={recordFilter} onChange={setRecordFilter} />
-				<div className="segmented" aria-label="筛选委托">
+				<fieldset className="segmented" aria-label="筛选委托">
 					{[
 						{ id: "all", label: "全部" },
 						{ id: "active", label: "进行中" },
@@ -72,7 +72,7 @@ export function Orders({
 							{f.label}
 						</button>
 					))}
-				</div>
+				</fieldset>
 				{cancel.isError && <ErrorNotice message={errorMessage(cancel.error)} />}{" "}
 				{query.isPending ? (
 					<Loading />

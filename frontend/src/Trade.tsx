@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { ApiError, api, errorMessage } from "./api";
+import { PlanPicker } from "./PlanPicker";
+import type { Plan } from "./planSchema";
 import type { Instrument } from "./schema";
 import { orderSchema, previewSchema } from "./schema";
 import { TradePreview } from "./TradePreview";
@@ -44,8 +46,12 @@ export function Trade({
 		requestId: crypto.randomUUID(),
 	});
 	const client = useQueryClient();
+	const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 	const payload = {
 		request_id: draft.requestId,
+		...(selectedPlan
+			? { plan_id: selectedPlan.id, plan_version: selectedPlan.version }
+			: {}),
 		symbol: instrument.symbol,
 		side,
 		order_type: draft.type,
@@ -100,14 +106,14 @@ export function Trade({
 	});
 	useEffect(() => {
 		if (!online) preview.reset();
-	}, [online]);
+	}, [online, preview.reset]);
 	useEffect(() => {
 		const resume = () => {
 			if (document.visibilityState === "visible") preview.reset();
 		};
 		document.addEventListener("visibilitychange", resume);
 		return () => document.removeEventListener("visibilitychange", resume);
-	}, []);
+	}, [preview.reset]);
 	const change = (patch: Partial<Draft>) => {
 		setDraft((previous) => ({
 			...previous,
@@ -155,6 +161,22 @@ export function Trade({
 						submit.isPending
 					}
 				>
+					<PlanPicker
+						symbol={instrument.symbol}
+						selected={selectedPlan}
+						onSelect={(plan) => {
+							setSelectedPlan(plan);
+							change(
+								plan
+									? {
+											reason: plan.reason,
+											target: plan.target_price ?? "",
+											stop: plan.stop_price ?? "",
+										}
+									: {},
+							);
+						}}
+					/>
 					<div className="field">
 						<label htmlFor="order-type">委托方式</label>
 						<select
@@ -265,20 +287,18 @@ export function Trade({
 					</div>
 					<details>
 						<summary>记录目标价与止损参考价</summary>
-						<p className="footnote">仅供复盘，不会自动触发买卖。</p>
+						<p className="footnote">
+							以原币记录参考值，可保留四位小数；不会自动触发买卖。
+						</p>
 						<div className="form-grid">
 							<div className="field">
 								<label htmlFor="target">目标价</label>
 								<input
 									id="target"
 									type="number"
-									min={instrument.tick_size}
-									step={
-										instrument.tick_rule === "HK" ||
-										instrument.tick_rule === "US"
-											? "any"
-											: instrument.tick_size
-									}
+									inputMode="decimal"
+									min="0.0001"
+									step="any"
 									value={draft.target}
 									onChange={(e) => change({ target: e.target.value })}
 								/>
@@ -288,13 +308,9 @@ export function Trade({
 								<input
 									id="stop"
 									type="number"
-									min={instrument.tick_size}
-									step={
-										instrument.tick_rule === "HK" ||
-										instrument.tick_rule === "US"
-											? "any"
-											: instrument.tick_size
-									}
+									inputMode="decimal"
+									min="0.0001"
+									step="any"
 									value={draft.stop}
 									onChange={(e) => change({ stop: e.target.value })}
 								/>

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { ArrowRight, ChartBar, LockKey } from "@phosphor-icons/react";
 import { useMutation } from "@tanstack/react-query";
-import { ChartBar, LockKey, ArrowRight } from "@phosphor-icons/react";
+import { useState } from "react";
 import { api, errorMessage } from "./api";
 import { acknowledgmentSchema } from "./schema";
 import { ErrorNotice } from "./ui";

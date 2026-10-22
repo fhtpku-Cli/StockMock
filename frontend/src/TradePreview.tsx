@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import type { previewSchema } from "./schema";
 import { money, price, time } from "./api";
+import type { previewSchema } from "./schema";
 export function TradePreview({
 	preview,
 	currency,

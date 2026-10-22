@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
-import type { ReactNode } from "react";
 import {
 	ArrowClockwise,
-	X,
 	ChartLine,
 	WarningCircle,
+	X,
 } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
+import { useEffect, useRef } from "react";
 export function Panel({
 	title,
 	action,
@@ -121,6 +121,30 @@ export function Modal({
 			ref={ref}
 			className={wide ? "modal wide" : "modal"}
 			onCancel={onClose}
+			onKeyDown={(event) => {
+				if (event.key !== "Tab") return;
+				const dialog = event.currentTarget;
+				const controls = Array.from(
+					dialog.querySelectorAll<HTMLElement>(
+						'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])',
+					),
+				).filter(
+					(element) =>
+						element.getClientRects().length > 0 &&
+						element.closest("dialog") === dialog,
+				);
+				if (controls.length === 0) return;
+				event.preventDefault();
+				const current = controls.findIndex(
+					(element) => element === document.activeElement,
+				);
+				const next = event.shiftKey
+					? current <= 0
+						? controls.length - 1
+						: current - 1
+					: (current + 1) % controls.length;
+				controls[next]?.focus();
+			}}
 		>
 			<div className="modal-heading">
 				<h2>{title}</h2>
