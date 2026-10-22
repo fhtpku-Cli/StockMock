@@ -1,8 +1,9 @@
+import { TradePreview } from "./TradePreview";
 import { z } from "zod";
 import { useOnline } from "./useOnline";
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiError, api, errorMessage, money, price, time } from "./api";
+import { ApiError, api, errorMessage } from "./api";
 import { orderSchema, previewSchema } from "./schema";
 import type { Instrument } from "./schema";
 import { ErrorNotice, Modal } from "./ui";
@@ -290,54 +291,11 @@ export function Trade({
 					</p>
 				)}
 				{preview.isSuccess && (
-					<div className="preview-box">
-						<h3>确认这笔委托</h3>
-						<dl className="summary-list">
-							<div>
-								<dt>价格边界</dt>
-								<dd>
-									{price(
-										preview.data.price_bound,
-										instrument.currency,
-										undefined,
-									)}
-								</dd>
-							</div>
-							<div>
-								<dt>预计费用</dt>
-								<dd>
-									{money(preview.data.estimated_fee, instrument.currency)}
-								</dd>
-							</div>
-							<div>
-								<dt>占用人民币</dt>
-								<dd>{money(preview.data.reserved_cny)}</dd>
-							</div>
-							<div>
-								<dt>占用外币</dt>
-								<dd>
-									{money(preview.data.reserved_foreign, instrument.currency)}
-								</dd>
-							</div>
-							{preview.data.fx_rate && (
-								<div>
-									<dt>换汇参考</dt>
-									<dd>
-										1 {instrument.currency} = {preview.data.fx_rate} CNY
-									</dd>
-								</div>
-							)}
-							<div>
-								<dt>有效至（北京时间）</dt>
-								<dd>{time(preview.data.expires_at)}</dd>
-							</div>
-						</dl>
-						{preview.data.warnings.map((w) => (
-							<p key={w} className="notice">
-								{w}
-							</p>
-						))}
-					</div>
+					<TradePreview
+						preview={preview.data}
+						currency={instrument.currency}
+						side={side}
+					/>
 				)}
 				<p className="footnote">
 					提交后等待有效行情确认，可能延迟成交。撤单确认前，资金或持仓继续占用。

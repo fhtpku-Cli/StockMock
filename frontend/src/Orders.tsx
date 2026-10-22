@@ -3,22 +3,14 @@ import {
 	initialRecordFilter,
 	recordMatches,
 } from "./RecordFilters";
+import { OrderRecord } from "./OrderRecord";
 import { useOnline } from "./useOnline";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { api, errorMessage, money, price, time } from "./api";
+import { api, errorMessage } from "./api";
 import { orderSchema } from "./schema";
-import type { Order } from "./schema";
-import { Badge, Empty, ErrorNotice, Loading, Panel } from "./ui";
-const statuses = {
-	accepted: "等待成交",
-	cancel_pending: "撤单确认中",
-	filled: "已成交",
-	cancelled: "已撤单",
-	expired: "已过期",
-	terminated: "已终止",
-} as const;
+import { Empty, ErrorNotice, Loading, Panel } from "./ui";
 export function Orders({
 	onJournal,
 }: {
@@ -96,154 +88,35 @@ export function Orders({
 				) : (
 					<div className="order-list">
 						{orders?.map((o) => (
-							<OrderRow
+							<OrderRecord
 								key={o.id}
 								order={o}
-								busy={!online || cancel.isPending}
-								cancel={() => cancel.mutate(o.id)}
-								onJournal={() => onJournal(o.id)}
+								actions={
+									<>
+										<button
+											type="button"
+											className="text-button"
+											onClick={() => onJournal(o.id)}
+										>
+											写复盘
+										</button>
+										{o.status === "accepted" && (
+											<button
+												type="button"
+												className="button small"
+												disabled={!online || cancel.isPending}
+												onClick={() => cancel.mutate(o.id)}
+											>
+												{cancel.isPending ? "处理中…" : "申请撤单"}
+											</button>
+										)}
+									</>
+								}
 							/>
 						))}
 					</div>
 				)}
 			</Panel>
 		</div>
-	);
-}
-function OrderRow({
-	order: o,
-	busy,
-	cancel,
-	onJournal,
-}: {
-	readonly order: Order;
-	readonly busy: boolean;
-	readonly cancel: () => void;
-	readonly onJournal: () => void;
-}) {
-	return (
-		<article className="order-row">
-			<div className="order-top">
-				<div>
-					<strong>{o.symbol}</strong>
-					<span className={o.side === "buy" ? "positive" : "negative"}>
-						{o.side === "buy" ? "买入" : "卖出"} {o.quantity} 股 / 份
-					</span>
-				</div>
-				<Badge
-					tone={
-						o.status === "filled"
-							? "good"
-							: o.status === "accepted" || o.status === "cancel_pending"
-								? "warn"
-								: "neutral"
-					}
-				>
-					{statuses[o.status]}
-				</Badge>
-			</div>
-			<div className="order-details">
-				<span>
-					{o.order_type === "limit" ? "限价" : "市价模拟"}{" "}
-					{price(o.limit_price ?? o.price_bound, o.currency)}
-				</span>
-				<span>提交 {time(o.created_at)}</span>
-				{o.fill_price && <span>成交 {price(o.fill_price, o.currency)}</span>}
-				{o.fee && <span>费用 {money(o.fee, o.currency)}</span>}
-			</div>
-			{o.status_reason && <p className="footnote">{o.status_reason}</p>}
-			<details>
-				<summary>时间与交易计划</summary>
-				<dl className="summary-list">
-					<div>
-						<dt>生效时间</dt>
-						<dd>{time(o.active_at)}</dd>
-					</div>
-					<div>
-						<dt>有效至</dt>
-						<dd>{time(o.expires_at)}</dd>
-					</div>
-					<div>
-						<dt>成交时间 / 确认时间</dt>
-						<dd>
-							{time(o.filled_at)} / {time(o.confirmed_at)}
-						</dd>
-					</div>
-					<div>
-						<dt>撤单请求时间</dt>
-						<dd>{time(o.cancel_at)}</dd>
-					</div>
-					<div>
-						<dt>成交行情来源</dt>
-						<dd>
-							{o.source || "历史记录未注明"} ·
-							以委托生效后的完整有效样本判断成交，不按图中高低价补成交。
-						</dd>
-					</div>
-					{o.currency !== "CNY" && o.fx_source && o.fx_time && o.fx_rate && (
-						<div>
-							<dt>委托锁定换汇参考</dt>
-							<dd>
-								1 {o.currency} = {o.fx_rate} CNY · {o.fx_source || "未注明"} ·{" "}
-								{time(o.fx_time)} · 实际换汇以资金流水为准
-							</dd>
-						</div>
-					)}
-					{o.currency !== "CNY" && (!o.fx_source || !o.fx_time) && (
-						<p className="footnote">
-							{o.side === "sell"
-								? "卖出款保留原币，本单无人民币换汇参考。"
-								: "本单无人民币换汇参考，使用已有外币现金；实际变动以流水为准。"}
-						</p>
-					)}
-					{o.side === "sell" && o.status === "filled" && (
-						<>
-							<div>
-								<dt>卖出份额成本（含买入费用）</dt>
-								<dd>{money(o.cost_basis ?? null, o.currency)}</dd>
-							</div>
-							<div>
-								<dt>已实现收益（原币，扣除买卖费用）</dt>
-								<dd>{money(o.realized_pnl ?? null, o.currency)}</dd>
-							</div>
-							<p className="footnote">
-								仅为本次卖出份额的原币净收益，不含分红与换汇影响；剩余持仓浮动收益另计。
-							</p>
-							{o.realized_pnl == null && (
-								<p className="footnote">
-									此历史成交未保存成本结转，不能确认单笔收益。
-								</p>
-							)}
-						</>
-					)}
-					<div>
-						<dt>交易理由</dt>
-						<dd>{o.reason || "未填写"}</dd>
-					</div>
-					<div>
-						<dt>目标 / 止损参考价</dt>
-						<dd>
-							{price(o.target_price, o.currency)} /{" "}
-							{price(o.stop_price, o.currency)}
-						</dd>
-					</div>
-				</dl>
-			</details>
-			<div className="order-actions">
-				<button type="button" className="text-button" onClick={onJournal}>
-					写复盘
-				</button>
-				{o.status === "accepted" && (
-					<button
-						type="button"
-						className="button small"
-						disabled={busy}
-						onClick={cancel}
-					>
-						{busy ? "处理中…" : "申请撤单"}
-					</button>
-				)}
-			</div>
-		</article>
 	);
 }

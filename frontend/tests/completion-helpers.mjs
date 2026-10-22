@@ -1,13 +1,15 @@
+import { verifyPreview } from "./completion-checks.mjs";
 import { launchBrowser } from "./browser.mjs";
 import { expect } from "@playwright/test";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 export async function createCompletionFixture() {
 	const out = new URL(
-		"../../.omo/evidence/completion-20261023/ui/",
+		process.env.FRONTEND_TEST_OUTPUT ??
+			"../../.omo/evidence/completion-20261023/ui/",
 		import.meta.url,
 	).pathname;
 	await mkdir(out, { recursive: true });
-	const url = "http://127.0.0.1:8004";
+	const url = process.env.FRONTEND_TEST_URL ?? "http://127.0.0.1:8004";
 	const browser = await launchBrowser();
 	const context = await browser.newContext({
 		viewport: { width: 1440, height: 1000 },
@@ -51,6 +53,7 @@ export async function createCompletionFixture() {
 		await page.getByLabel("搜索代码或名称").fill(symbol);
 		await page.locator(".security-main").click();
 	};
+	let previewCount = 0;
 	const order = async (side, quantity, price) => {
 		await discover("AAPL");
 		await page
@@ -68,10 +71,23 @@ export async function createCompletionFixture() {
 					? "受控验收：计划持有两周，检验资金与成本。"
 					: "受控验收：分批退出并复盘费用。",
 			);
+		await page.getByText("记录目标价与止损参考价", { exact: true }).click();
+		await page.getByLabel("目标价", { exact: true }).fill("120");
+		await page.getByLabel("止损参考价", { exact: true }).fill("80");
+		const response = page.waitForResponse(
+			(r) =>
+				r.url().endsWith("/api/orders/preview") &&
+				r.request().method() === "POST",
+		);
 		await page.getByRole("button", { name: "预览费用与资金占用" }).click();
 		await expect(
 			page.getByRole("heading", { name: "确认这笔委托" }),
 		).toBeVisible();
+		const preview = await (await response).json();
+		await verifyPreview({ page, preview, side });
+		await shot(`preview-${++previewCount}-${side}`);
+		scenes.push({ name: `preview-api-${previewCount}`, preview });
+		await page.setViewportSize({ width: 1440, height: 1000 });
 		await page.getByRole("button", { name: "确认提交委托" }).click();
 		await expect(page.getByRole("heading", { name: "委托记录" })).toBeVisible();
 	};

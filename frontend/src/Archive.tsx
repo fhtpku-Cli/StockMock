@@ -1,8 +1,9 @@
+import { OrderRecord, LinkedTrade } from "./OrderRecord";
 import { AdjustmentRecords } from "./Adjustments";
 import { AssetHistory } from "./AssetHistory";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
-import { api, errorMessage, money, price, time } from "./api";
+import { api, errorMessage, money, time } from "./api";
 import { decimal, journalSchema, ledgerSchema, orderSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 const archiveSchema = z.object({
@@ -77,30 +78,7 @@ export function Archive({
 						{query.data.orders.length === 0 ? (
 							<p className="footnote">本轮没有委托。</p>
 						) : (
-							query.data.orders.map((o) => (
-								<article className="order-row" key={o.id}>
-									<strong>
-										{o.symbol} · {o.side === "buy" ? "买入" : "卖出"}{" "}
-										{o.quantity}
-									</strong>
-									<p className="footnote">
-										{time(o.created_at)} ·{" "}
-										{o.fill_price
-											? `成交 ${price(o.fill_price, o.currency)}`
-											: `限价 ${price(o.limit_price ?? o.price_bound, o.currency)}`}{" "}
-										· {o.status_reason}
-									</p>
-									<p>{o.reason || "未填写交易理由"}</p>
-									{o.side === "sell" && o.status === "filled" && (
-										<p className="footnote">
-											已实现收益（原币，扣除买卖费用）：
-											{o.realized_pnl == null
-												? "历史值未记录"
-												: money(o.realized_pnl, o.currency)}
-										</p>
-									)}
-								</article>
-							))
+							query.data.orders.map((o) => <OrderRecord key={o.id} order={o} />)
 						)}
 					</section>
 					<section>
@@ -116,6 +94,10 @@ export function Archive({
 											{j.order_id ? " · 关联交易" : ""}
 										</small>
 										<p>{j.text}</p>
+										<LinkedTrade
+											linked={j.order_id !== null}
+											order={query.data.orders.find((o) => o.id === j.order_id)}
+										/>
 									</article>
 								))
 							)}

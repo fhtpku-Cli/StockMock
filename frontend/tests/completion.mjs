@@ -1,3 +1,4 @@
+import { verifyArchive } from "./completion-checks.mjs";
 import { expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { readFile, writeFile } from "node:fs/promises";
@@ -22,12 +23,13 @@ try {
 	await page
 		.getByLabel("访问密码")
 		.fill(
-			(
-				await readFile(
-					new URL("../../backend/.local-password", import.meta.url),
-					"utf8",
-				)
-			).trim(),
+			process.env.FRONTEND_TEST_PASSWORD ??
+				(
+					await readFile(
+						new URL("../../backend/.local-password", import.meta.url),
+						"utf8",
+					)
+				).trim(),
 		);
 	await page.getByRole("button", { name: "进入我的空间" }).click();
 	await expect(page.getByRole("heading", { name: "资产概览" })).toBeVisible();
@@ -205,11 +207,17 @@ try {
 	await page.getByRole("button", { name: "查看历史" }).click();
 	const archive = page.getByRole("dialog", { name: "已归档练习 · 只读" });
 	await expect(archive).toContainText("部分卖出已实现7.60美元");
-	await expect(archive.locator(".order-row")).toHaveCount(4);
+	await expect(
+		archive
+			.locator("section")
+			.filter({ has: page.getByRole("heading", { name: /历史委托/ }) })
+			.locator(".order-row"),
+	).toHaveCount(4);
 	await expect(
 		archive.getByRole("button", { name: /模拟买入|模拟卖出|重开/ }),
 	).toHaveCount(0);
 	await shot("archived-cycle");
+	await verifyArchive({ page, archive, shot });
 	expect(errors).toEqual([]);
 	await writeFile(
 		out + "result.json",

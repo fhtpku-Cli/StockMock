@@ -112,12 +112,15 @@ class Engine:
             request,
             OrderContext(quote, rate, now, reference),
         )
+        conversion_rate = rate if order.reserved_cny > 0 else None
         return Preview(
             price_bound=order.price_bound,
             estimated_fee=money(order.price_bound * order.quantity * FEE),
             reserved_cny=order.reserved_cny,
             reserved_foreign=order.reserved_foreign,
-            fx_rate=order.fx_rate,
+            fx_rate=conversion_rate.cny_per_unit if conversion_rate else None,
+            fx_source=conversion_rate.source if conversion_rate else None,
+            fx_time=conversion_rate.market_time if conversion_rate else None,
             expires_at=order.expires_at,
             warnings=["模拟费用 0.05%；整笔成交；行情可能延迟；公司行动需人工核对"],
         )

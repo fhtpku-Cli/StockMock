@@ -77,6 +77,8 @@ export const previewSchema = z.object({
 	reserved_cny: decimal,
 	reserved_foreign: decimal,
 	fx_rate: decimal.nullable(),
+	fx_source: z.string().nullable(),
+	fx_time: z.iso.datetime({ offset: true }).nullable(),
 	expires_at: z.string(),
 	warnings: z.array(z.string()),
 });

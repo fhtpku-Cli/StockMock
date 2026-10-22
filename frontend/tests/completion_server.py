@@ -1,10 +1,12 @@
 """完整交易浏览器验收服务：临时 SQLite、受控时钟和测试文件驱动行情。
 
-仅绑定 127.0.0.1:8004。控制文件由同机测试脚本写入，生产没有此入口。
+默认绑定 127.0.0.1:8004，可通过 FRONTEND_TEST_PORT 指定隔离端口。
+FRONTEND_TEST_OUTPUT 指定证据目录，FRONTEND_TEST_PASSWORD 指定独立测试密码。控制文件由同机测试脚本写入，生产没有此入口。
 运行：backend/.venv/bin/python frontend/tests/completion_server.py
 """
 
 import json
+import os
 import tempfile
 import threading
 from contextlib import ExitStack
@@ -24,7 +26,7 @@ import test_engine
 from test_engine import ControlledProvider
 import uvicorn
 
-OUTPUT = ROOT / ".omo/evidence/completion-20261023/ui"
+OUTPUT = Path(os.environ.get("FRONTEND_TEST_OUTPUT", str(ROOT / ".omo/evidence/completion-20261023/ui"))).resolve()
 NOW = datetime(2026, 10, 22, 15, 0, tzinfo=UTC)
 
 
@@ -99,10 +101,10 @@ if __name__ == "__main__":
         try:
             uvicorn.run(
                 create_app(
-                    engine=engine, password=(ROOT / "backend/.local-password").read_text().strip(), run_worker=False
+                    engine=engine, password=os.environ.get("FRONTEND_TEST_PASSWORD") or (ROOT / "backend/.local-password").read_text().strip(), run_worker=False
                 ),
                 host="127.0.0.1",
-                port=8004,
+                port=int(os.environ.get("FRONTEND_TEST_PORT", "8004")),
                 log_level="warning",
             )
         finally:

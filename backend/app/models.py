@@ -136,7 +136,9 @@ class Preview(Model):
     estimated_fee: Decimal
     reserved_cny: Decimal
     reserved_foreign: Decimal
-    fx_rate: Decimal
+    fx_rate: Decimal | None
+    fx_source: str | None
+    fx_time: datetime | None
     expires_at: datetime
     warnings: list[str]
 
