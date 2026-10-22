@@ -57,12 +57,8 @@ def invoke(args: list[str], *, check: bool = True) -> subprocess.CompletedProces
 def main() -> None:
     """安装、启动、查询、停止或移除当前用户服务。"""
     parser = argparse.ArgumentParser(description=__doc__)
-    _ = parser.add_argument(
-        "action", choices=["install", "start", "status", "stop", "uninstall"]
-    )
-    _ = parser.add_argument(
-        "--dry-run", action="store_true", help="仅显示计划，不修改主机"
-    )
+    _ = parser.add_argument("action", choices=["install", "start", "status", "stop", "uninstall"])
+    _ = parser.add_argument("--dry-run", action="store_true", help="仅显示计划，不修改主机")
     args = Arguments()
     _ = parser.parse_args(namespace=args)
     path = Path.home() / "Library/LaunchAgents" / f"{LABEL}.plist"
@@ -90,9 +86,9 @@ def main() -> None:
     if path.exists() and not path.is_symlink():
         try:
             with path.open("rb") as stream:
-                owned = TypeAdapter(
-                    dict[str, str | bool | int | list[str]]
-                ).validate_python(plistlib.load(stream), strict=True) == plist(ROOT)
+                owned = TypeAdapter(dict[str, str | bool | int | list[str]]).validate_python(
+                    plistlib.load(stream), strict=True
+                ) == plist(ROOT)
         except (plistlib.InvalidFileException, ValueError, OSError):
             owned = False
     process_match = re.search(r"\bpid = (\d+)", result.stdout or "")
@@ -104,9 +100,7 @@ def main() -> None:
                     "已加载": loaded,
                     "属于当前项目": owned,
                     "进程PID": process_match.group(1) if process_match else None,
-                    "正在运行": bool(
-                        re.search(r"state = running", result.stdout or "")
-                    ),
+                    "正在运行": bool(re.search(r"state = running", result.stdout or "")),
                     "本机8000端口可连接": port_busy(),
                 },
                 ensure_ascii=False,
@@ -114,9 +108,7 @@ def main() -> None:
         )
         return
     if (path.exists() or loaded) and not owned:
-        parser.error(
-            "同名服务不属于当前项目或无法核对；拒绝停止、删除、覆盖或复用，请人工检查"
-        )
+        parser.error("同名服务不属于当前项目或无法核对；拒绝停止、删除、覆盖或复用，请人工检查")
     if args.action in {"stop", "uninstall"}:
         if loaded:
             _ = invoke(["launchctl", "bootout", target])
@@ -128,9 +120,7 @@ def main() -> None:
         print("服务已加载；没有重复启动。")
         return
     if port_busy():
-        parser.error(
-            "127.0.0.1:8000 已被占用。请自行停止旧实例后重试；不会终止其他进程。"
-        )
+        parser.error("127.0.0.1:8000 已被占用。请自行停止旧实例后重试；不会终止其他进程。")
     for item in (
         ROOT / "backend/.venv/bin/python",
         ROOT / "frontend/dist/index.html",
@@ -147,9 +137,7 @@ def main() -> None:
         check=False,
     )
     if preflight.returncode:
-        parser.error(
-            "运行配置检查失败。请核对密码权限、.runtime.json 和依赖；未启动服务。"
-        )
+        parser.error("运行配置检查失败。请核对密码权限、.runtime.json 和依赖；未启动服务。")
     if args.action == "install":
         if path.exists():
             parser.error("服务文件已存在；请先检查现有配置，或卸载后重装")

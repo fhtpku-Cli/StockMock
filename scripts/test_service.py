@@ -43,13 +43,9 @@ class ServiceTests(unittest.TestCase):
             path.write_bytes(plistlib.dumps(payload))
             self.assertEqual(plistlib.loads(path.read_bytes()), payload)
             if REAL_PLATFORM == "darwin":
-                result = subprocess.run(
-                    ["plutil", "-lint", str(path)], capture_output=True, text=True
-                )
+                result = subprocess.run(["plutil", "-lint", str(path)], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(
-                payload["ProgramArguments"][0], str(root / "backend/.venv/bin/python")
-            )
+            self.assertEqual(payload["ProgramArguments"][0], str(root / "backend/.venv/bin/python"))
             self.assertNotIn("EnvironmentVariables", payload)
             self.assertTrue(payload["KeepAlive"])
 
@@ -58,9 +54,7 @@ class ServiceTests(unittest.TestCase):
             root = Path(temp)
             (root / "backend").mkdir()
             config = root / "backend/.runtime.json"
-            config.write_text(
-                json.dumps({"PAPER_ALLOWED_HOSTS": "localhost,private.ts.net"})
-            )
+            config.write_text(json.dumps({"PAPER_ALLOWED_HOSTS": "localhost,private.ts.net"}))
             config.chmod(0o600)
             self.assertEqual(
                 runtime.configuration(root)["PAPER_ALLOWED_HOSTS"],
@@ -79,9 +73,7 @@ class ServiceTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as temp,
             patch.object(service.Path, "home", return_value=Path(temp)),
             patch.object(service, "port_busy", return_value=True),
-            patch.object(
-                service, "invoke", return_value=subprocess.CompletedProcess([], 1)
-            ) as calls,
+            patch.object(service, "invoke", return_value=subprocess.CompletedProcess([], 1)) as calls,
             patch("sys.argv", ["service.py", "install"]),
         ):
             with self.assertRaises(SystemExit):
@@ -103,9 +95,7 @@ class ServiceTests(unittest.TestCase):
             with (
                 patch.object(service, "ROOT", root),
                 patch.object(service.Path, "home", return_value=root),
-                patch.object(
-                    service, "invoke", return_value=subprocess.CompletedProcess([], 0)
-                ) as calls,
+                patch.object(service, "invoke", return_value=subprocess.CompletedProcess([], 0)) as calls,
                 patch("sys.argv", ["service.py", "uninstall"]),
             ):
                 service.main()
@@ -140,16 +130,10 @@ class ServiceTests(unittest.TestCase):
             handler = runtime.configure_logging(folder)
             try:
                 for _ in range(4500):
-                    handler.emit(
-                        logging.LogRecord(
-                            "test", logging.INFO, "test", 1, "x" * 1000, (), None
-                        )
-                    )
+                    handler.emit(logging.LogRecord("test", logging.INFO, "test", 1, "x" * 1000, (), None))
                 self.assertLessEqual(len(list(folder.glob("service.log*"))), 4)
                 self.assertTrue((folder / "service.log.3").exists())
-                self.assertTrue(
-                    all(path.stat().st_size < 1_002_000 for path in folder.iterdir())
-                )
+                self.assertTrue(all(path.stat().st_size < 1_002_000 for path in folder.iterdir()))
             finally:
                 handler.close()
                 for name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):

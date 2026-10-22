@@ -16,11 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def read_private(path: Path) -> str:
     """拒绝链接和非本人私密文件，避免意外公开配置。"""
     info = path.lstat()
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or stat.S_IMODE(info.st_mode) != 0o600
-        or info.st_uid != os.getuid()
-    ):
+    if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
         raise RuntimeError(f"文件须由当前用户拥有且权限为 0600：{path}")
     return path.read_text()
 
@@ -47,12 +43,8 @@ def configuration(root: Path) -> dict[str, str]:
 
 def configure_logging(log_dir: Path) -> logging.handlers.RotatingFileHandler:
     """运行日志限制为当前文件加三份历史，不输出访问请求。"""
-    handler = logging.handlers.RotatingFileHandler(
-        log_dir / "service.log", maxBytes=1_000_000, backupCount=3
-    )
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-    )
+    handler = logging.handlers.RotatingFileHandler(log_dir / "service.log", maxBytes=1_000_000, backupCount=3)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     for name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
         logger = logging.getLogger(name)
         logger.handlers = [handler]
@@ -92,9 +84,7 @@ def main() -> None:
     if "--check-config" in sys.argv:
         print("运行配置、密码权限与依赖检查通过；未启动服务。")
         return
-    uvicorn.run(
-        app, host="127.0.0.1", port=8000, workers=1, log_config=None, access_log=False
-    )
+    uvicorn.run(app, host="127.0.0.1", port=8000, workers=1, log_config=None, access_log=False)
 
 
 if __name__ == "__main__":
