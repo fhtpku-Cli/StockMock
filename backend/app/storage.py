@@ -35,6 +35,16 @@ class Store:
                 """CREATE TABLE IF NOT EXISTS requests(
                 id TEXT PRIMARY KEY, payload TEXT NOT NULL, response TEXT NOT NULL)"""
             )
+            _ = connection.execute(
+                """CREATE TABLE IF NOT EXISTS snapshots(
+                round_id TEXT NOT NULL, day TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(round_id,day))"""
+            )
+            _ = connection.execute(
+                """CREATE TABLE IF NOT EXISTS adjustments(
+                id TEXT PRIMARY KEY, round_id TEXT NOT NULL, symbol TEXT NOT NULL,
+                kind TEXT NOT NULL, effective_date TEXT NOT NULL, data TEXT NOT NULL,
+                UNIQUE(round_id,symbol,kind,effective_date))"""
+            )
             if connection.execute("SELECT id FROM rounds WHERE active=1").fetchone() is None:
                 self.save(connection, State(id=str(uuid4()), created_at=datetime.now(UTC)))
 

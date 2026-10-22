@@ -1,4 +1,4 @@
-"""启动：uv run uvicorn app.main:app --host 127.0.0.1 --port 8000。"""
+"""启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
 from fastapi import Depends, FastAPI
 
@@ -14,6 +14,7 @@ from app.engine import Engine
 from app.models import (
     Instrument,
 )
+from app.order_rules import tick_size
 
 
 def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
@@ -31,6 +32,7 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return QuoteView(
             symbol=symbol,
             price=data.price,
+            tick_size=tick_size(item, data.price),
             currency=data.currency,
             market_time=data.market_time,
             retrieved_at=data.retrieved_at,

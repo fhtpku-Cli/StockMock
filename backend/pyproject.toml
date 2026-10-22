@@ -9,6 +9,7 @@ dependencies = [
     "anyio>=4",
     "exchange-calendars>=4.11",
     "httpx2[brotli,http2,zstd]>=2.16.0",
+    "quickjs-ng>=0.17.0.1",
 ]
 [dependency-groups]
 dev = ["pytest>=8", "httpx>=0.28", "ruff", "basedpyright"]

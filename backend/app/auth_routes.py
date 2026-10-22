@@ -1,4 +1,4 @@
-"""启动：uv run uvicorn app.main:app --host 127.0.0.1 --port 8000。"""
+"""启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
 from fastapi import FastAPI, Request, Response
 
@@ -23,7 +23,7 @@ def register(app: FastAPI, auth: Auth) -> None:
             "paper_session",
             token,
             httponly=True,
-            secure=auth.secure,
+            secure=auth.secure or request.url.scheme == "https",
             samesite="strict",
             max_age=43200,
         )

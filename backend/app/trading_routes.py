@@ -1,16 +1,20 @@
-"""启动：uv run uvicorn app.main:app --host 127.0.0.1 --port 8000。"""
+"""启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Query
 
 from app.auth import Auth
 from app.engine import Engine
 from app.models import (
+    DomainError,
     Order,
     OrderInput,
     Preview,
 )
+from app.personal_models import Sizing
+from app.sizing import size_order
 
 
 def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
@@ -20,6 +24,12 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
     def preview(body: OrderInput) -> Preview:
         """检查委托资源并返回预览，不改变账户。"""
         return engine.preview(body, datetime.now(UTC))
+
+    @app.post("/api/orders/size", dependencies=[Depends(auth.require)])
+    def sizing(body: OrderInput, percent: Annotated[int, Query(ge=1, le=100)] = 100) -> Sizing:
+        if percent not in {25, 50, 100}:
+            raise DomainError("invalid_percent", "仓位比例仅支持 25、50 或 100", 422)
+        return size_order(engine, body, datetime.now(UTC), percent)
 
     @app.post("/api/orders", dependencies=[Depends(auth.require)])
     def place(body: OrderInput) -> Order:

@@ -96,6 +96,10 @@ def test_http_order_validation_and_worker_without_browser(engine: Engine, monkey
         }
         invalid = {**payload, "quantity": -1}
         assert client.post("/api/orders", json=invalid).status_code == 422
+        sized = client.post("/api/orders/size?percent=25", json=payload)
+        assert sized.status_code == 200, sized.text
+        assert sized.json()["suggested_quantity"] == 2400
+        assert client.post("/api/orders/size?percent=13", json=payload).status_code == 422
         response = client.post("/api/orders", json=payload)
         assert response.status_code == 200, response.text
         assert client.post("/api/orders", json=payload).json()["id"] == response.json()["id"]

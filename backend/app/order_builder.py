@@ -10,6 +10,7 @@ from app.accounting import FEE, available, money, sellable
 from app.calendar import is_open, window
 from app.marketdata import FxRate, Quote
 from app.models import DomainError, Instrument, Order, OrderInput, State
+from app.order_rules import tick_size, validate_quantity
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,15 +27,22 @@ def price_bound(item: Instrument, request: OrderInput, quote: Quote, now: dateti
     """确定限价或按报价步长保守舍入的市价保护边界。"""
     match request.order_type:
         case "limit":
-            if request.limit_price is None or request.limit_price % item.tick_size:
-                raise DomainError("invalid_price", f"请输入符合 {item.tick_size} 步长的限价", 422)
+            if request.limit_price is None:
+                raise DomainError("invalid_price", "请输入限价", 422)
+            step = tick_size(item, request.limit_price)
+            if request.limit_price % step:
+                raise DomainError("invalid_price", f"请输入符合 {step} 步长的限价", 422)
             return request.limit_price
         case "market":
             if not is_open(item, now):
                 raise DomainError("market_closed", "市价模拟只在常规连续交易时段受理")
             factor = Decimal("1.02") if request.side == "buy" else Decimal(".98")
             rounding = ROUND_FLOOR if request.side == "buy" else ROUND_CEILING
-            return (quote.price * factor / item.tick_size).to_integral_value(rounding=rounding) * item.tick_size
+            raw = quote.price * factor
+            step = tick_size(item, raw)
+            bound = (raw / step).to_integral_value(rounding=rounding) * step
+            actual_step = tick_size(item, bound)
+            return (bound / actual_step).to_integral_value(rounding=rounding) * actual_step
         case _:
             assert_never(request.order_type)
 
@@ -42,13 +50,14 @@ def price_bound(item: Instrument, request: OrderInput, quote: Quote, now: dateti
 def build_order(item: Instrument, state: State, request: OrderInput, context: OrderContext) -> Order:
     """校验价格与数量，计算订单参考汇率及资源预留。"""
     quote, rate, now, reference = context.quote, context.rate, context.now, context.reference
-    if request.quantity % item.lot_size:
-        raise DomainError("invalid_lot", f"数量必须为 {item.lot_size} 股的整数倍", 422)
+    validate_quantity(item, state, request)
     opening, closing = window(item, now)
     bound = price_bound(item, request, quote, now)
     lower = upper = None
     if reference is not None:
-        fraction = Decimal(".20") if item.symbol == "159915.SZ" else Decimal(".10")
+        fraction = item.price_limit_ratio
+        if fraction is None:
+            raise DomainError("unsupported_price_limit", "缺少已核验日价格范围，不受理该证券")
         lower = ((reference * (1 - fraction)) / item.tick_size).quantize(
             Decimal(1), rounding="ROUND_HALF_UP"
         ) * item.tick_size

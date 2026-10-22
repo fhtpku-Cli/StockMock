@@ -6,8 +6,8 @@ from decimal import Decimal
 from app.accounting import ACTIVE, money, reserved, sellable
 from app.catalog import instrument
 from app.engine import Engine
-from app.marketdata import MarketDataError
 from app.models import CashView, Portfolio, PositionView, WorkerView
+from app.valuation import value_account
 
 
 def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
@@ -22,36 +22,22 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
         )
         for c, b in state.cash.items()
     ]
-    rates = {"CNY": Decimal(1)}
-    warnings = ["个人模拟账本；资金交收简化；分红、拆股尚未自动处理，持仓收益需人工核对"]
-    if any(b for c, b in state.cash.items() if c != "CNY") or any(
-        instrument(lot.symbol, engine.catalog).currency != "CNY" for lot in state.lots
-    ):
-        try:
-            rates.update({r.currency: r.cny_per_unit for r in engine.provider.fx_rates()})
-        except MarketDataError:
-            warnings.append("外汇估值数据不可用，总资产暂不计算")
-    total = sum((b * rates.get(c, Decimal(0)) for c, b in state.cash.items()), Decimal(0))
-    complete = all(c in rates or not b for c, b in state.cash.items())
+    valuation = value_account(engine, state, now)
+    warnings = ["个人模拟账本；资金交收简化；公司行动需本人核对登记", *valuation.issues]
+    if any(valuation.receivables.values()):
+        warnings.append("总资产包含已登记应收股息；确认到账前不可用于委托")
     positions: list[PositionView] = []
     for symbol in sorted({lot.symbol for lot in state.lots}):
         item = instrument(symbol, engine.catalog)
         quantity = sum(lot.quantity for lot in state.lots if lot.symbol == symbol)
         cost = sum((lot.cost for lot in state.lots if lot.symbol == symbol), Decimal(0))
-        price = value = pnl = None
+        price = valuation.prices.get(symbol)
+        value = pnl = None
         status = "行情不可用，收益待核对"
-        try:
-            quote = engine.provider.quote(symbol)
-            price = quote.price
+        if price is not None:
             value = money(price * quantity)
             pnl = value - cost
-            status = f"参考估值；报价时间 {quote.market_time.isoformat()}；公司行动待核对"
-            if item.currency in rates:
-                total += value * rates[item.currency]
-            else:
-                complete = False
-        except MarketDataError:
-            complete = False
+            status = f"参考估值；报价时间 {valuation.times[symbol].isoformat()}；公司行动需人工核对"
         positions.append(
             PositionView(
                 symbol=symbol,
@@ -69,14 +55,12 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
                 valuation_status=status,
             )
         )
-    assets = money(total) if complete else None
+    assets = valuation.total
     return Portfolio(
         round_id=state.id,
         total_assets_cny=assets,
-        pnl_cny=money(total - Decimal(1000000)) if complete else None,
-        valuation_status="参考估值，持仓收益待核对"
-        if state.lots and complete
-        else ("完整" if complete else "行情缺失"),
+        pnl_cny=money(assets - Decimal(1000000)) if assets is not None else None,
+        valuation_status="参考估值，持仓收益待核对" if assets is not None else "行情缺失或过期",
         cash=cash,
         positions=positions,
         worker=worker,

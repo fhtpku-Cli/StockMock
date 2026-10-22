@@ -1,6 +1,6 @@
 """按交易所日历处理假日、午休及美国夏令时。"""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from functools import lru_cache
 
 import exchange_calendars as xcals
@@ -35,9 +35,15 @@ def is_open(item: Instrument, at: datetime) -> bool:
     local = at.astimezone(cal.tz)
     if item.market == "CN" and (local.hour, local.minute) >= (14, 57):
         return False
+    lunch_start = {"CN": time(11, 30), "HK": time(12)}.get(item.market)
+    if lunch_start is not None and lunch_start <= local.time() < time(13):
+        return False
     try:
-        return bool(cal.is_open_on_minute(at.replace(second=0, microsecond=0), ignore_breaks=False))
-    except (ValueError, IndexError):
+        opening, closing = window(item, at)
+        return opening <= at < closing and bool(
+            cal.is_open_on_minute(at.replace(second=0, microsecond=0), ignore_breaks=False)
+        )
+    except (ValueError, IndexError, DomainError):
         return False
 
 

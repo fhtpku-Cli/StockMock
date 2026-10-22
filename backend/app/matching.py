@@ -17,6 +17,7 @@ def eligible_time(order: Order, item: Instrument, sample: Quote, now: datetime) 
         and sample.volume is not None
         and sample.volume > 0
         and start < event
+        and event - start <= timedelta(minutes=5)
         and event > order.created_at
         and event > order.active_at
         and sample.price > 0

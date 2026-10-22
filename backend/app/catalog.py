@@ -1,100 +1,35 @@
-"""小范围观察清单；未核验的真实行情不进入撮合。"""
+"""将已核验主数据装配为交易目录，未知代码明确拒绝。"""
 
-from decimal import Decimal
 from typing import Final
 
+from app.instrument_registry import catalog_rules
 from app.models import DomainError, Instrument
 
-CATALOG: Final = (
+CATALOG: Final = tuple(
     Instrument(
-        symbol="600519.SS",
-        name="贵州茅台",
-        market="CN",
-        currency="CNY",
-        kind="stock",
-        lot_size=100,
-        tick_size=Decimal(".01"),
-        settlement_days=1,
-        tradable=True,
-        restriction="仅常规时段完整五分钟样本；停牌和公司行动需人工核对",
-    ),
-    Instrument(
-        symbol="510300.SS",
-        name="沪深300ETF",
-        market="CN",
-        currency="CNY",
-        kind="ETF",
-        lot_size=100,
-        tick_size=Decimal(".001"),
-        settlement_days=1,
-        tradable=True,
-        restriction="仅常规时段完整五分钟样本；停牌和公司行动需人工核对",
-    ),
-    Instrument(
-        symbol="000001.SZ",
-        name="平安银行",
-        market="CN",
-        currency="CNY",
-        kind="stock",
-        lot_size=100,
-        tick_size=Decimal(".01"),
-        settlement_days=1,
-        tradable=True,
-        restriction="仅常规时段完整五分钟样本；停牌和公司行动需人工核对",
-    ),
-    Instrument(
-        symbol="159915.SZ",
-        name="创业板ETF",
-        market="CN",
-        currency="CNY",
-        kind="ETF",
-        lot_size=100,
-        tick_size=Decimal(".001"),
-        settlement_days=1,
-        tradable=True,
-        restriction="仅常规时段完整五分钟样本；停牌和公司行动需人工核对",
-    ),
-    Instrument(
-        symbol="0700.HK",
-        name="腾讯控股",
-        market="HK",
-        currency="HKD",
-        kind="stock",
-        lot_size=100,
-        tick_size=Decimal(".2"),
-    ),
-    Instrument(
-        symbol="2800.HK",
-        name="盈富基金",
-        market="HK",
-        currency="HKD",
-        kind="ETF",
-        lot_size=500,
-        tick_size=Decimal(".02"),
-    ),
-    Instrument(
-        symbol="AAPL",
-        name="苹果",
-        market="US",
-        currency="USD",
-        kind="stock",
-        lot_size=1,
-        tick_size=Decimal(".01"),
-    ),
-    Instrument(
-        symbol="SPY",
-        name="标普500ETF",
-        market="US",
-        currency="USD",
-        kind="ETF",
-        lot_size=1,
-        tick_size=Decimal(".01"),
-    ),
+        symbol=rule.symbol,
+        name=rule.name,
+        market=rule.market,
+        currency=rule.currency,
+        kind=rule.kind,
+        lot_size=rule.lot_size,
+        tick_size=rule.tick_size,
+        settlement_days=rule.settlement_days,
+        tradable=rule.tradable,
+        restriction=rule.restriction,
+        price_limit_ratio=rule.price_limit_ratio,
+        min_buy_quantity=rule.min_buy_quantity,
+        quantity_step=rule.quantity_step,
+        tick_rule=rule.tick_rule,
+        rule_source=rule.rule_source,
+        verified_on=str(rule.verified_on),
+    )
+    for rule in catalog_rules()
 )
 
 
 def instrument(symbol: str, catalog: tuple[Instrument, ...] = CATALOG) -> Instrument:
-    """解析已支持标的，拒绝任意未知代码。"""
+    """仅接纳包含来源与交易规则的目录条目。"""
     for item in catalog:
         if item.symbol == symbol:
             return item

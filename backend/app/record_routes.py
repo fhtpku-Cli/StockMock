@@ -1,4 +1,4 @@
-"""启动：uv run uvicorn app.main:app --host 127.0.0.1 --port 8000。"""
+"""启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
 import csv
 import io

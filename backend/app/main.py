@@ -1,4 +1,4 @@
-"""启动：uv run uvicorn app.main:app --host 127.0.0.1 --port 8000。"""
+"""启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
 import os
 from collections.abc import AsyncGenerator
@@ -6,10 +6,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anyio
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import RequestResponseEndpoint
 
 from app.asset_routes import register as register_asset_routes
 from app.auth import Auth
@@ -21,7 +20,10 @@ from app.marketdata import MarketDataClient, MarketDataError
 from app.models import (
     DomainError,
 )
+from app.personal_routes import register as register_personal_routes
 from app.record_routes import register as register_record_routes
+from app.security import AccessConfig
+from app.security import register as register_security
 from app.storage import Store
 from app.trading_routes import register as register_trading_routes
 from app.worker import Worker
@@ -67,30 +69,7 @@ def create_app(
     app.state.engine = engine
     app.state.worker = worker
 
-    @app.middleware("http")
-    async def origin_guard(request: Request, call_next: RequestResponseEndpoint) -> Response:
-        origin = request.headers.get("origin")
-        if request.method not in {"GET", "HEAD", "OPTIONS"} and origin:
-            allowed = {
-                f"{request.url.scheme}://{request.headers.get('host', '')}",
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-            }
-            if origin not in allowed:
-                return JSONResponse(
-                    {
-                        "detail": {
-                            "code": "origin_rejected",
-                            "message": "拒绝跨站写入请求",
-                        }
-                    },
-                    status_code=403,
-                )
-        response = await call_next(request)
-        response.headers["Cache-Control"] = "no-store"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        return response
+    register_security(app, AccessConfig.from_env())
 
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, error: DomainError) -> JSONResponse:
@@ -116,11 +95,9 @@ def create_app(
     register_trading_routes(app, engine, auth)
     register_record_routes(app, engine, auth)
     register_asset_routes(app, engine, auth, worker)
+    register_personal_routes(app, engine, auth)
 
     frontend = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if frontend.exists():
         app.mount("/", StaticFiles(directory=frontend, html=True), name="frontend")
     return app
-
-
-app = create_app()

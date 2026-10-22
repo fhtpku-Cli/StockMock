@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Protocol, final
 
 from app.accounting import ACTIVE, FEE, money
+from app.action_guard import check_actions
 from app.calendar import is_open, prior_session_day, window
 from app.catalog import CATALOG, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
@@ -60,10 +61,22 @@ class Engine:
         if not samples:
             raise DomainError("quote_unavailable", "暂无完整的可成交分钟样本")
         quote = samples[-1]
-        if not quote.tradable or quote.currency != item.currency or quote.price <= 0 or quote.market_time > now:
+        if (
+            not quote.tradable
+            or quote.symbol != item.symbol
+            or quote.currency != item.currency
+            or quote.price <= 0
+            or quote.market_time > now
+            or quote.interval_start is None
+            or quote.volume is None
+            or quote.volume <= 0
+        ):
             raise DomainError("quote_unverified", "当前行情不能用于成交，请等待已核验样本")
         if is_open(item, now) and now - quote.market_time > timedelta(minutes=20):
             raise DomainError("quote_stale", "行情超过容忍时效，暂停新订单")
+        with self.store.transaction() as connection:
+            state = self.store.load(connection)
+            check_actions(connection, state.id, item, quote, now)
         rate = self.optional_rate(item, request, now)
         reference = None
         if item.market == "CN":
@@ -140,6 +153,7 @@ class Engine:
                     raise DomainError("idempotency_conflict", "相同请求编号不能用于不同操作")
                 saved = Order.model_validate_json(row[1])
                 return next((o for o in state.orders if o.id == saved.id), saved)
+            check_actions(connection, state.id, instrument(request.symbol, self.catalog), quote, now)
             order = build_order(
                 instrument(request.symbol, self.catalog),
                 state,

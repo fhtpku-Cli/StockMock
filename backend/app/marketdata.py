@@ -1,189 +1,41 @@
-"""个人研究行情边界：腾讯估值、新浪完整分钟线、Frankfurter 日频汇率。"""
+"""缓存和分派真实行情请求；失败不会生成替代报价。"""
 
 from __future__ import annotations
 
 import logging
 import socket
-from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime
 from threading import Lock
 from time import monotonic
-from typing import TYPE_CHECKING, ClassVar, Final, Literal, assert_never
-from zoneinfo import ZoneInfo
+from typing import TYPE_CHECKING, Final, assert_never
 
 import httpx2
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, ValidationError
 
+from app.instrument_registry import resolve_rule
+from app.marketdata_daily import SDK_URL, decode_daily, parse_daily
+from app.marketdata_futu import FutuOpenD
+from app.marketdata_futu_parser import futu_port, parse_futu_intraday
 from app.marketdata_models import Bar, Currency, FxRate, MarketDataError, Quote
+from app.marketdata_parsers import instrument_config, parse_fx, parse_history, parse_intraday, parse_quote
+from app.marketdata_us import parse_us_intraday
 
 if TYPE_CHECKING:
     from _thread import LockType
 
-__all__ = ["Bar", "Currency", "FxRate", "MarketDataError", "Quote"]
+    from app.instrument_rules import InstrumentRule
 
-SOURCE: Final = "tencent-public"
+__all__ = [
+    "Bar",
+    "Currency",
+    "FxRate",
+    "MarketDataError",
+    "Quote",
+    "parse_fx",
+    "parse_history",
+    "parse_intraday",
+    "parse_quote",
+]
 _MAX_RESPONSE_BYTES: Final = 1_000_000
-_FX_CURRENCIES: Final = {"HKD", "USD"}
-_SYMBOLS: Final = {
-    "600519.SS": ("sh600519", "CNY", "Asia/Shanghai", "%Y%m%d%H%M%S"),
-    "510300.SS": ("sh510300", "CNY", "Asia/Shanghai", "%Y%m%d%H%M%S"),
-    "000001.SZ": ("sz000001", "CNY", "Asia/Shanghai", "%Y%m%d%H%M%S"),
-    "159915.SZ": ("sz159915", "CNY", "Asia/Shanghai", "%Y%m%d%H%M%S"),
-    "0700.HK": ("hk00700", "HKD", "Asia/Hong_Kong", "%Y/%m/%d %H:%M:%S"),
-    "2800.HK": ("hk02800", "HKD", "Asia/Hong_Kong", "%Y/%m/%d %H:%M:%S"),
-    "AAPL": ("usAAPL", "USD", "America/New_York", "%Y-%m-%d %H:%M:%S"),
-    "SPY": ("usSPY", "USD", "America/New_York", "%Y-%m-%d %H:%M:%S"),
-}
-
-
-class _Boundary(BaseModel):
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, allow_inf_nan=False)
-
-
-class _Daily(_Boundary):
-    day: list[list[JsonValue]] = Field(default_factory=list)
-
-
-class _History(_Boundary):
-    code: int
-    data: dict[str, _Daily]
-
-
-class _Minute(_Boundary):
-    day: datetime
-    open: Decimal = Field(gt=0)
-    high: Decimal = Field(gt=0)
-    low: Decimal = Field(gt=0)
-    close: Decimal = Field(gt=0)
-    volume: Decimal = Field(ge=0)
-
-
-class _Fx(_Boundary):
-    date: date
-    base: Literal["CNY"]
-    quote: Literal["HKD", "USD"]
-    rate: Decimal = Field(gt=0)
-
-
-def _instrument(symbol: str) -> tuple[str, Currency, ZoneInfo, str]:
-    if symbol not in _SYMBOLS:
-        raise MarketDataError("unsupported_symbol", symbol)
-    code, currency, zone, pattern = _SYMBOLS[symbol]
-    return code, TypeAdapter(Currency).validate_python(currency), ZoneInfo(zone), pattern
-
-
-def parse_quote(raw: bytes, symbol: str, retrieved_at: datetime) -> Quote:
-    """腾讯字段 30 仅是供应商时间，始终不可作为成交依据。"""
-    code, currency, zone, pattern = _instrument(symbol)
-    try:
-        text = raw.decode("gb18030").strip()
-        prefix = f'v_{code}="'
-        if not text.startswith(prefix) or not text.endswith('";'):
-            raise MarketDataError("invalid_response", symbol)
-        fields = text[len(prefix) : -2].split("~")
-        price = TypeAdapter(Decimal).validate_python(fields[3])
-        stamp = datetime.strptime(fields[30], pattern).replace(tzinfo=zone).astimezone(UTC)
-        if not price.is_finite() or price <= 0 or stamp > retrieved_at + timedelta(minutes=1):
-            raise MarketDataError("invalid_quote", symbol)
-        return Quote(symbol, price, currency, stamp, retrieved_at, SOURCE)
-    except (UnicodeError, IndexError, ValueError) as exc:
-        raise MarketDataError("invalid_response", symbol) from exc
-
-
-def parse_intraday(raw: bytes, symbol: str, retrieved_at: datetime) -> tuple[Quote, ...]:
-    """新浪五分钟时间标签为区间末端；只输出已结束且有成交量的区间。"""
-    _, currency, zone, _ = _instrument(symbol)
-    if currency != "CNY":
-        raise MarketDataError("intraday_unverified", symbol)
-    try:
-        text = raw.decode("utf-8")
-        start, end = text.index("([") + 1, text.rindex("]);") + 1
-        rows = TypeAdapter(list[_Minute]).validate_json(text[start:end])
-        results: list[Quote] = []
-        for row in rows:
-            valid_range = row.low <= min(row.open, row.close) <= max(row.open, row.close) <= row.high
-            if row.day.tzinfo is not None or not valid_range:
-                raise MarketDataError("invalid_bar", symbol)
-            stamp = row.day.replace(tzinfo=zone).astimezone(UTC)
-            if row.day.minute % 5 or row.day.second:
-                raise MarketDataError("invalid_bar_time", symbol)
-            if stamp <= retrieved_at and row.volume > 0:
-                results.append(
-                    Quote(
-                        symbol,
-                        row.close,
-                        currency,
-                        stamp,
-                        retrieved_at,
-                        "sina-public-5m",
-                        tradable=True,
-                        interval_start=stamp - timedelta(minutes=5),
-                        volume=row.volume,
-                    )
-                )
-        if len({row.market_time for row in results}) != len(results):
-            raise MarketDataError("duplicate_bar", symbol)
-        return tuple(sorted(results, key=lambda row: row.market_time))
-    except (UnicodeError, ValueError) as exc:
-        raise MarketDataError("invalid_response", symbol) from exc
-
-
-def parse_history(raw: bytes, symbol: str, retrieved_at: datetime) -> tuple[Bar, ...]:
-    """日线日期仅作图表标签；不推导具体成交时点，不用于撮合。"""
-    code, currency, zone, _ = _instrument(symbol)
-    try:
-        payload = _History.model_validate_json(raw)
-        if payload.code != 0 or code not in payload.data or not payload.data[code].day:
-            raise MarketDataError("history_unavailable", symbol)
-        bars: list[Bar] = []
-        for row in payload.data[code].day:
-            day, opening, close, high, low, volume = TypeAdapter(
-                tuple[date, Decimal, Decimal, Decimal, Decimal, Decimal],
-            ).validate_python(row[:6])
-            finite = all(value.is_finite() for value in (opening, close, high, low, volume))
-            if not finite or not 0 < low <= min(opening, close) <= max(opening, close) <= high or volume < 0:
-                raise MarketDataError("invalid_bar", symbol)
-            bars.append(
-                Bar(
-                    symbol,
-                    day,
-                    opening,
-                    high,
-                    low,
-                    close,
-                    volume,
-                    currency,
-                    datetime.combine(day, time.min, zone).astimezone(UTC),
-                    retrieved_at,
-                    SOURCE,
-                )
-            )
-        return tuple(bars)
-    except ValidationError as exc:
-        raise MarketDataError("invalid_response", symbol) from exc
-
-
-def parse_fx(raw: bytes, retrieved_at: datetime) -> tuple[FxRate, ...]:
-    """以每日参考值倒数得到每单位外币对应人民币，不伪造发布时间。"""
-    try:
-        rows = TypeAdapter(list[_Fx]).validate_json(raw)
-        if len(rows) != len(_FX_CURRENCIES) or {row.quote for row in rows} != _FX_CURRENCIES:
-            raise MarketDataError("incomplete_fx", "HKD/USD")
-        if len({row.date for row in rows}) != 1 or any(row.date > retrieved_at.date() for row in rows):
-            raise MarketDataError("invalid_fx_date", "HKD/USD")
-        rates = tuple(
-            FxRate(
-                row.quote,
-                Decimal(1) / row.rate,
-                datetime.combine(row.date, time.min, UTC),
-                retrieved_at,
-                "frankfurter-v2-daily",
-            )
-            for row in rows
-        )
-        return (FxRate("CNY", Decimal(1), rates[0].market_time, retrieved_at, "currency-identity"), *rates)
-    except ValidationError as exc:
-        raise MarketDataError("invalid_response", "FX") from exc
 
 
 def _log_response(response: httpx2.Response) -> None:
@@ -222,6 +74,8 @@ class MarketDataClient:
                     assert_never(value)
 
     def _get(self, url: str) -> bytes:
+        if url.startswith("futu:"):
+            return FutuOpenD(futu_port()).history_bytes(url.removeprefix("futu:"))
         transport = httpx2.HTTPTransport(
             http2=True,
             retries=3,
@@ -250,25 +104,43 @@ class MarketDataClient:
         except httpx2.RequestError as exc:
             raise MarketDataError("network_error", type(exc).__name__) from exc
 
-    def quote(self, symbol: str) -> Quote:
+    def quote(self, symbol: str | InstrumentRule) -> Quote:
         """获取只供观察和估值的真实快照。"""
-        code, _, _, _ = _instrument(symbol)
+        code, _, _, _ = instrument_config(symbol)
         raw, retrieved_at = self._load(f"https://qt.gtimg.cn/q={code}", 60)
         return parse_quote(raw, symbol, retrieved_at)
 
-    def intraday(self, symbol: str) -> tuple[Quote, ...]:
-        """获取境内证券完整五分钟候选，交易层另查合法时段。"""
-        code, currency, _, _ = _instrument(symbol)
-        if currency != "CNY":
-            raise MarketDataError("intraday_unverified", symbol)
-        endpoint = "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_data=/"
-        url = f"{endpoint}CN_MarketDataService.getKLineData?symbol={code}&scale=5&ma=no&datalen=240"
+    def intraday(self, symbol: str | InstrumentRule) -> tuple[Quote, ...]:
+        """按已核验市场分派完整区间，交易层另查会话与委托时点。"""
+        rule = resolve_rule(symbol)
+        match rule.market:
+            case "CN":
+                endpoint = "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_data=/"
+                url = (
+                    f"{endpoint}CN_MarketDataService.getKLineData?symbol={rule.provider_code}&scale=5&ma=no&datalen=240"
+                )
+                parser = parse_intraday
+            case "US":
+                endpoint = "https://stock.finance.sina.com.cn/usstock/api/jsonp_v2.php/var%20_data=/"
+                url = f"{endpoint}US_MinKService.getMinK?symbol={rule.symbol}&type=5&___qn=3"
+                parser = parse_us_intraday
+            case "HK":
+                url = f"futu:{rule.provider_code[2:]}"
+                parser = parse_futu_intraday
+            case _:
+                assert_never(rule.market)
         raw, retrieved_at = self._load(url, 60)
-        return parse_intraday(raw, symbol, retrieved_at)
+        return parser(raw, rule, retrieved_at)
 
-    def history(self, symbol: str) -> tuple[Bar, ...]:
-        """读取最多三十条未复权日线，实际数量由来源决定。"""
-        code, _, _, _ = _instrument(symbol)
+    def history(self, symbol: str | InstrumentRule) -> tuple[Bar, ...]:
+        """美股最多 252 条、其余最多 30 条原始日线；实际数量由来源决定。"""
+        rule = resolve_rule(symbol)
+        if rule.market == "US":
+            sdk, _ = self._load(SDK_URL, 86400)
+            url = f"https://finance.sina.com.cn/us_stock/company/hisdata/klc_kl_{rule.symbol}.js"
+            raw, retrieved_at = self._load(url, 3600)
+            return parse_daily(decode_daily(raw, sdk, rule.symbol), rule, retrieved_at)
+        code, _, _, _ = instrument_config(symbol)
         url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},day,,,30,"
         raw, retrieved_at = self._load(url, 3600)
         return parse_history(raw, symbol, retrieved_at)

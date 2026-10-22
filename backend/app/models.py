@@ -28,6 +28,12 @@ class Instrument(Model):
     tradable: bool = False
     restriction: str = "行情时间与交易规则未完成核验，仅供观察"
     settlement_days: int = 0
+    price_limit_ratio: Decimal | None = None
+    min_buy_quantity: int | None = None
+    quantity_step: int | None = None
+    tick_rule: Literal["fixed", "HK", "US"] = "fixed"
+    rule_source: str = ""
+    verified_on: str = ""
 
 
 class OrderInput(Model):
