@@ -14,6 +14,7 @@ import app.activated_registry as registry_module
 import app.trading_routes as trading_module
 import app.worker as worker_module
 from app.activated_registry import RuleProvider
+from app.admission_sources import candidate_rule
 from app.catalog import CATALOG
 from app.discovery import Discovery
 from app.discovery_models import ObservationInstrument
@@ -62,6 +63,18 @@ def inject(monkeypatch: pytest.MonkeyPatch, rule: InstrumentRule) -> None:
 
 
 def security_rule(symbol: str) -> InstrumentRule:
+    if symbol in {"159902.SZ", "159957.SZ", "SCHD"}:
+        domestic = symbol.endswith(".SZ")
+        return candidate_rule(
+            ObservationInstrument(
+                symbol=symbol,
+                name="受控股票ETF",
+                provider_code="sz" + symbol[:6] if domestic else "us" + symbol,
+                market="CN" if domestic else "US",
+                currency="CNY" if domestic else "USD",
+                kind="ETF",
+            )
+        )
     rule = candidate(symbol)
     if symbol == "300750.SZ":
         rule = rule.model_copy(update={"provider_code": "sz300750", "price_limit_ratio": Decimal(".2")})
@@ -86,14 +99,16 @@ def security_rule(symbol: str) -> InstrumentRule:
     return InstrumentRule.model_validate_json(rule.model_dump_json())
 
 
-@pytest.mark.parametrize("symbol", ["600000.SS", "300750.SZ", "688981.SS", "512880.SS", "PLTR"])
+@pytest.mark.parametrize(
+    "symbol", ["600000.SS", "300750.SZ", "688981.SS", "512880.SS", "PLTR", "159902.SZ", "159957.SZ", "SCHD"]
+)
 def test_new_security_http_worker_restart_sell(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, symbol: str) -> None:
     # Given: 新标的未在基础目录，真实数据库与行情规则适配器均隔离。
     rule = security_rule(symbol)
     inject(monkeypatch, rule)
     engine = isolated(tmp_path)
     quantity = rule.min_buy_quantity or rule.lot_size
-    if symbol == "PLTR":
+    if rule.market == "US":
         Clock.current = NOW.replace(hour=14)
     with TestClient(create_app(engine, PASSWORD, run_worker=False)) as client:
         assert client.post("/api/auth/login", json={"password": PASSWORD}).status_code == 200
@@ -101,6 +116,7 @@ def test_new_security_http_worker_restart_sell(tmp_path: Path, monkeypatch: pyte
         response = client.post(f"/api/instruments/{symbol}/enable", json={})
         assert response.status_code == 200, response.text
         assert Instrument.model_validate_json(response.content).tradable
+        assert client.post(f"/api/instruments/{symbol}/enable", json={}).content == response.content
         payload = {
             "request_id": str(uuid4()),
             "symbol": symbol,

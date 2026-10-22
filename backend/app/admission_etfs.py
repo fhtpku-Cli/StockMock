@@ -76,4 +76,45 @@ ETF_METADATA: Final = {
     "515050.SS": EtfMetadata(
         "https://www.sse.com.cn/disclosure/fund/announcement/c/2020-10-26/515050_20201027_1.pdf", Decimal(".1")
     ),
+    "159901.SZ": EtfMetadata("https://www.efunds.com.cn/fund/159901_org.shtml", Decimal(".1")),
+    **{
+        f"{code}.SZ": EtfMetadata(f"https://www.chinaamc.com/fund/{code}/index.shtml", Decimal(limit))
+        for code, limit in (
+            ("159902", ".1"),
+            ("159995", ".1"),
+            ("159957", ".2"),
+            ("159966", ".2"),
+            ("159967", ".2"),
+        )
+    },
+    **{
+        f"{code}.SZ": EtfMetadata(f"https://qy.99fund.com/fundDetail/index.htm?fundId={code}", Decimal(".1"))
+        for code in ("159912", "159928", "159929", "159930", "159931")
+    },
+    "159938.SZ": EtfMetadata("https://www.gffunds.com.cn/jjgg/flwj/202601/P020260106334888466020.pdf", Decimal(".1")),
+    "159939.SZ": EtfMetadata(
+        "https://dataclouds.cninfo.com.cn/sjother2/fund/2026/20260324/2c64588a31f04c7594fca45e60b8e9de.pdf",
+        Decimal(".1"),
+    ),
+    **{
+        symbol: EtfMetadata(
+            "https://www.ishares.com/us/literature/product-brief/ishares-core-us-stock-product-brief-itot-ivv-ijh-ijr-en-us.pdf",
+            None,
+        )
+        for symbol in ("ITOT", "IJH", "IJR")
+    },
+    "IWF": EtfMetadata("https://www.ishares.com/us/products/239706/ishares-russell-1000-growth-etf", None),
+    "IWD": EtfMetadata("https://www.ishares.com/us/products/239708/ishares-russell-1000-value-etf", None),
+    **{
+        symbol: EtfMetadata(f"https://www.schwabassetmanagement.com/products/{symbol.lower()}", None)
+        for symbol in ("SCHD", "SCHG", "SCHV", "SCHM", "SCHA")
+    },
+    "XLC": EtfMetadata(
+        "https://www.ssga.com/us/en/individual/etfs/state-street-communication-services-select-sector-spdr-etf-xlc",
+        None,
+    ),
+    "XBI": EtfMetadata(
+        "https://www.ssga.com/library-content/products/factsheets/etfs/us/factsheet-us-en-xbi.pdf", None
+    ),
+    "SMH": EtfMetadata("https://www.vaneck.com/us/en/investments/semiconductor-etf-smh/overview", None),
 }

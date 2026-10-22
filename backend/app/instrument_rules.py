@@ -79,7 +79,7 @@ _US: Final[tuple[tuple[str, str, Literal["stock", "ETF"]], ...]] = (
     *((entry.symbol, entry.name, entry.kind) for entry in US_EXPANSION),
 )
 _VERIFIED: Final = date(2026, 10, 22)
-_CN_RESTRICTION: Final = "仅成熟普通股票/境内股票ETF；ST、退市、IPO无涨跌幅期及个股科创/创业板不接入；公司行动人工核对"
+_CN_RESTRICTION: Final = "仅成熟普通A股及逐项核验的境内股票ETF；排除风险警示、退市及上市初期；公司行动人工核对"
 _CN_SOURCE: Final = "https://www.sse.com.cn/lawandrules/sselawsrules/trade/universal/"
 
 CATALOG_RULES: Final = (
