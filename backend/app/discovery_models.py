@@ -34,7 +34,9 @@ class SearchResult(Model):
 
     items: list[Instrument | ObservationInstrument]
     source: str = "tencent-smartbox / eastmoney-us-classification / hkex-securities-list"
-    message: str = "供应商搜索结果可能截断，非完整市场清单；筛选无结果时请输入更精确代码；目录外证券仅供观察"
+    message: str = (
+        "供应商搜索结果可能截断，非完整市场清单；筛选无结果时请输入更精确代码；核验前仅供观察；可在详情申请启用"
+    )
 
 
 def observation_identity(value: str | InstrumentRule | ObservationInstrument) -> InstrumentRule | ObservationInstrument:

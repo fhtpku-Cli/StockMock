@@ -12,6 +12,7 @@ from app.instrument_rules import CATALOG_RULES, InstrumentRule
 from app.marketdata_models import MarketDataError
 
 _CN_BOARD_LOT: Final = 100
+_STAR_MINIMUM: Final = 200
 _CN_CODE_LENGTH: Final = 6
 _HK_CODE_LENGTHS: Final = {4, 5}
 
@@ -47,13 +48,20 @@ def validate_rule(rule: InstrumentRule) -> InstrumentRule:
         raise MarketDataError("unsupported_instrument_class", rule.symbol)
     if rule.market == "CN":
         supported_stock = rule.provider_code.startswith(
-            ("sh600", "sh601", "sh603", "sh605", "sz000", "sz001", "sz002", "sz003")
+            ("sh600", "sh601", "sh603", "sh605", "sz000", "sz001", "sz002", "sz003", "sh688", "sz300", "sz301")
         )
         if rule.price_limit_ratio is None or (rule.kind == "stock" and not supported_stock):
             raise MarketDataError("unsupported_instrument_class", rule.symbol)
-        if rule.kind == "stock" and rule.price_limit_ratio != Decimal(".1"):
+        star = rule.kind == "stock" and rule.provider_code.startswith("sh688")
+        growth = rule.kind == "stock" and rule.provider_code.startswith(("sz300", "sz301"))
+        if rule.kind == "stock" and rule.price_limit_ratio != (Decimal(".2") if star or growth else Decimal(".1")):
             raise MarketDataError("invalid_instrument_rule", rule.symbol)
-        if rule.settlement_days != 1 or rule.lot_size != _CN_BOARD_LOT:
+        if (
+            (star and (rule.min_buy_quantity != _STAR_MINIMUM or rule.quantity_step != 1))
+            or (not star and (rule.min_buy_quantity not in {None, 100} or rule.quantity_step not in {None, 100}))
+            or rule.settlement_days != 1
+            or rule.lot_size != (1 if star else _CN_BOARD_LOT)
+        ):
             raise MarketDataError("invalid_instrument_rule", rule.symbol)
         expected_tick = Decimal(".01") if rule.kind == "stock" else Decimal(".001")
         if rule.tick_rule != "fixed" or rule.tick_size != expected_tick:

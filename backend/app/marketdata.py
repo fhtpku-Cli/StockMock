@@ -18,6 +18,7 @@ from app.marketdata_futu import FutuOpenD
 from app.marketdata_futu_parser import futu_port, parse_futu_intraday
 from app.marketdata_models import Bar, Currency, FxRate, MarketDataError, Quote
 from app.marketdata_parsers import instrument_config, parse_fx, parse_history, parse_intraday, parse_quote
+from app.marketdata_urls import tencent_history_url
 from app.marketdata_us import parse_us_intraday
 
 if TYPE_CHECKING:
@@ -145,8 +146,7 @@ class MarketDataClient:
             url = f"https://finance.sina.com.cn/us_stock/company/hisdata/klc_kl_{rule.symbol}.js"
             raw, retrieved_at = self._load(url, 3600)
             return parse_daily(decode_daily(raw, sdk, rule.symbol), rule, retrieved_at)
-        code, _, _, _ = instrument_config(symbol)
-        url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},day,,,30,"
+        url = tencent_history_url(rule, 30)
         raw, retrieved_at = self._load(url, 3600)
         return parse_history(raw, symbol, retrieved_at)
 

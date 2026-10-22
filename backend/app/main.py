@@ -10,10 +10,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.activated_registry import RuleProvider
+from app.admission_routes import register as register_admission_routes
 from app.asset_routes import register as register_asset_routes
 from app.auth import Auth
 from app.auth_routes import register as register_auth_routes
-from app.catalog import CATALOG, instrument
+from app.catalog import instrument
 from app.engine import Engine
 from app.market_routes import register as register_market_routes
 from app.marketdata import MarketDataClient, MarketDataError
@@ -32,15 +34,13 @@ from app.worker import Worker
 def configured_engine() -> Engine:
     """从本地环境配置建立真实行情与可人工暂停的标的清单。"""
     paused = frozenset(filter(None, os.getenv("PAPER_PAUSED_SYMBOLS", "").split(",")))
+    client = MarketDataClient()
+    engine = Engine(Store(Path(os.getenv("PAPER_DB", "data/paper.sqlite3"))), client)
     for symbol in paused:
-        _ = instrument(symbol)
-    catalog = tuple(
-        item.model_copy(update={"tradable": False, "restriction": "公司行动或规则待人工核对，已暂停交易"})
-        if item.symbol in paused
-        else item
-        for item in CATALOG
-    )
-    return Engine(Store(Path(os.getenv("PAPER_DB", "data/paper.sqlite3"))), MarketDataClient(), catalog)
+        _ = instrument(symbol, engine.catalog)
+    engine.paused = paused
+    engine.provider = RuleProvider(engine.registry, client)
+    return engine
 
 
 def create_app(
@@ -65,7 +65,7 @@ def create_app(
             yield
             group.cancel_scope.cancel()
 
-    app = FastAPI(title="个人模拟投资", version="0.1.2", lifespan=lifespan)
+    app = FastAPI(title="个人模拟投资", version="0.1.3", lifespan=lifespan)
     app.state.engine = engine
     app.state.worker = worker
 
@@ -92,6 +92,7 @@ def create_app(
 
     register_auth_routes(app, auth)
     register_market_routes(app, engine, auth)
+    register_admission_routes(app, engine, auth)
     register_trading_routes(app, engine, auth)
     register_record_routes(app, engine, auth)
     register_asset_routes(app, engine, auth, worker)

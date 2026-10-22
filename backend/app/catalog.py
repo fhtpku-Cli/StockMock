@@ -3,10 +3,13 @@
 from typing import Final
 
 from app.instrument_registry import catalog_rules
+from app.instrument_rules import InstrumentRule
 from app.models import DomainError, Instrument
 
-CATALOG: Final = tuple(
-    Instrument(
+
+def from_rule(rule: InstrumentRule) -> Instrument:
+    """将完整核验规则转换为用户可见交易参数。"""
+    return Instrument(
         symbol=rule.symbol,
         name=rule.name,
         market=rule.market,
@@ -24,8 +27,9 @@ CATALOG: Final = tuple(
         rule_source=rule.rule_source,
         verified_on=str(rule.verified_on),
     )
-    for rule in catalog_rules()
-)
+
+
+CATALOG: Final = tuple(from_rule(rule) for rule in catalog_rules())
 
 
 def instrument(symbol: str, catalog: tuple[Instrument, ...] = CATALOG) -> Instrument:

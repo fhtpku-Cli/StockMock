@@ -48,6 +48,9 @@ class Store:
             _ = connection.execute(
                 "CREATE TABLE IF NOT EXISTS observations(symbol TEXT PRIMARY KEY, data TEXT NOT NULL)"
             )
+            _ = connection.execute(
+                "CREATE TABLE IF NOT EXISTS activated_instruments(symbol TEXT PRIMARY KEY, data TEXT NOT NULL)"
+            )
             if connection.execute("SELECT id FROM rounds WHERE active=1").fetchone() is None:
                 self.save(connection, State(id=str(uuid4()), created_at=datetime.now(UTC)))
 

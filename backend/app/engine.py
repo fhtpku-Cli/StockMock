@@ -6,8 +6,9 @@ from typing import Protocol, final
 
 from app.accounting import ACTIVE, FEE, money
 from app.action_guard import check_actions
+from app.activated_registry import ActivatedRegistry
 from app.calendar import is_open, prior_session_day, window
-from app.catalog import CATALOG, instrument
+from app.catalog import CATALOG, from_rule, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
 from app.matching import advance
 from app.models import DomainError, Instrument, Order, OrderInput, Preview
@@ -48,7 +49,27 @@ class Engine:
         """保存依赖并初始化本实例的状态。"""
         self.store = store
         self.provider = provider
-        self.catalog = catalog
+        self.registry = ActivatedRegistry(store, catalog)
+        self._catalog = catalog
+        self.paused: frozenset[str] = frozenset()
+
+    @property
+    def catalog(self) -> tuple[Instrument, ...]:
+        """基础规则优先，持久扩展补齐，人工暂停始终最后覆盖。"""
+        merged = {item.symbol: item for item in self._catalog}
+        for rule in self.registry.rules:
+            _ = merged.setdefault(rule.symbol, from_rule(rule))
+        return tuple(
+            item.model_copy(update={"tradable": False, "restriction": "公司行动或规则待人工核对，已暂停交易"})
+            if item.symbol in self.paused
+            else item
+            for item in merged.values()
+        )
+
+    @catalog.setter
+    def catalog(self, value: tuple[Instrument, ...]) -> None:
+        self._catalog = value
+        self.registry.catalog = value
 
     def prepare(self, request: OrderInput, now: datetime) -> tuple[Quote, FxRate | None, Decimal | None]:
         """在写事务外获取委托所需的行情和参考汇率。"""

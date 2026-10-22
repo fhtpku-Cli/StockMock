@@ -8,6 +8,7 @@ from app.catalog import instrument
 from app.engine import Engine
 from app.models import DomainError, OrderInput
 from app.order_builder import OrderContext, build_order
+from app.order_rules import maximum_quantity
 from app.personal_models import Sizing
 
 FULL_POSITION: Final = 100
@@ -20,13 +21,17 @@ def size_order(engine: Engine, request: OrderInput, now: datetime, percent: int)
     state = engine.store.read()
     step = item.quantity_step or item.lot_size
     minimum = item.min_buy_quantity or item.lot_size
+    limit = maximum_quantity(item, request.order_type)
+    total = sum(lot.quantity for lot in state.lots if lot.symbol == item.symbol)
     maximum = 0
     if request.side == "sell":
-        maximum = sellable(state, item.symbol, now)
-        if item.market == "HK" or maximum != sum(lot.quantity for lot in state.lots if lot.symbol == item.symbol):
+        maximum = min(sellable(state, item.symbol, now), limit)
+        if item.market == "HK" or maximum != total:
             maximum = maximum // step * step
+        if maximum < minimum and (item.market == "HK" or maximum != total):
+            maximum = 0
     else:
-        low, high = 0, 10000000 // step
+        low, high = 0, limit // step
         while low < high:
             middle = (low + high + 1) // 2
             quantity = middle * step
@@ -47,6 +52,6 @@ def size_order(engine: Engine, request: OrderInput, now: datetime, percent: int)
                 high = middle - 1
         maximum = low * step if low * step >= minimum else 0
     suggested = maximum if percent == FULL_POSITION else (maximum * percent // FULL_POSITION // step) * step
-    if request.side == "buy" and suggested < minimum:
+    if suggested < minimum and not (request.side == "sell" and item.market != "HK" and suggested == total):
         suggested = 0
     return Sizing(max_quantity=maximum, suggested_quantity=suggested, quantity_step=step, minimum_quantity=minimum)
