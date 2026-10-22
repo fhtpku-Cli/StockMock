@@ -91,6 +91,14 @@ export function Archive({
 										· {o.status_reason}
 									</p>
 									<p>{o.reason || "未填写交易理由"}</p>
+									{o.side === "sell" && o.status === "filled" && (
+										<p className="footnote">
+											已实现收益（原币，扣除买卖费用）：
+											{o.realized_pnl == null
+												? "历史值未记录"
+												: money(o.realized_pnl, o.currency)}
+										</p>
+									)}
 								</article>
 							))
 						)}

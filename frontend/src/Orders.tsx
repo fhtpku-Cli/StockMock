@@ -174,6 +174,49 @@ function OrderRow({
 						<dd>{time(o.cancel_at)}</dd>
 					</div>
 					<div>
+						<dt>成交行情来源</dt>
+						<dd>
+							{o.source || "历史记录未注明"} ·
+							以委托生效后的完整有效样本判断成交，不按图中高低价补成交。
+						</dd>
+					</div>
+					{o.currency !== "CNY" && o.fx_source && o.fx_time && o.fx_rate && (
+						<div>
+							<dt>委托锁定换汇参考</dt>
+							<dd>
+								1 {o.currency} = {o.fx_rate} CNY · {o.fx_source || "未注明"} ·{" "}
+								{time(o.fx_time)} · 实际换汇以资金流水为准
+							</dd>
+						</div>
+					)}
+					{o.currency !== "CNY" && (!o.fx_source || !o.fx_time) && (
+						<p className="footnote">
+							{o.side === "sell"
+								? "卖出款保留原币，本单无人民币换汇参考。"
+								: "本单无人民币换汇参考，使用已有外币现金；实际变动以流水为准。"}
+						</p>
+					)}
+					{o.side === "sell" && o.status === "filled" && (
+						<>
+							<div>
+								<dt>卖出份额成本（含买入费用）</dt>
+								<dd>{money(o.cost_basis ?? null, o.currency)}</dd>
+							</div>
+							<div>
+								<dt>已实现收益（原币，扣除买卖费用）</dt>
+								<dd>{money(o.realized_pnl ?? null, o.currency)}</dd>
+							</div>
+							<p className="footnote">
+								仅为本次卖出份额的原币净收益，不含分红与换汇影响；剩余持仓浮动收益另计。
+							</p>
+							{o.realized_pnl == null && (
+								<p className="footnote">
+									此历史成交未保存成本结转，不能确认单笔收益。
+								</p>
+							)}
+						</>
+					)}
+					<div>
 						<dt>交易理由</dt>
 						<dd>{o.reason || "未填写"}</dd>
 					</div>

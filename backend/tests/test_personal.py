@@ -20,7 +20,7 @@ from app.snapshots import capture, snapshots
 from app.storage import Store
 from app.valuation import value_account
 from tests.test_api import PASSWORD
-from tests.test_engine import NOW, ControlledProvider, request
+from tests.test_engine import NOW, ControlledProvider, request, sample
 
 
 def held(engine: Engine, quantity: int = 100) -> None:
@@ -102,6 +102,21 @@ def test_payment_between_state_and_valuation_does_not_mix_balances(engine: Engin
     assert mixed.total is None
     assert mixed.status == "missing"
     assert value_account(engine, engine.store.read(), NOW).total == before.total
+
+
+def test_split_then_partial_sale_preserves_basis_and_realized_profit(engine: Engine) -> None:
+    held(engine)
+    body = action(engine).model_copy(update={"kind": "split", "cash_per_share": None, "numerator": 2, "denominator": 1})
+    _ = apply_action(engine, body, NOW)
+    later = NOW + timedelta(days=1)
+    engine.provider = ControlledProvider(quote_time=later, price=Decimal(50), history_day=NOW.date())
+    sell = engine.place(request().model_copy(update={"side": "sell", "limit_price": Decimal(50)}), later)
+    engine.process(sell.symbol, (sample(engine, sell, "55"),), later + timedelta(minutes=2))
+    state = Store(engine.store.path).read()
+    assert state.orders[-1].cost_basis == Decimal(4500)
+    assert state.orders[-1].realized_pnl == Decimal("997.25")
+    assert sum(lot.cost for lot in state.lots) == Decimal(4500)
+    assert sum(lot.quantity for lot in state.lots) == 100
 
 
 def test_fractional_split_and_pending_orders_rollback(engine: Engine) -> None:

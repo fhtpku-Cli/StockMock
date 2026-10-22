@@ -10,7 +10,7 @@ from app.api_models import ConvertInput
 from app.calendar import window
 from app.catalog import instrument
 from app.engine import Engine
-from app.models import DomainError, WorkerView
+from app.models import DomainError, Order, WorkerView
 from app.operations import convert
 from app.views import portfolio
 from tests.test_engine import NOW, ControlledProvider, request, sample
@@ -62,6 +62,12 @@ def test_weighted_cost_after_two_buys_partial_sale(engine: Engine) -> None:
     lots = engine.store.read().lots
     assert sum(lot.quantity for lot in lots) == 15
     assert sum(lot.cost for lot in lots) == Decimal("2251.12")
+    persisted = engine.store.read()
+    disposed = persisted.orders[-1]
+    assert disposed.cost_basis == Decimal("750.38")
+    assert disposed.realized_pnl == Decimal("-.76")
+    engine.process("AAPL", (sample(engine, sell, "150"),), now + timedelta(minutes=6))
+    assert engine.store.read() == persisted
 
 
 def test_us_daylight_saving_and_cn_holiday(engine: Engine) -> None:
@@ -73,6 +79,13 @@ def test_us_daylight_saving_and_cn_holiday(engine: Engine) -> None:
     assert summer.hour == 13
     assert winter.hour == 14
     assert china.date().isoformat() == "2026-10-08"
+
+
+def test_legacy_order_missing_realized_basis_stays_unknown(engine: Engine) -> None:
+    order = engine.place(request(), NOW)
+    legacy = Order.model_validate(order.model_dump(exclude={"cost_basis", "realized_pnl"}))
+    assert legacy.cost_basis is None
+    assert legacy.realized_pnl is None
 
 
 def test_stale_prior_close_rejects_daily_price_bound(engine: Engine) -> None:

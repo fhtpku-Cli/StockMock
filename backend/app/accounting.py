@@ -85,6 +85,7 @@ def fill(
     price, event = sample.price, sample.market_time
     gross = money(price * order.quantity)
     fee = money(gross * FEE)
+    cost_basis = realized_pnl = None
     match order.side:
         case "buy":
             cost = gross + fee
@@ -117,7 +118,8 @@ def fill(
                 )
             )
         case "sell":
-            reduce_lots(state, order, event)
+            cost_basis = reduce_lots(state, order, event)
+            realized_pnl = gross - fee - cost_basis
             state.cash[order.currency] += gross - fee
             entry(state, "sell", order.currency, gross, EntryContext(now, order.id, order.symbol))
             entry(state, "fee", order.currency, -fee, EntryContext(now, order.id, "模拟费率 0.05%"))
@@ -131,11 +133,13 @@ def fill(
             "confirmed_at": now,
             "fill_price": price,
             "fee": fee,
+            "cost_basis": cost_basis,
+            "realized_pnl": realized_pnl,
         }
     )
 
 
-def reduce_lots(state: State, order: Order, event: datetime) -> None:
+def reduce_lots(state: State, order: Order, event: datetime) -> Decimal:
     """按移动加权平均成本结转售出份额，保留剩余批次解锁日期。"""
     remaining = order.quantity
     lots: list[Lot] = []
@@ -170,3 +174,4 @@ def reduce_lots(state: State, order: Order, event: datetime) -> None:
             updated_lot = lot
         normalized.append(updated_lot)
     state.lots[:] = normalized
+    return removed_cost

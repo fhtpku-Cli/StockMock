@@ -77,6 +77,20 @@ describe("接口边界拒绝不可信的账户与行情", () => {
 			stop_price: null,
 		};
 		expect(orderSchema.safeParse(valid).success).toBe(true);
+		expect(
+			orderSchema.parse({ ...valid, cost_basis: null, realized_pnl: null })
+				.realized_pnl,
+		).toBeNull();
+		expect(
+			orderSchema.parse({
+				...valid,
+				cost_basis: "396.20",
+				realized_pnl: "7.60",
+			}).realized_pnl,
+		).toBe("7.60");
+		expect(orderSchema.safeParse({ ...valid, realized_pnl: 7.6 }).success).toBe(
+			false,
+		);
 		expect(orderSchema.safeParse({ ...valid, status: "unknown" }).success).toBe(
 			false,
 		);

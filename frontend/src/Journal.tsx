@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Order } from "./schema";
 import { orderSchema } from "./schema";
 import {
 	RecordFilters,
@@ -8,7 +9,7 @@ import {
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Notebook, DownloadSimple } from "@phosphor-icons/react";
-import { api, errorMessage, money, time } from "./api";
+import { api, errorMessage, money, price, time } from "./api";
 import { acknowledgmentSchema, journalSchema, ledgerSchema } from "./schema";
 import { Empty, ErrorNotice, Loading, Panel } from "./ui";
 export function Journal({
@@ -137,6 +138,9 @@ export function Journal({
 												{j.order_id ? " · 关联交易" : ""}
 											</small>
 											<p>{j.text}</p>
+											<LinkedTrade
+												order={orders.data?.find((o) => o.id === j.order_id)}
+											/>
 										</article>
 									))}
 							</div>
@@ -185,5 +189,32 @@ export function Journal({
 				</Panel>
 			</div>
 		</div>
+	);
+}
+
+function LinkedTrade({ order }: { readonly order: Order | undefined }) {
+	if (!order) return null;
+	return (
+		<details>
+			<summary>原计划与实际交易 · {order.symbol}</summary>
+			<p>{order.reason || "未填写交易理由"}</p>
+			<p className="footnote">
+				目标 / 止损参考：{price(order.target_price, order.currency)} /{" "}
+				{price(order.stop_price, order.currency)}；仅供记录，不自动交易。
+			</p>
+			<p className="footnote">
+				{order.side === "buy" ? "买入" : "卖出"} {order.quantity} 股 / 份 ·
+				成交价 {price(order.fill_price, order.currency)} · 费用{" "}
+				{money(order.fee, order.currency)}
+			</p>
+			{order.side === "sell" && order.status === "filled" && (
+				<p>
+					已实现收益（原币，扣除买卖费用）：
+					{order.realized_pnl == null
+						? "历史值未记录"
+						: money(order.realized_pnl, order.currency)}
+				</p>
+			)}
+		</details>
 	);
 }

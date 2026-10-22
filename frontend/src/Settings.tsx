@@ -255,7 +255,7 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 				<button
 					type="submit"
 					className="button primary full"
-					disabled={convert.isPending || !fx.isSuccess}
+					disabled={!online || convert.isPending || !fx.isSuccess}
 				>
 					{convert.isPending ? "换汇中…" : "确认换回人民币"}
 				</button>

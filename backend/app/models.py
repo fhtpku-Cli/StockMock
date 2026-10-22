@@ -65,6 +65,8 @@ class Order(OrderInput):
     confirmed_at: datetime | None = None
     fill_price: Decimal | None = None
     fee: Decimal | None = None
+    cost_basis: Decimal | None = None
+    realized_pnl: Decimal | None = None
     currency: Currency
     reserved_cny: Decimal = Decimal(0)
     reserved_foreign: Decimal = Decimal(0)
