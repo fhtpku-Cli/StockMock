@@ -100,8 +100,8 @@ export function Discover({
 			</Panel>
 			<Panel title="发现市场 · 在线搜索">
 				<p className="footnote discovery-intro">
-					按名称或代码查询 A 股、港股、美股与
-					ETF。目录外证券可加入自选观察，交易规则核验前不开放模拟交易。
+					按名称或代码查询 A 股、港股、美股与 ETF。常用清单不代表全部范围；A
+					股与美股可在详情申请启用模拟交易，核验通过后开放，港股继续仅观察。
 				</p>
 				<div className="discovery-filters">
 					<label className="search-box">

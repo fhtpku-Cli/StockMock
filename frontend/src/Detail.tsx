@@ -6,16 +6,22 @@ import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 import { useOnline } from "./useOnline";
 import { useWatchlist } from "./useWatchlist";
 import { VolumeHistory } from "./VolumeHistory";
+import { useEnableInstrument } from "./useEnableInstrument";
 export function Detail({
 	instrument,
 	onClose,
 	onTrade,
+	onEnabled,
 }: {
 	readonly instrument: Instrument;
 	readonly onClose: () => void;
 	readonly onTrade: (side: "buy" | "sell") => void;
+	readonly onEnabled: (instrument: Instrument) => void;
 }) {
 	const online = useOnline();
+	const enable = useEnableInstrument(onEnabled);
+	const canEnable =
+		!instrument.tradable && ["CN", "US"].includes(instrument.market);
 	const { toggle, contains, pending } = useWatchlist();
 	const portfolio = useQuery({
 		queryKey: ["portfolio"],
@@ -129,6 +135,16 @@ export function Detail({
 				/>
 			)}
 			<dl className="summary-list">
+				{instrument.min_buy_quantity != null &&
+					instrument.quantity_step != null && (
+						<div>
+							<dt>买入数量规则</dt>
+							<dd>
+								{instrument.min_buy_quantity} 股 / 份起，每次递增{" "}
+								{instrument.quantity_step} 股 / 份
+							</dd>
+						</div>
+					)}
 				<div>
 					<dt>每手数量</dt>
 					<dd>
@@ -152,7 +168,7 @@ export function Detail({
 				</div>
 			</dl>
 			{instrument.rule_source && (
-				<p className="footnote">
+				<p className="footnote instrument-rule-source">
 					证券资料与规则来源：{instrument.rule_source} · 核对日期{" "}
 					{instrument.verified_on ?? "未注明"}
 				</p>
@@ -179,6 +195,28 @@ export function Detail({
 				</dl>
 			)}
 			{toggle.isError && <ErrorNotice message={errorMessage(toggle.error)} />}
+			{canEnable && (
+				<div className="notice" aria-live="polite" aria-busy={enable.isPending}>
+					<p>
+						通过交易规则与行情核验后，可启用此证券的模拟交易；核验未通过时继续保留观察。
+					</p>
+					<button
+						type="button"
+						className="button primary"
+						disabled={!online || enable.isPending}
+						onClick={() => enable.mutate(instrument.symbol)}
+					>
+						{enable.isPending
+							? "正在核验交易条件…"
+							: enable.isError
+								? "重试启用模拟交易"
+								: "启用模拟交易"}
+					</button>
+					{enable.isError && (
+						<ErrorNotice message={errorMessage(enable.error)} />
+					)}
+				</div>
+			)}
 			<div className="button-row discovery-detail-actions">
 				<button
 					type="button"

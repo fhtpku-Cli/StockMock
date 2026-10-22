@@ -29,6 +29,12 @@
 .discovery-detail-actions {
 	flex-wrap: wrap;
 }
+.discovery-detail-actions > * {
+	flex: 1 1 100px;
+}
+.instrument-rule-source {
+	overflow-wrap: anywhere;
+}
 @media (max-width: 540px) {
 	.discovery-filters {
 		grid-template-columns: repeat(2, minmax(0, 1fr));

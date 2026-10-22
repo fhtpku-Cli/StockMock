@@ -224,8 +224,17 @@ export function App() {
 			{overlay.kind === "cash" && <Cash onClose={close} />}{" "}
 			{overlay.kind === "detail" && (
 				<Detail
+					key={overlay.instrument.symbol}
 					instrument={overlay.instrument}
 					onClose={close}
+					onEnabled={(instrument) =>
+						setOverlay((current) =>
+							current.kind === "detail" &&
+							current.instrument.symbol === instrument.symbol
+								? { kind: "detail", instrument }
+								: current,
+						)
+					}
 					onTrade={(side) =>
 						setOverlay({ kind: "trade", instrument: overlay.instrument, side })
 					}

@@ -26,6 +26,7 @@ if (root) {
 				}}
 				onClose={() => root.replaceChildren()}
 				onTrade={() => root.replaceChildren()}
+				onEnabled={() => {}}
 			/>
 		</QueryClientProvider>,
 	);

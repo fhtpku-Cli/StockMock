@@ -173,7 +173,11 @@ export function Trade({
 					<div className="form-grid">
 						<div className="field">
 							<label htmlFor="quantity">
-								数量（每手 {instrument.lot_size}）
+								{side === "buy" &&
+								instrument.min_buy_quantity != null &&
+								instrument.min_buy_quantity !== instrument.quantity_step
+									? `数量（${instrument.min_buy_quantity} 起，递增 ${instrument.quantity_step ?? instrument.lot_size}）`
+									: `数量（每手 ${instrument.lot_size}）`}
 							</label>
 							<input
 								id="quantity"
@@ -216,7 +220,10 @@ export function Trade({
 						)}
 					</div>
 					<p className="footnote">
-						{instrument.market} · 每手 {instrument.lot_size} ·{" "}
+						{instrument.market} · 买入{" "}
+						{instrument.min_buy_quantity ?? instrument.lot_size} 股 / 份起，递增{" "}
+						{instrument.quantity_step ?? instrument.lot_size} 股 /
+						份。卖出数量以可卖持仓和预览校验为准。{" "}
 						{instrument.tick_rule === "HK"
 							? "港股价位随价格区间与证券类型变化，以预览校验为准。"
 							: instrument.tick_rule === "US"

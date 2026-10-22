@@ -55,7 +55,7 @@ try {
 		.context()
 		.request.get(new URL("/api/instruments", page.url()).href);
 	const catalog = await catalogResponse.json();
-	expect(catalog.length).toBe(60);
+	expect(catalog.length).toBeGreaterThanOrEqual(60);
 	await expect(page.locator(".security-main")).toHaveCount(catalog.length);
 	for (const symbol of ["COST", "VOO"]) {
 		await page.getByLabel("搜索代码或名称").fill(symbol);

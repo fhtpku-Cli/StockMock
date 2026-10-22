@@ -39,13 +39,14 @@ export async function api<T>(
 	path: string,
 	schema: z.ZodType<T>,
 	body?: Readonly<Record<string, unknown>>,
+	options?: { readonly timeout: number },
 ): Promise<T> {
 	try {
 		if (body && !navigator.onLine)
 			throw new ApiError("offline", "当前离线，操作未提交。请联网后重新确认。");
 		const response = body
-			? await http.post(path, { json: body })
-			: await http.get(path);
+			? await http.post(path, { json: body, ...options })
+			: await http.get(path, options);
 		const raw: unknown = await response.json();
 		const result = schema.safeParse(raw);
 		if (!result.success)
