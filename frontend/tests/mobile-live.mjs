@@ -1,9 +1,16 @@
 import { launchBrowser, baseUrl } from "./browser.mjs";
 import { devices, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { readFile, writeFile } from "node:fs/promises";
-const out = new URL("../../.omo/evidence/mobile-ui/", import.meta.url).pathname;
-const browser = await launchBrowser();
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+const out = process.env.FRONTEND_EVIDENCE_DIR
+	? process.env.FRONTEND_EVIDENCE_DIR.replace(/\/?$/, "/")
+	: new URL("../../.omo/evidence/mobile-ui/", import.meta.url).pathname;
+await mkdir(out, { recursive: true });
+const address = process.env.FRONTEND_TEST_RESOLVE_ADDRESS;
+const hostResolverRules = address
+	? `MAP ${new URL(baseUrl).hostname} ${address}`
+	: undefined;
+const browser = await launchBrowser({ hostResolverRules });
 const context = await browser.newContext({ ...devices["iPhone 13"] });
 const page = await context.newPage();
 const errors = [],
@@ -14,8 +21,21 @@ const shot = async (name) => {
 	await page.screenshot({ path: out + name + ".png", animations: "disabled" });
 	views.push({ name, text: await page.locator("main").innerText() });
 };
+const readJson = (path) =>
+	page.evaluate(async (path) => {
+		const response = await fetch(path);
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		return response.json();
+	}, path);
 try {
-	await page.goto(baseUrl);
+	const navigation = await page.goto(baseUrl);
+	expect(navigation.status()).toBe(200);
+	const secureContext = await page.evaluate(() => window.isSecureContext);
+	const tls = await navigation.securityDetails();
+	if (baseUrl.startsWith("https:")) {
+		expect(secureContext).toBe(true);
+		expect(tls?.protocol).toMatch(/^TLS/);
+	}
 	expect(await page.title()).toContain("持仓练习");
 	const font = await page
 		.getByLabel("访问密码")
@@ -35,17 +55,20 @@ try {
 	await page.getByRole("button", { name: "进入我的空间" }).tap();
 	await expect(page.getByRole("heading", { name: "资产概览" })).toBeVisible();
 	await shot("live-assets");
-	const initialRound = (
-		await (await context.request.get(baseUrl + "/api/portfolio")).json()
-	).round_id;
+	const initialRound = (await readJson("/api/portfolio")).round_id;
+	const sessionCookies = (await context.cookies()).map(
+		({ secure, httpOnly, sameSite }) => ({ secure, httpOnly, sameSite }),
+	);
+	if (baseUrl.startsWith("https:")) {
+		expect(sessionCookies.length).toBeGreaterThan(0);
+		expect(sessionCookies.every((c) => c.secure && c.httpOnly)).toBe(true);
+	}
 	await context.setOffline(true);
 	await expect(page.getByRole("alert")).toContainText("当前离线");
 	await shot("live-offline");
 	await context.setOffline(false);
 	await expect(page.getByText(/当前离线/)).toHaveCount(0);
-	const restoredRound = (
-		await (await context.request.get(baseUrl + "/api/portfolio")).json()
-	).round_id;
+	const restoredRound = (await readJson("/api/portfolio")).round_id;
 	expect(restoredRound).toBe(initialRound);
 	for (const label of ["自选", "委托", "复盘"]) {
 		await page.getByRole("button", { name: label, exact: true }).tap();
@@ -86,14 +109,15 @@ try {
 	await page.reload();
 	await expect(page.getByRole("heading", { name: "资产概览" })).toBeVisible();
 	await shot("live-reload-session");
-	const manifest = await (
-		await context.request.get(baseUrl + "/manifest.webmanifest")
-	).json();
+	const manifest = await readJson("/manifest.webmanifest");
 	const icons = [];
 	for (const item of manifest.icons) {
-		const r = await context.request.get(baseUrl + item.src);
-		const b = await r.body();
-		expect(r.status()).toBe(200);
+		const bytes = await page.evaluate(async (src) => {
+			const r = await fetch(src);
+			if (!r.ok) throw new Error(`HTTP ${r.status}`);
+			return Array.from(new Uint8Array(await r.arrayBuffer()));
+		}, item.src);
+		const b = Buffer.from(bytes);
 		icons.push({
 			src: item.src,
 			width: b.readUInt32BE(16),
@@ -111,7 +135,12 @@ try {
 		out + "live.json",
 		JSON.stringify(
 			{
-				source: "真实本机服务只读；Chromium手机仿真，非iPhone真机",
+				source: "真实服务只读；Chromium手机仿真，非iPhone真机",
+				resolverOverride: Boolean(address),
+				certificateValidation: true,
+				secureContext,
+				tlsProtocol: tls?.protocol,
+				sessionCookies,
 				views,
 				errors,
 				audits,
@@ -126,6 +155,10 @@ try {
 	console.log(
 		JSON.stringify({
 			views: views.length,
+			resolverOverride: Boolean(address),
+			secureContext,
+			tlsProtocol: tls?.protocol,
+			sessionCookies,
 			errors,
 			axe: audits.map((a) => [a.surface, a.violations.length]),
 			icons,
