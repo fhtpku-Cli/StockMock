@@ -288,7 +288,10 @@ def observe(frame, event, arg):
             raise RuntimeError('配置检查启动业务worker')
 sys.setprofile(observe)
 sys.argv = [sys.argv[1], '--check-config']
-runpy.run_path(sys.argv[0], run_name='__main__')
+try:
+    runpy.run_path(sys.argv[0], run_name='__main__')
+finally:
+    sys.setprofile(None)
 assert all(t.name == 'MainThread' or t.name.startswith('quickjs-worker-') for t in threading.enumerate())
 print('NETWORK_AND_WORKER_GUARD_PASSED')
 """
