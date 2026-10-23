@@ -5,14 +5,23 @@ from decimal import Decimal
 
 from app.accounting import ACTIVE, money, reserved, sellable
 from app.catalog import instrument
+from app.composition import composition, percentage
 from app.engine import Engine
-from app.models import CashView, Portfolio, PositionView, WorkerView
+from app.models import CashView, DomainError, Portfolio, PositionView, WorkerView
 from app.valuation import value_account
 
 
 def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
     """汇总现金和持仓；缺失数据不按零价估值。"""
     state = engine.store.read()
+    valuation = value_account(engine, state, now)
+    for _attempt in range(2):
+        if engine.store.read() == state:
+            break
+        state = engine.store.read()
+        valuation = value_account(engine, state, now)
+    if engine.store.read() != state:
+        raise DomainError("valuation_changed", "账户正在变化，请刷新重试", 409)
     cash = [
         CashView(
             currency=c,
@@ -22,7 +31,6 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
         )
         for c, b in state.cash.items()
     ]
-    valuation = value_account(engine, state, now)
     warnings = ["个人模拟账本；资金交收简化；公司行动需本人核对登记", *valuation.issues]
     if any(valuation.receivables.values()):
         warnings.append("总资产包含已登记应收股息；确认到账前不可用于委托")
@@ -40,6 +48,19 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
             status = f"参考估值；报价时间 {valuation.times[symbol].isoformat()}；公司行动需人工核对"
         positions.append(
             PositionView(
+                market=item.market,
+                cost=cost,
+                pnl_percent=percentage(pnl, cost),
+                market_value_cny=money(value * valuation.rates[item.currency])
+                if value is not None and item.currency in valuation.rates
+                else None,
+                weight_percent=percentage(
+                    money(value * valuation.rates[item.currency])
+                    if value is not None and item.currency in valuation.rates
+                    else None,
+                    valuation.total,
+                ),
+                price_time=valuation.times.get(symbol),
                 symbol=symbol,
                 name=item.name,
                 currency=item.currency,
@@ -58,6 +79,7 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
     assets = valuation.total
     return Portfolio(
         round_id=state.id,
+        composition=composition(state, positions, valuation),
         total_assets_cny=assets,
         pnl_cny=money(assets - Decimal(1000000)) if assets is not None else None,
         valuation_status="参考估值，持仓收益待核对" if assets is not None else "行情缺失或过期",

@@ -2,11 +2,19 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
 
 Currency = Literal["CNY", "USD", "HKD"]
+
+
+def percentage_text(value: Decimal) -> str:
+    """只在JSON边界展开指数，不改变Decimal精度或舍入微小比例。"""
+    return format(value, "f")
+
+
+Percentage = Annotated[Decimal, PlainSerializer(percentage_text, return_type=str, when_used="json")]
 
 
 class Model(BaseModel):
@@ -178,6 +186,12 @@ class CashView(Model):
 class PositionView(Model):
     """持仓数量与明确标记的参考估值。"""
 
+    market: Literal["CN", "HK", "US"] | None = None
+    cost: Decimal | None = None
+    pnl_percent: Percentage | None = None
+    market_value_cny: Decimal | None = None
+    weight_percent: Percentage | None = None
+    price_time: datetime | None = None
     symbol: str
     name: str
     currency: Currency
@@ -198,10 +212,40 @@ class WorkerView(Model):
     status: str = "starting"
 
 
+class Allocation(Model):
+    """同一分母下的分类金额。"""
+
+    key: str
+    value_cny: Decimal | None
+    weight_percent: Percentage | None
+
+
+class Composition(Model):
+    """现金包含占用，应收单列且不可花费。"""
+
+    cash_cny: Decimal | None
+    positions_cny: Decimal | None
+    receivables_cny: Decimal | None
+    cash_percent: Percentage | None
+    positions_percent: Percentage | None
+    receivables_percent: Percentage | None
+    by_market: list[Allocation]
+    by_currency: list[Allocation]
+    price_times: dict[str, datetime]
+    issues: list[str]
+
+
+class HealthView(WorkerView):
+    """兼容原撮合状态，同时暴露计划观察心跳。"""
+
+    plan_worker: WorkerView
+
+
 class Portfolio(Model):
     """个人活动轮次的资产视图。"""
 
     round_id: str
+    composition: Composition | None = None
     initial_capital: Decimal = Decimal("1000000.00")
     total_assets_cny: Decimal | None
     pnl_cny: Decimal | None

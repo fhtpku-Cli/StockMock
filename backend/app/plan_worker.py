@@ -11,7 +11,7 @@ from app.calendar import is_open
 from app.catalog import instrument
 from app.engine import Engine
 from app.marketdata import MarketDataError
-from app.models import DomainError
+from app.models import DomainError, WorkerView
 from app.plan_alerts import due_alert, observe, price_alerts
 from app.plans import round_plans
 
@@ -26,6 +26,7 @@ class PlanWorker:
         """生产 Engine 配置独立的有界缓存客户端，防止共享网络锁阻塞撮合。"""
         self.engine = engine
         self.cursor = 0
+        self.view = WorkerView()
 
     def tick(self) -> None:
         """只查询当前活动计划证券，单来源错误不终止其他证券。"""
@@ -35,6 +36,7 @@ class PlanWorker:
             due_alert(self.engine.store, plan, now)
         if not plans:
             self.cursor = 0
+            self.view = WorkerView(last_run=now, status="running")
             return
         start = self.cursor % len(plans)
         selected = (plans[start:] + plans[:start])[:BATCH_SIZE]
@@ -57,6 +59,8 @@ class PlanWorker:
                 logging.getLogger(__name__).warning("计划行情不可用 symbol=%s code=%s", plan.symbol, error.code)
             price_alerts(self.engine.store, plan, observe(plan, sample, datetime.now(UTC)))
 
+        self.view = WorkerView(last_run=datetime.now(UTC), status="running")
+
     async def run(self) -> None:
         """与原 Worker 分离运行；线程数固定为一，不随计划数扩张。"""
         limiter = anyio.CapacityLimiter(1)
@@ -64,5 +68,6 @@ class PlanWorker:
             try:
                 await anyio.to_thread.run_sync(self.tick, limiter=limiter)
             except (DomainError, sqlite3.OperationalError) as error:
+                self.view = WorkerView(last_run=datetime.now(UTC), status="计划观察暂不可用，下轮重试")
                 logging.getLogger(__name__).warning("计划观察下轮重试 type=%s", type(error).__name__)
             await anyio.sleep(60)

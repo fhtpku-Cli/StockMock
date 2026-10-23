@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.activated_registry import RuleProvider
 from app.admission_routes import register as register_admission_routes
+from app.analysis_routes import register as register_analysis_routes
 from app.archive_routes import register as register_archive_routes
 from app.asset_routes import register as register_asset_routes
 from app.auth import Auth
@@ -72,7 +73,7 @@ def create_app(
             yield
             group.cancel_scope.cancel()
 
-    app = FastAPI(title="个人模拟投资", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="个人模拟投资", version="0.3.0", lifespan=lifespan)
     app.state.engine = engine
     app.state.worker = worker
     app.state.plan_worker = plan_worker
@@ -103,11 +104,12 @@ def create_app(
     register_admission_routes(app, engine, auth)
     register_trading_routes(app, engine, auth)
     register_record_routes(app, engine, auth)
-    register_asset_routes(app, engine, auth, worker)
+    register_asset_routes(app, engine, auth, worker, plan_worker)
     register_personal_routes(app, engine, auth)
     register_plan_routes(app, engine, auth)
     register_review_routes(app, engine, auth)
     register_archive_routes(app, engine, auth)
+    register_analysis_routes(app, engine, auth)
 
     frontend = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if frontend.exists():

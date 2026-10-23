@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 
 from app import trading_routes
+from app.analysis_models import LedgerPage
 from app.api_models import ResetInput
 from app.engine import Engine
 from app.main import create_app
@@ -107,7 +108,11 @@ def test_full_archive_pagination_exports_and_read_only(engine: Engine) -> None:
             identifiers: list[str] = []
             for offset in range(0, 507, 100):
                 response = http.get(url + f"/api/rounds/{plan.round_id}/{route}?offset={offset}&limit=100")
-                result = Page[Journal | Entry].model_validate_json(response.content)
+                result = (
+                    LedgerPage.model_validate_json(response.content)
+                    if route == "ledger"
+                    else Page[Journal].model_validate_json(response.content)
+                )
                 assert result.total == 507
                 identifiers.extend(row.id for row in result.items)
             assert len(set(identifiers)) == 507

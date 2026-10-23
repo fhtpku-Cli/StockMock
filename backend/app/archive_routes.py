@@ -5,9 +5,11 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Query
 
+from app.analysis_models import LedgerPage, LedgerQuery
 from app.auth import Auth
+from app.cash_queries import ledger_page
 from app.engine import Engine
-from app.models import Entry, Journal, Order
+from app.models import Journal, Order
 from app.plan_models import Page
 from app.plan_queries import PageQuery, page
 
@@ -24,5 +26,5 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return page(list(reversed(engine.store.read_round(str(round_id)).journal)), query)
 
     @app.get("/api/rounds/{round_id}/ledger", dependencies=[Depends(auth.require)])
-    def round_ledger(round_id: UUID, query: Annotated[PageQuery, Query()]) -> Page[Entry]:
-        return page(list(reversed(engine.store.read_round(str(round_id)).ledger)), query)
+    def round_ledger(round_id: UUID, query: Annotated[LedgerQuery, Query()]) -> LedgerPage:
+        return ledger_page(engine.store.read_round(str(round_id)), query)

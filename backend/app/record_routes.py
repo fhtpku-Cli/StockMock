@@ -40,12 +40,12 @@ def ledger_csv(state: State) -> Response:
         note = safe_cell(row.note)
         writer.writerow(
             [
-                row.id,
-                row.kind,
+                safe_cell(row.id),
+                safe_cell(row.kind),
                 row.currency,
                 row.amount,
                 row.created_at.isoformat(),
-                row.order_id,
+                safe_cell(row.order_id or ""),
                 note,
             ]
         )
