@@ -5,7 +5,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, webkit } from "@playwright/test";
 import { launchBrowser } from "./browser.mjs";
 const root = resolve(import.meta.dirname, "../..");
-const output = resolve(root, ".omo/evidence/0.4.0/frontend");
+const output = process.env.REVIEWS_EVIDENCE_DIR ?? resolve(root, ".omo/evidence/0.4.0/frontend");
 const url = "http://127.0.0.1:8405";
 await mkdir(output, { recursive: true });
 const observations = [];

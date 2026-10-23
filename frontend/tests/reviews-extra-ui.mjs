@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, webkit } from "@playwright/test";
 import { launchBrowser } from "./browser.mjs";
-const output = resolve(import.meta.dirname, "../../.omo/evidence/0.4.0/frontend");
+const output = process.env.REVIEWS_EVIDENCE_DIR ?? resolve(import.meta.dirname, "../../.omo/evidence/0.4.0/frontend");
 const url = "http://127.0.0.1:8405";
 const observations = JSON.parse(await readFile(resolve(output, "main-observations.json"), "utf8"));
 let fixture;

@@ -78,7 +78,7 @@ export function Reviews({ roundId }: { readonly roundId?: string }) {
 							key={key}
 							onClick={() => {
 								setState(key);
-								setSelected(null);
+								refresh();
 							}}
 						>
 							{reviewStateNames[key]} · {first?.counts[key] ?? "—"}
@@ -93,7 +93,7 @@ export function Reviews({ roundId }: { readonly roundId?: string }) {
 					value={state}
 					onChange={(event) => {
 						setState(event.target.value);
-						setSelected(null);
+						refresh();
 					}}
 				>
 					<option value="todo">全部待办（首次与补充）</option>
