@@ -11,7 +11,7 @@
 ## 分工与质量
 
 - 当前执行依据为 `outputs/项目执行计划.md`，详细规则见 `outputs/个人模拟交易首版设计稿.md`；显式用户决定优先于 PM 默认值。
-- 当前下一版执行依据为 `outputs/0.3.0迭代规划与执行交接.md`；正式版本仍为 0.2.0，0.3.0 的开发、候选验收、部署与最新 HEAD 的完整 CI 需逐项完成后更新状态。
+- 当前正式个人版为 0.3.0，执行依据为 `outputs/0.3.0迭代规划与执行交接.md`，实际交付及最新 CI 状态见 `outputs/0.3.0执行与验收记录.md`。iPhone新交互与Mac整机重启仍待本人集中验收，不能以浏览器仿真或服务重载替代。
 - `trade_engine` 拥有 `backend/`，但不拥有 `backend/app/marketdata.py` 和 `backend/tests/test_marketdata.py`。
 - `market_data` 拥有上述行情模块、`backend/app/marketdata_models.py`、对应测试、`work/data_probe/` 和 `outputs/行情接入实测.md`。
 - `portfolio_ui` 拥有 `frontend/` 和 `outputs/前端验证记录.md`。
