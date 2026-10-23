@@ -4,12 +4,13 @@ import { AdjustmentRecords } from "./Adjustments";
 import { Alerts } from "./Alerts";
 import { AssetHistory } from "./AssetHistory";
 import { api, errorMessage, money, time } from "./api";
+import { CashStatement } from "./CashStatement";
 import { LinkedTrade, OrderRecord } from "./OrderRecord";
 import { Pagination } from "./Pagination";
 import { PlanSummary } from "./PlanSummary";
 import { planSchema } from "./planSchema";
 import { Reviews } from "./Reviews";
-import { decimal, journalSchema, ledgerSchema, orderSchema } from "./schema";
+import { decimal, journalSchema, orderSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 import { usePages } from "./usePages";
 
@@ -40,11 +41,6 @@ export function Archive({
 		["archive-journal", roundId],
 		`${base}/journal`,
 		journalSchema.element,
-	);
-	const ledger = usePages(
-		["archive-ledger", roundId],
-		`${base}/ledger`,
-		ledgerSchema.element,
 	);
 	const plans = usePages(
 		["plans", "archive", roundId],
@@ -189,41 +185,7 @@ export function Archive({
 							/>
 						)}
 					</section>
-					<section>
-						<h3>历史资金流水（{ledger.total}）</h3>
-						{ledger.isPending ? (
-							<Loading />
-						) : ledger.isError ? (
-							<ErrorNotice
-								message={errorMessage(ledger.error)}
-								retry={() => void ledger.refetch()}
-							/>
-						) : (
-							ledger.total === 0 && (
-								<p className="footnote">本轮没有资金变动。</p>
-							)
-						)}
-						<div className="ledger-list">
-							{ledger.items.map((entry) => (
-								<article key={entry.id}>
-									<div>
-										<strong>{entry.note}</strong>
-										<small>{time(entry.created_at)}</small>
-									</div>
-									<b>{money(entry.amount, entry.currency)}</b>
-								</article>
-							))}
-						</div>
-						{ledger.data && (
-							<Pagination
-								count={ledger.items.length}
-								total={ledger.total}
-								pending={ledger.isFetchingNextPage}
-								more={ledger.hasNextPage}
-								onMore={() => void ledger.fetchNextPage()}
-							/>
-						)}
-					</section>
+					<CashStatement roundId={roundId} />
 				</div>
 			)}
 		</Modal>

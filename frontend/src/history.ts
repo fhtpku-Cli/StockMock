@@ -34,3 +34,18 @@ export function snapshotSegments(
 	}
 	return segments;
 }
+
+export const snapshotRangeSchema = z.object({
+	round_id: z.string(),
+	start_date: z.string().nullable(),
+	end_date: z.string().nullable(),
+	items: z.array(snapshotSchema),
+	recorded_days: z.number().int(),
+	complete_days: z.number().int(),
+	missing_days: z.number().int(),
+	first: snapshotSchema.nullable(),
+	last: snapshotSchema.nullable(),
+	change_cny: decimal.nullable(),
+	continuous: z.boolean(),
+	reason: z.string(),
+});

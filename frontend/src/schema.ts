@@ -22,7 +22,25 @@ export const instrumentSearchSchema = z.object({
 	source: z.string(),
 	message: z.string(),
 });
+const allocationSchema = z.object({
+	key: z.string(),
+	value_cny: decimal.nullable(),
+	weight_percent: decimal.nullable(),
+});
+export const compositionSchema = z.object({
+	cash_cny: decimal.nullable(),
+	positions_cny: decimal.nullable(),
+	receivables_cny: decimal.nullable(),
+	cash_percent: decimal.nullable(),
+	positions_percent: decimal.nullable(),
+	receivables_percent: decimal.nullable(),
+	by_market: z.array(allocationSchema),
+	by_currency: z.array(allocationSchema),
+	price_times: z.record(z.string(), z.string()),
+	issues: z.array(z.string()),
+});
 export const portfolioSchema = z.object({
+	composition: compositionSchema.optional(),
 	round_id: z.string(),
 	initial_capital: decimal,
 	total_assets_cny: decimal.nullable(),
@@ -43,6 +61,12 @@ export const portfolioSchema = z.object({
 			currency: z.string(),
 			quantity: z.number(),
 			sellable: z.number(),
+			market: z.string(),
+			cost: decimal,
+			pnl_percent: decimal.nullable(),
+			market_value_cny: decimal.nullable(),
+			weight_percent: decimal.nullable(),
+			price_time: z.string().nullable(),
 			reserved: z.number(),
 			average_cost: decimal,
 			market_price: decimal.nullable(),

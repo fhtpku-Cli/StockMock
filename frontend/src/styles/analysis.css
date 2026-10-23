@@ -1,0 +1,114 @@
+.analysis-metrics {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+	gap: var(--s4);
+	margin-block: var(--s4);
+}
+.analysis-metric {
+	min-width: 0;
+	padding: var(--s4);
+	background: var(--canvas);
+	border-radius: var(--radius);
+	display: flex;
+	flex-direction: column;
+	gap: var(--s2);
+	overflow-wrap: anywhere;
+}
+.analysis-metric > strong {
+	font-size: 24px;
+	font-variant-numeric: tabular-nums;
+}
+.analysis-groups {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--s6);
+	margin-block: var(--s5);
+}
+.analysis-groups small,
+.history-summary small {
+	display: block;
+}
+.analysis-filters {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+	gap: var(--s3);
+	margin-block: var(--s4);
+}
+.analysis-filters label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s2);
+	min-width: 0;
+}
+.analysis-filters input[type="date"] {
+	min-width: 0;
+	max-width: 100%;
+	appearance: none;
+}
+.analysis-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--s2) var(--s4);
+	align-items: center;
+	margin-block: var(--s3);
+}
+.history-summary {
+	margin-block: var(--s4);
+	padding: var(--s4);
+	background: var(--canvas);
+	border-radius: var(--radius);
+	overflow-wrap: anywhere;
+}
+.history-summary > strong {
+	display: block;
+	font-size: 24px;
+	font-variant-numeric: tabular-nums;
+	margin-block: var(--s2);
+}
+.positions-table {
+	min-width: 720px;
+}
+.statement-entries > article {
+	padding-block: var(--s4);
+	border-bottom: 1px solid var(--line);
+	overflow-wrap: anywhere;
+}
+.statement-entry-heading {
+	display: flex;
+	justify-content: space-between;
+	gap: var(--s4);
+	align-items: flex-start;
+}
+.statement-entry-heading small {
+	display: block;
+}
+.statement-entry-heading b {
+	flex-shrink: 0;
+	font-variant-numeric: tabular-nums;
+}
+.cash-statement .summary-list > div {
+	gap: var(--s3);
+	flex-wrap: wrap;
+}
+.cash-statement .summary-list dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.cash-statement {
+	margin-bottom: var(--s6);
+}
+@media (max-width: 600px) {
+	.analysis-groups {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.statement-entry-heading {
+		flex-direction: column;
+		gap: var(--s2);
+	}
+	.analysis-filters {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.csv-download {
+		max-width: 100%;
+	}
+}

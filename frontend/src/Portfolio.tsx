@@ -8,9 +8,11 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Alerts } from "./Alerts";
 import { AssetHistory } from "./AssetHistory";
-import { api, errorMessage, money, number, price, time } from "./api";
+import { api, errorMessage, money, time } from "./api";
+import { Composition } from "./Composition";
+import { Positions } from "./Positions";
 import { portfolioSchema } from "./schema";
-import { Badge, Empty, ErrorNotice, Loading, Panel } from "./ui";
+import { Badge, ErrorNotice, Loading, Panel } from "./ui";
 export function PortfolioView({
 	onExplore,
 	onCash,
@@ -75,6 +77,7 @@ export function PortfolioView({
 					{w}
 				</div>
 			))}
+			{p.composition && <Composition value={p.composition} />}
 			<Alerts onSymbol={onSymbol} compact />
 			<div className="metric-grid">
 				<div className="metric">
@@ -107,75 +110,11 @@ export function PortfolioView({
 			</div>
 			<div className="dashboard-grid">
 				<div className="stack">
-					<Panel
-						title="我的持仓"
-						action={
-							<button type="button" className="text-button" onClick={onExplore}>
-								发现标的 <ArrowRight />
-							</button>
-						}
-					>
-						{p.positions.length === 0 ? (
-							<Empty
-								title="第一笔投资，从观察开始"
-								action={
-									<button
-										type="button"
-										className="button primary"
-										onClick={onExplore}
-									>
-										去看看市场 <ArrowUpRight />
-									</button>
-								}
-							>
-								资金已就位。选择你熟悉的标的，写下判断，再开始练习。
-							</Empty>
-						) : (
-							<div className="table-scroll">
-								<table>
-									<thead>
-										<tr>
-											<th>标的</th>
-											<th>持仓 / 可卖</th>
-											<th>市值</th>
-											<th>浮动收益</th>
-										</tr>
-									</thead>
-									<tbody>
-										{p.positions.map((position) => (
-											<tr key={position.symbol}>
-												<td>
-													<button
-														type="button"
-														className="symbol-link"
-														onClick={() => onSymbol(position.symbol)}
-													>
-														{position.name}
-														<small>{position.symbol}</small>
-													</button>
-												</td>
-												<td>
-													{number(position.quantity)}
-													<small>可卖 {number(position.sellable)}</small>
-												</td>
-												<td>
-													{money(position.market_value, position.currency)}
-													<small>
-														成本{" "}
-														{price(position.average_cost, position.currency)}
-													</small>
-												</td>
-												<td>
-													{money(position.pnl, position.currency)}
-													<small>{position.valuation_status}</small>
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						)}
-					</Panel>
+					<Positions
+						positions={p.positions}
+						onSymbol={onSymbol}
+						onExplore={onExplore}
+					/>
 					<AssetHistory />
 				</div>
 				<div className="stack">
@@ -183,7 +122,7 @@ export function PortfolioView({
 						title="现金账户"
 						action={
 							<button type="button" className="text-button" onClick={onCash}>
-								管理 <ArrowRight />
+								明细与换汇 <ArrowRight />
 							</button>
 						}
 					>

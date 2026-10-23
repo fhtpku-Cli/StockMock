@@ -143,3 +143,20 @@ export const price = (
 	}
 	return formatter.format(Number(value));
 };
+
+export async function downloadCsv(path: string): Promise<Blob> {
+	try {
+		const response = await http.get(path);
+		if (!response.headers.get("content-type")?.includes("text/csv"))
+			throw new ApiError(
+				"invalid_export",
+				"未收到有效的 CSV 文件，请重试导出。",
+			);
+		return await response.blob();
+	} catch (error) {
+		if (error instanceof ApiError) throw error;
+		if (error instanceof Error)
+			throw new ApiError("export_failed", "导出失败，请检查连接后重新导出。");
+		throw error;
+	}
+}

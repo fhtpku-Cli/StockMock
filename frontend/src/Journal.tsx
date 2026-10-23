@@ -1,8 +1,9 @@
-import { DownloadSimple, Notebook } from "@phosphor-icons/react";
+import { Notebook } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
-import { api, errorMessage, money, time } from "./api";
+import { api, errorMessage, time } from "./api";
+import { CashStatement } from "./CashStatement";
 import { LinkedTrade } from "./OrderRecord";
 import {
 	initialRecordFilter,
@@ -10,12 +11,7 @@ import {
 	recordMatches,
 } from "./RecordFilters";
 import { Reviews } from "./Reviews";
-import {
-	acknowledgmentSchema,
-	journalSchema,
-	ledgerSchema,
-	orderSchema,
-} from "./schema";
+import { acknowledgmentSchema, journalSchema, orderSchema } from "./schema";
 import { Empty, ErrorNotice, Loading, Panel } from "./ui";
 export function Journal({
 	orderId,
@@ -34,10 +30,6 @@ export function Journal({
 	const journal = useQuery({
 		queryKey: ["journal"],
 		queryFn: () => api("journal", journalSchema),
-	});
-	const ledger = useQuery({
-		queryKey: ["ledger"],
-		queryFn: () => api("ledger", ledgerSchema),
 	});
 	const save = useMutation({
 		mutationFn: () =>
@@ -63,7 +55,7 @@ export function Journal({
 			<Reviews />
 			<RecordFilters value={recordFilter} onChange={setRecordFilter} />
 			<p className="footnote">
-				市场按关联委托币种筛选；未关联笔记仅在“全部”显示。资金流水按币种筛选。
+				市场按关联委托币种筛选；未关联笔记仅在“全部”显示。下方资金核对使用独立筛选条件。
 			</p>
 			{orders.isError && recordFilter.market !== "all" && (
 				<ErrorNotice
@@ -158,46 +150,7 @@ export function Journal({
 						)}
 					</Panel>
 				</div>
-				<Panel
-					title="资金流水"
-					action={
-						<a
-							className="text-button"
-							href="/api/export.csv"
-							download
-							aria-label="导出资金流水"
-						>
-							<DownloadSimple size={20} />
-						</a>
-					}
-				>
-					{ledger.isPending ? (
-						<Loading />
-					) : ledger.isError ? (
-						<ErrorNotice
-							message={errorMessage(ledger.error)}
-							retry={() => void ledger.refetch()}
-						/>
-					) : ledger.data.length === 0 ? (
-						<p className="muted">暂无资金流水。</p>
-					) : (
-						<div className="ledger-list">
-							{ledger.data
-								.filter((l) =>
-									recordMatches(l.created_at, l.currency, recordFilter),
-								)
-								.map((l) => (
-									<article key={l.id}>
-										<div>
-											<strong>{l.note || l.kind}</strong>
-											<small>{time(l.created_at)}</small>
-										</div>
-										<b>{money(l.amount, l.currency)}</b>
-									</article>
-								))}
-						</div>
-					)}
-				</Panel>
+				<CashStatement />
 			</div>
 		</div>
 	);

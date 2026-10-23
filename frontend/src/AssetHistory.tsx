@@ -1,35 +1,97 @@
 import { useQuery } from "@tanstack/react-query";
-import { z } from "zod";
+import { useState } from "react";
+import { dateRangeError, filterParams } from "./analysis";
 import { api, errorMessage, money, time } from "./api";
-import { snapshotSchema, snapshotSegments } from "./history";
+import { CsvDownload } from "./CsvDownload";
+import { snapshotRangeSchema } from "./history";
+import { SnapshotChart } from "./SnapshotChart";
 import { ErrorNotice, Loading, Panel } from "./ui";
+
+const ranges = [
+	{ value: "7d", label: "近7天" },
+	{ value: "30d", label: "近30天" },
+	{ value: "90d", label: "近90天" },
+	{ value: "all", label: "本轮全部" },
+	{ value: "custom", label: "自定日期" },
+] as const;
 export function AssetHistory({ roundId }: { readonly roundId?: string }) {
+	const [choice, setChoice] = useState("all");
+	const [dates, setDates] = useState({ start_date: "", end_date: "" });
+	const [params, setParams] = useState("range=all");
+	const [validation, setValidation] = useState<string | null>(null);
+	const prefix = roundId ? `rounds/${encodeURIComponent(roundId)}/` : "";
 	const query = useQuery({
-		queryKey: ["snapshots", roundId ?? "current"],
+		queryKey: ["snapshots", roundId ?? "current", params],
 		queryFn: () =>
-			api(
-				roundId
-					? `rounds/${encodeURIComponent(roundId)}/snapshots`
-					: "snapshots",
-				z.array(snapshotSchema),
-			),
+			api(`${prefix}snapshots/range?${params}`, snapshotRangeSchema),
 	});
-	const rows = [...(query.data ?? [])].sort((a, b) =>
-		a.day.localeCompare(b.day),
-	);
-	const segments = snapshotSegments(rows);
-	const valid = segments.flat();
-	const amounts = valid.map((r) => Number(r.total_assets_cny));
-	const low = Math.min(...amounts),
-		high = Math.max(...amounts);
-	const start = Date.parse(rows[0]?.day ?? "1970-01-01"),
-		end = Date.parse(rows.at(-1)?.day ?? "1970-01-01");
-	const x = (day: string) =>
-		20 + ((Date.parse(day) - start) / Math.max(end - start, 86400000)) * 660;
-	const y = (value: string | null) =>
-		160 - ((Number(value) - low) / Math.max(high - low, 1)) * 130;
 	return (
-		<Panel title="资产轨迹">
+		<Panel title="资产轨迹" className="asset-history">
+			<fieldset className="analysis-actions" aria-label="资产轨迹范围">
+				{ranges.map((range) => (
+					<button
+						type="button"
+						className={choice === range.value ? "button primary" : "button"}
+						aria-pressed={choice === range.value}
+						key={range.value}
+						onClick={() => {
+							setChoice(range.value);
+							setValidation(null);
+							if (range.value !== "custom") setParams(`range=${range.value}`);
+						}}
+					>
+						{range.label}
+					</button>
+				))}
+			</fieldset>
+			{choice === "custom" && (
+				<form
+					onSubmit={(event) => {
+						event.preventDefault();
+						const error =
+							dateRangeError(dates) ??
+							(!dates.start_date || !dates.end_date
+								? "请选择开始和结束日期。"
+								: null);
+						setValidation(error);
+						if (!error) setParams(filterParams({ range: "custom", ...dates }));
+					}}
+				>
+					<div className="analysis-filters">
+						<label>
+							轨迹开始日期
+							<input
+								type="date"
+								required
+								value={dates.start_date}
+								onChange={(event) =>
+									setDates({ ...dates, start_date: event.target.value })
+								}
+							/>
+						</label>
+						<label>
+							轨迹结束日期
+							<input
+								type="date"
+								required
+								value={dates.end_date}
+								onChange={(event) =>
+									setDates({ ...dates, end_date: event.target.value })
+								}
+							/>
+						</label>
+					</div>
+					<button type="submit" className="button">
+						应用轨迹日期
+					</button>
+					{validation && <ErrorNotice message={validation} />}
+				</form>
+			)}
+			<p className="footnote">
+				北京时间自然日。
+				{roundId ? "快捷范围截至本轮归档日。" : "快捷范围截至今天。"}
+				只展示后台实际留存的记录，不补画历史；采集时资产不是收盘净值。
+			</p>
 			{query.isPending ? (
 				<Loading />
 			) : query.isError ? (
@@ -37,104 +99,66 @@ export function AssetHistory({ roundId }: { readonly roundId?: string }) {
 					message={errorMessage(query.error)}
 					retry={() => void query.refetch()}
 				/>
-			) : rows.length === 0 ? (
-				<p className="chart-empty">
-					尚无每日资产快照。服务运行后会逐日留存，不补画过去的收益。
-				</p>
 			) : (
 				<>
 					<p className="footnote">
-						每日折合人民币资产；缺失、过时和未记录日期不连线。单个点不代表趋势。
+						当前显示：{query.data.start_date ?? "本轮开始"} 至{" "}
+						{query.data.end_date ?? "本轮结束"}
 					</p>
-					{valid.length > 0 && (
-						<figure className="price-chart">
-							<svg
-								viewBox="0 0 700 190"
-								role="img"
-								aria-label="每日资产轨迹，缺失日期断开"
-							>
-								<path
-									d="M20 30H680 M20 95H680 M20 160H680"
-									className="grid-line"
-								/>
-								{segments.map((segment) => (
-									<g key={segment[0]?.id}>
-										<polyline
-											data-testid="asset-segment"
-											points={segment
-												.map((r) => `${x(r.day)},${y(r.total_assets_cny)}`)
-												.join(" ")}
-											fill="none"
-											stroke="currentColor"
-											strokeWidth="2"
-										/>
-										{segment.map((r) => (
-											<circle
-												key={r.id}
-												cx={x(r.day)}
-												cy={y(r.total_assets_cny)}
-												r="3"
-												fill="currentColor"
-											>
-												<title>
-													{r.day} {money(r.total_assets_cny)}
-												</title>
-											</circle>
-										))}
-									</g>
-								))}
-							</svg>
-							<figcaption>
-								<span>{rows[0]?.day}</span>
-								<span>{rows.at(-1)?.day}</span>
-							</figcaption>
-						</figure>
+					<div className="history-summary">
+						<span>已记录首末资产变化</span>
+						<strong>
+							{query.data.change_cny !== null &&
+							Number(query.data.change_cny) > 0
+								? "+"
+								: ""}
+							{money(query.data.change_cny)}
+						</strong>
+						<p>{query.data.reason}</p>
+						<small>
+							实际记录 {query.data.recorded_days} 天 · 完整估值{" "}
+							{query.data.complete_days} 天 · 未记录 {query.data.missing_days}{" "}
+							天
+						</small>
+						<small>
+							实际首记录：
+							{query.data.first
+								? `${query.data.first.day} · ${time(query.data.first.captured_at)}`
+								: "无记录"}
+						</small>
+						<small>
+							实际末记录：
+							{query.data.last
+								? `${query.data.last.day} · ${time(query.data.last.captured_at)}`
+								: "无记录"}
+						</small>
+					</div>
+					{!query.data.continuous && query.data.recorded_days > 0 && (
+						<p className="notice">
+							覆盖不连续：未记录日期、缺失或过时估值均不连线。有效首末记录的差额不代表逐日或收盘收益。
+						</p>
 					)}
-					<details>
-						<summary>查看每日金额与估值依据（{rows.length} 天）</summary>
-						<div className="table-scroll">
-							<table>
-								<thead>
-									<tr>
-										<th>日期</th>
-										<th>总资产 / 本轮收益</th>
-										<th>估值状态</th>
-									</tr>
-								</thead>
-								<tbody>
-									{rows.map((r) => (
-										<tr key={r.id}>
-											<td>
-												{r.day}
-												<small>记录于 {time(r.captured_at)}</small>
-											</td>
-											<td>
-												{money(r.total_assets_cny)}
-												<small>{money(r.pnl_cny)}</small>
-											</td>
-											<td>
-												{
-													(
-														{
-															complete: "完整",
-															stale: "过时，不连线",
-															missing: "缺失，不连线",
-														} as const
-													)[r.status]
-												}
-												<small>{r.issues.join("；")}</small>
-												{Object.entries(r.price_times).map(([symbol, t]) => (
-													<small key={symbol}>
-														{symbol} · {time(t)}
-													</small>
-												))}
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
-					</details>
+					{query.data.items.length === 0 ? (
+						<p className="chart-empty">
+							所选范围没有实际资产记录。可调整日期；不会补采过去的数据。
+						</p>
+					) : (
+						<SnapshotChart items={query.data.items} />
+					)}
+					<div className="analysis-actions">
+						<CsvDownload
+							path={`${prefix}snapshots/export.csv?${params}`}
+							name={`资产快照-${roundId ?? "当前轮"}-所选范围.csv`}
+						>
+							导出所选快照
+						</CsvDownload>
+						<CsvDownload
+							path={`${prefix}snapshots/export.csv?range=all`}
+							name={`资产快照-${roundId ?? "当前轮"}-全部.csv`}
+						>
+							导出本轮全部快照
+						</CsvDownload>
+					</div>
 				</>
 			)}
 		</Panel>
