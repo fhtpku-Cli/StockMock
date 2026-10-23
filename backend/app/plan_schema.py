@@ -6,6 +6,10 @@ import sqlite3
 def initialize(connection: sqlite3.Connection) -> None:
     """复用现有启动事务，旧 JSON 字段由模型默认值兼容。"""
     statements = (
+        """CREATE TABLE IF NOT EXISTS review_conclusions(
+        id TEXT PRIMARY KEY, round_id TEXT NOT NULL, subject_type TEXT NOT NULL,
+        subject_id TEXT NOT NULL, payload TEXT NOT NULL, data TEXT NOT NULL)""",
+        "CREATE INDEX IF NOT EXISTS conclusions_subject ON review_conclusions(round_id,subject_type,subject_id)",
         """CREATE TABLE IF NOT EXISTS plans(
         id TEXT PRIMARY KEY, round_id TEXT NOT NULL, symbol TEXT NOT NULL,
         status TEXT NOT NULL, version INTEGER NOT NULL, data TEXT NOT NULL)""",

@@ -2,16 +2,12 @@
 
 import csv
 import io
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import assert_never
 
 from fastapi import Response
 
-from app.models import State
 from app.plan_models import Alert, Plan
-from app.plan_reviews import reviews
-from app.storage import Store
 
 
 def safe_cell(value: str | Decimal | int | None) -> str:
@@ -82,79 +78,6 @@ def export_plans(plans: list[Plan]) -> Response:
             ]
         )
     return csv_response(output, "plans.csv")
-
-
-def export_reviews(store: Store, state: State) -> Response:
-    """每笔委托保留当时快照、成交时间和来源；无委托计划及旧独立笔记同样导出。"""
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(
-        [
-            "轮次",
-            "计划编号",
-            "复盘状态",
-            "实际情况",
-            "委托编号",
-            "证券",
-            "币种",
-            "方向",
-            "委托状态",
-            "成交数量",
-            "成交价格",
-            "费用",
-            "已实现原币净收益（仅该卖单）",
-            "市场成交时间",
-            "确认时间",
-            "行情来源",
-            "委托当时计划快照",
-            "旧委托理由",
-            "复盘笔记",
-        ]
-    )
-    for review in reviews(store, state, datetime.now(UTC)):
-        orders = [o for o in state.orders if o.plan_id == review.plan.id] if review.plan else [review.legacy_order]
-        for order in orders or [None]:
-            writer.writerow(
-                [
-                    safe_cell(value)
-                    for value in (
-                        state.id,
-                        review.plan.id if review.plan else None,
-                        review.status,
-                        review.actual_status,
-                        order.id if order else None,
-                        review.plan.symbol if review.plan else order.symbol if order else None,
-                        review.currency,
-                        order.side if order else None,
-                        order.status if order else None,
-                        order.quantity if order and order.status == "filled" else 0,
-                        order.fill_price if order else None,
-                        order.fee if order else None,
-                        order.realized_pnl if order else None,
-                        order.filled_at.isoformat() if order and order.filled_at else None,
-                        order.confirmed_at.isoformat() if order and order.confirmed_at else None,
-                        order.source if order else None,
-                        order.plan_snapshot.model_dump_json() if order and order.plan_snapshot else None,
-                        order.reason if order else None,
-                        "\n".join(f"{note.created_at.isoformat()} {note.text}" for note in review.notes) or None,
-                    )
-                ]
-            )
-    for note in state.journal:
-        if note.order_id is None and note.plan_id is None:
-            writer.writerow(
-                [
-                    safe_cell(value)
-                    for value in (
-                        state.id,
-                        None,
-                        "独立旧笔记",
-                        *([None] * 15),
-                        f"{note.created_at.isoformat()} {note.text}",
-                    )
-                ]
-            )
-    return csv_response(output, "reviews.csv")
 
 
 def export_alerts(items: list[Alert]) -> Response:

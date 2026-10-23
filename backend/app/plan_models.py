@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import Field
 
 from app.models import Currency, Journal, Model, Order, PlanSnapshot
+from app.review_core_models import Coverage, Market, ReviewState, SubjectType
 
 
 class PlanInput(Model):
@@ -94,3 +95,11 @@ class Review(Model):
     currency: Currency
     status: Literal["pending", "reviewed", "not_due"]
     actual_status: str
+    subject_type: SubjectType
+    symbol: str
+    market: Market | None = None
+    created_at: datetime
+    latest_record_at: datetime
+    review_state: ReviewState
+    update_reasons: list[str]
+    coverage: Coverage

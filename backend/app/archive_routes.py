@@ -12,6 +12,9 @@ from app.engine import Engine
 from app.models import Journal, Order
 from app.plan_models import Page
 from app.plan_queries import PageQuery, page
+from app.review_journal import journal_page
+from app.review_queries import RecordQuery
+from app.review_repository import read_context
 
 
 def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
@@ -22,8 +25,14 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return page(list(reversed(engine.store.read_round(str(round_id)).orders)), query)
 
     @app.get("/api/rounds/{round_id}/journal", dependencies=[Depends(auth.require)])
-    def round_journal(round_id: UUID, query: Annotated[PageQuery, Query()]) -> Page[Journal]:
-        return page(list(reversed(engine.store.read_round(str(round_id)).journal)), query)
+    def round_journal(round_id: UUID, query: Annotated[RecordQuery, Query()]) -> Page[Journal]:
+        result = journal_page(read_context(engine.store, str(round_id)), query)
+        return Page[Journal](
+            items=[Journal.model_validate(n.model_dump(include=set(Journal.model_fields))) for n in result.items],
+            total=result.total,
+            offset=result.offset,
+            limit=result.limit,
+        )
 
     @app.get("/api/rounds/{round_id}/ledger", dependencies=[Depends(auth.require)])
     def round_ledger(round_id: UUID, query: Annotated[LedgerQuery, Query()]) -> LedgerPage:

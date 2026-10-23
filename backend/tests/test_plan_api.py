@@ -62,7 +62,7 @@ def test_two_http_clients_share_plans_conflicts_snapshots_and_notes(
             url + "/api/journal", json={"plan_id": plan.id, "order_id": order.id, "text": "保留原判断，等待成交"}
         )
         assert note.status_code == 200
-        summaries = Page[Review].model_validate_json(first.get(url + "/api/reviews?status=reviewed").content)
+        summaries = Page[Review].model_validate_json(first.get(url + "/api/reviews?status=pending").content)
         assert summaries.total == 1
         assert len(summaries.items[0].notes) == 1
         fresh = create_plan(engine, body().model_copy(update={"symbol": "AAPL"}), NOW)
@@ -178,5 +178,6 @@ def test_more_than_500_orders_remain_accessible_and_exported(engine: Engine) -> 
             assert len(set(ids)) == 507
         exported = http.get(url + f"/api/reviews/export.csv?round_id={plan.round_id}")
         rows = list(csv.reader(io.StringIO(exported.text)))
-        assert len(rows) == 508
-        assert all(plan.id in row[16] for row in rows[1:])
+        order_rows = [row for row in rows[1:] if row[19] == "order_submitted"]
+        assert len(order_rows) == 507
+        assert all(plan.id in row[16] for row in order_rows)

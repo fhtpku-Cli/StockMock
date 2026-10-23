@@ -9,10 +9,13 @@ from fastapi import Depends, FastAPI, Query, Response
 from app.auth import Auth
 from app.engine import Engine
 from app.models import Order, State
-from app.plan_exports import export_plans, export_reviews
+from app.plan_exports import export_plans
 from app.plan_models import Page, Plan, PlanInput, PlanUpdate
 from app.plan_queries import PageQuery, PlanQuery, page
 from app.plans import create_plan, get_plan, round_plans, update_plan
+from app.review_exports import export_reviews
+from app.review_queries import WorkbenchQuery
+from app.review_repository import read_context
 
 
 def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
@@ -26,8 +29,8 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return export_plans(round_plans(engine.store, state_for(round_id).id))
 
     @app.get("/api/reviews/export.csv", dependencies=[Depends(auth.require)])
-    def reviews_export(round_id: str | None = None) -> Response:
-        return export_reviews(engine.store, state_for(round_id))
+    def reviews_export(query: Annotated[WorkbenchQuery, Query()]) -> Response:
+        return export_reviews(read_context(engine.store, query.round_id), query, datetime.now(UTC))
 
     @app.get("/api/plans", dependencies=[Depends(auth.require)])
     def list_plans(query: Annotated[PlanQuery, Query()]) -> Page[Plan]:

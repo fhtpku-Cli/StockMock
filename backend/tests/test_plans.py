@@ -156,7 +156,7 @@ def test_plan_review_actual_fills_partial_sale_cancel_notes_and_missing_profit(e
         state.journal.append(Journal(id=str(uuid4()), plan_id=plan.id, text="部分卖出复盘", created_at=later))
         engine.store.save(connection, state)
     summary = reviews(engine.store, engine.store.read(), later)[0]
-    assert summary.status == "reviewed"
+    assert summary.status == "pending"
     assert summary.realized_pnl is None
     assert len(summary.notes) == 1
 
