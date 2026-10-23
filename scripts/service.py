@@ -139,20 +139,42 @@ def main() -> None:
     for item in (
         ROOT / "backend/.venv/bin/python",
         ROOT / "frontend/dist/index.html",
-        ROOT / "backend/.local-password",
     ):
         if not item.is_file():
             parser.error(f"缺少运行文件：{item}")
-    preflight = invoke(
-        [
-            str(ROOT / "backend/.venv/bin/python"),
-            str(ROOT / "scripts/run-service.py"),
-            "--check-config",
-        ],
-        check=False,
-    )
+    try:
+        preflight = invoke(
+            [
+                str(ROOT / "backend/.venv/bin/python"),
+                str(ROOT / "scripts/run-service.py"),
+                "--check-config",
+            ],
+            check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        parser.error("配置检查超过 30 秒；未启动服务。请检查数据库占用、依赖和私有日志。")
+    except OSError:
+        parser.error("无法执行 Python 启动器；未启动服务。请检查解释器权限，并运行 status 查看系统任务状态。")
     if preflight.returncode:
-        parser.error("运行配置检查失败。请核对密码权限、.runtime.json 和依赖；未启动服务。")
+        # 只转达启动器固定类别，绝不原样打印子进程异常或配置输入。
+        stages: list[str] = re.findall(
+            r"^\[(logging|config_file|config_format|password_file|password_value|dependency|initialization|startup)\]",
+            preflight.stderr or "",
+            re.MULTILINE,
+        )
+        descriptions = {
+            "logging": "日志不可写",
+            "config_file": "运行配置缺失或权限不安全",
+            "config_format": "JSON、字段或类型无效",
+            "password_file": "密码缺失或权限不安全",
+            "password_value": "密码长度不足",
+            "dependency": "依赖无法导入",
+            "initialization": "应用初始化失败，请核对 Host/Origin、证券规则和数据库",
+            "startup": "服务启动失败",
+        }
+        category = "; ".join(f"{stage}: {descriptions[stage]}" for stage in dict.fromkeys(stages)) or "unknown"
+        parser.error(f"运行配置检查失败 [{category}]；请检查私有 service.log 中对应说明；未启动服务。")
     if args.action == "install":
         if path.exists():
             parser.error("服务文件已存在；请先检查现有配置，或卸载后重装")
