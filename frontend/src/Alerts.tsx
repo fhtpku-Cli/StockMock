@@ -4,9 +4,11 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { useState } from "react";
+import type { z } from "zod";
 import { api, errorMessage, time } from "./api";
 import { Pagination } from "./Pagination";
 import { alertPageSchema, alertSchema } from "./planSchema";
+import { ReviewModal } from "./ReviewDetail";
 import { Badge, ErrorNotice, Loading, Panel } from "./ui";
 import { useOnline } from "./useOnline";
 
@@ -21,6 +23,9 @@ export function Alerts({
 	readonly roundId?: string;
 	readonly onSymbol?: (symbol: string) => void;
 }) {
+	const [selectedAlert, setSelectedAlert] = useState<z.infer<
+		typeof alertSchema
+	> | null>(null);
 	const [unreadOnly, setUnreadOnly] = useState(!roundId);
 	const online = useOnline();
 	const client = useQueryClient();
@@ -131,6 +136,13 @@ export function Alerts({
 						<p className="footnote">
 							记录于 {time(item.created_at)}（北京时间） · 不会自动买卖或撤单
 						</p>
+						<button
+							type="button"
+							className="button small"
+							onClick={() => setSelectedAlert(item)}
+						>
+							查看相关计划/复盘
+						</button>
 						{!roundId && !item.read_at && (
 							<button
 								type="button"
@@ -151,6 +163,17 @@ export function Alerts({
 					pending={query.isFetchingNextPage}
 					more={query.hasNextPage}
 					onMore={() => void query.fetchNextPage()}
+				/>
+			)}
+			{selectedAlert && (
+				<ReviewModal
+					target={{
+						roundId: selectedAlert.round_id,
+						subjectType: "plan",
+						subjectId: selectedAlert.plan_id,
+					}}
+					alert={selectedAlert}
+					onClose={() => setSelectedAlert(null)}
 				/>
 			)}
 		</Panel>

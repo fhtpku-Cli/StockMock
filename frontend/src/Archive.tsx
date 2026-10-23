@@ -5,12 +5,13 @@ import { Alerts } from "./Alerts";
 import { AssetHistory } from "./AssetHistory";
 import { api, errorMessage, money, time } from "./api";
 import { CashStatement } from "./CashStatement";
-import { LinkedTrade, OrderRecord } from "./OrderRecord";
+import { JournalNotes } from "./JournalNotes";
+import { OrderRecord } from "./OrderRecord";
 import { Pagination } from "./Pagination";
 import { PlanSummary } from "./PlanSummary";
 import { planSchema } from "./planSchema";
 import { Reviews } from "./Reviews";
-import { decimal, journalSchema, orderSchema } from "./schema";
+import { decimal, orderSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 import { usePages } from "./usePages";
 
@@ -36,11 +37,6 @@ export function Archive({
 		["archive-orders", roundId],
 		`${base}/orders`,
 		orderSchema,
-	);
-	const notes = usePages(
-		["archive-journal", roundId],
-		`${base}/journal`,
-		journalSchema.element,
 	);
 	const plans = usePages(
 		["plans", "archive", roundId],
@@ -140,51 +136,7 @@ export function Archive({
 							/>
 						)}
 					</section>
-					<section>
-						<h3>历史复盘笔记（{notes.total}）</h3>
-						{notes.isPending ? (
-							<Loading />
-						) : notes.isError ? (
-							<ErrorNotice
-								message={errorMessage(notes.error)}
-								retry={() => void notes.refetch()}
-							/>
-						) : (
-							notes.total === 0 && (
-								<p className="footnote">本轮没有复盘笔记。</p>
-							)
-						)}
-						<div className="journal-list">
-							{notes.items.map((entry) => (
-								<article key={entry.id}>
-									<small>
-										{time(entry.created_at)}（北京时间）
-										{entry.plan_id
-											? " · 关联计划"
-											: entry.order_id
-												? " · 关联委托"
-												: " · 独立笔记"}
-									</small>
-									<p className="review-notes">{entry.text}</p>
-									<LinkedTrade
-										linked={entry.order_id !== null}
-										order={orders.items.find(
-											(order) => order.id === entry.order_id,
-										)}
-									/>
-								</article>
-							))}
-						</div>
-						{notes.data && (
-							<Pagination
-								count={notes.items.length}
-								total={notes.total}
-								pending={notes.isFetchingNextPage}
-								more={notes.hasNextPage}
-								onMore={() => void notes.fetchNextPage()}
-							/>
-						)}
-					</section>
+					<JournalNotes roundId={roundId} />
 					<CashStatement roundId={roundId} />
 				</div>
 			)}
