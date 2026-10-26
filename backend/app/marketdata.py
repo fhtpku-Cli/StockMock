@@ -13,7 +13,7 @@ import httpx2
 
 from app.discovery_models import ObservationInstrument, observation_identity
 from app.instrument_registry import resolve_rule
-from app.marketdata_daily import SDK_URL, decode_daily, parse_daily
+from app.marketdata_daily import SDK_URL, decode_daily, extract_decoder, parse_daily
 from app.marketdata_futu import FutuOpenD
 from app.marketdata_futu_parser import futu_port, parse_futu_intraday
 from app.marketdata_models import Bar, Currency, FxRate, MarketDataError, Quote
@@ -64,6 +64,8 @@ class MarketDataClient:
                 duration = ttl
                 try:
                     value = self._get(url)
+                    if url == SDK_URL:
+                        _ = extract_decoder(value)
                 except MarketDataError as error:
                     value, duration = error, 15
                 entry = (monotonic() + duration, datetime.now(UTC), value)
