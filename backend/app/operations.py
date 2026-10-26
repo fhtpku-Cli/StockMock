@@ -19,6 +19,7 @@ def convert(engine: Engine, request: ConvertInput, now: datetime) -> None:
             if rows[0][0] != payload:
                 raise DomainError("idempotency_conflict", "请求编号已用于其他操作")
             return
+        round_id = engine.store.load(connection).id
     rates = engine.provider.fx_rates()
     rate = next((r for r in rates if r.currency == request.currency), None)
     if rate is None or now - rate.market_time > timedelta(days=5) or rate.market_time > now:
@@ -31,6 +32,8 @@ def convert(engine: Engine, request: ConvertInput, now: datetime) -> None:
                 raise DomainError("idempotency_conflict", "请求编号已用于其他操作")
             return
         state = engine.store.load(connection)
+        if state.id != round_id:
+            raise DomainError("round_changed", "练习轮次已变化，请刷新后重新操作")
         if available(state, request.currency) < request.amount:
             raise DomainError("insufficient_funds", "可用外币余额不足")
         cny = money(request.amount * rate.cny_per_unit)

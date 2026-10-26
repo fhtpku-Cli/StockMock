@@ -13,9 +13,9 @@ from app.marketdata import Bar, FxRate, MarketDataError, Quote
 from app.matching import advance
 from app.models import DomainError, Instrument, Order, OrderInput, Preview
 from app.order_builder import OrderContext, build_order
-from app.order_requests import same_request
+from app.order_requests import retry_order
 from app.plans import order_snapshot
-from app.storage import Store, read_rows
+from app.storage import Store
 
 
 class Provider(Protocol):
@@ -154,34 +154,18 @@ class Engine:
     def place(self, request: OrderInput, now: datetime) -> Order:
         """以请求编号保证委托受理幂等。"""
         with self.store.transaction() as connection:
-            rows = read_rows(
-                connection,
-                "SELECT payload,response FROM requests WHERE id=?",
-                (request.request_id,),
-            )
-            if rows:
-                row = rows[0]
-                if not same_request(row[0], request):
-                    raise DomainError("idempotency_conflict", "相同请求编号不能用于不同操作")
-                saved = Order.model_validate_json(row[1])
-                return next(
-                    (o for o in self.store.load(connection).orders if o.id == saved.id),
-                    saved,
-                )
+            saved = retry_order(connection, request)
+            if saved is not None:
+                return saved
+            round_id = self.store.load(connection).id
         quote, rate, reference = self.prepare(request, now)
         with self.store.transaction() as connection:
+            saved = retry_order(connection, request)
+            if saved is not None:
+                return saved
             state = self.store.load(connection)
-            rows = read_rows(
-                connection,
-                "SELECT payload,response FROM requests WHERE id=?",
-                (request.request_id,),
-            )
-            if rows:
-                row = rows[0]
-                if not same_request(row[0], request):
-                    raise DomainError("idempotency_conflict", "相同请求编号不能用于不同操作")
-                saved = Order.model_validate_json(row[1])
-                return next((o for o in state.orders if o.id == saved.id), saved)
+            if state.id != round_id:
+                raise DomainError("round_changed", "练习轮次已变化，请刷新后重新操作")
             check_actions(connection, state.id, instrument(request.symbol, self.catalog), quote, now)
             order = build_order(
                 instrument(request.symbol, self.catalog),
