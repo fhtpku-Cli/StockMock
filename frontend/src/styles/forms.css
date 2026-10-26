@@ -207,6 +207,13 @@ details .footnote {
 	max-width: 100%;
 	height: 48px;
 }
+.record-filters input[type="date"] {
+	-webkit-appearance: none;
+	appearance: none;
+}
+.record-filters input[type="date"]::-webkit-date-and-time-value {
+	text-align: left;
+}
 @media (max-width: 600px) {
 	.filters {
 		flex-wrap: wrap;

@@ -22,10 +22,16 @@
 }
 .form-footer {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	margin-top: 16px;
 	gap: 16px;
+}
+.form-footer > .button {
+	flex-shrink: 0;
+	white-space: nowrap;
+	margin-left: auto;
 }
 .journal-list article {
 	border-bottom: 1px solid var(--line);
