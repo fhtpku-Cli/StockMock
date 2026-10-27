@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 from app.instrument_registry import resolve_rule
 from app.instrument_rules import InstrumentRule
 from app.marketdata_futu import MAX_TCP_PORT
-from app.marketdata_models import MarketDataError, Quote
+from app.marketdata_models import SETTLE, MarketDataError, Quote, interval_is_settled
 
 
 class _Row(BaseModel):
@@ -109,4 +109,8 @@ def parse_futu_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: 
                     volume=row.volume,
                 )
             )
-    return tuple(sorted(quotes, key=lambda row: row.market_time))
+    return tuple(
+        row
+        for row in sorted(quotes, key=lambda row: row.market_time)
+        if interval_is_settled(row.market_time, retrieved_at, SETTLE)
+    )

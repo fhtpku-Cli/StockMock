@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, Valid
 
 from app.discovery_models import ObservationInstrument, observation_identity
 from app.instrument_registry import resolve_rule
-from app.marketdata_models import Bar, Currency, FxRate, MarketDataError, Quote
+from app.marketdata_models import SETTLE, Bar, Currency, FxRate, MarketDataError, Quote, interval_is_settled
 
 if TYPE_CHECKING:
     from app.instrument_rules import InstrumentRule
@@ -84,7 +84,7 @@ def parse_quote(raw: bytes, symbol: str | InstrumentRule | ObservationInstrument
 
 
 def parse_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datetime) -> tuple[Quote, ...]:
-    """新浪五分钟时间标签为区间末端；只输出已结束且有成交量的区间。"""
+    """新浪五分钟时间标签为区间末端；只输出已定稿且有成交量的区间。"""
     _, currency, zone, _ = instrument_config(symbol)
     symbol = resolve_rule(symbol).symbol
     if currency != "CNY":
@@ -117,7 +117,11 @@ def parse_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datet
                 )
         if len({row.market_time for row in results}) != len(results):
             raise MarketDataError("duplicate_bar", symbol)
-        return tuple(sorted(results, key=lambda row: row.market_time))
+        return tuple(
+            row
+            for row in sorted(results, key=lambda row: row.market_time)
+            if interval_is_settled(row.market_time, retrieved_at, SETTLE)
+        )
     except (UnicodeError, ValueError) as exc:
         raise MarketDataError("invalid_response", symbol) from exc
 
