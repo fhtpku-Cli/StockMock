@@ -3,12 +3,12 @@
 from datetime import datetime, timedelta
 
 from app.accounting import fill
-from app.calendar import is_open
+from app.calendar import is_open, last_candidate_end
 from app.marketdata import Quote
 from app.models import Instrument, Order, State
 
 
-def eligible_time(order: Order, item: Instrument, sample: Quote, now: datetime) -> bool:
+def eligible_time(order: Order, item: Instrument, sample: Quote) -> bool:
     """要求整个分钟区间处于委托生效后且为可支持时段。"""
     event = sample.market_time
     start = sample.interval_start
@@ -21,7 +21,6 @@ def eligible_time(order: Order, item: Instrument, sample: Quote, now: datetime) 
         and event > order.created_at
         and event > order.active_at
         and sample.price > 0
-        and now - event <= timedelta(minutes=20)
         and start >= order.active_at
         and is_open(item, event - timedelta(microseconds=1))
         and is_open(item, start)
@@ -55,7 +54,7 @@ def advance(state: State, order: Order, item: Instrument, sample: Quote, now: da
     ):
         return order
     cutoff = min(order.expires_at, order.cancel_at or order.expires_at)
-    if event >= cutoff:
+    if event > cutoff:
         return order.model_copy(
             update={
                 "status": "cancelled" if order.cancel_at and order.cancel_at <= order.expires_at else "expired",
@@ -64,7 +63,7 @@ def advance(state: State, order: Order, item: Instrument, sample: Quote, now: da
             }
         )
     updated = order.model_copy(update={"last_sample_at": event})
-    if not eligible_time(updated, item, sample, now):
+    if not eligible_time(updated, item, sample):
         return updated
     allowed = sample.price <= order.price_bound if order.side == "buy" else sample.price >= order.price_bound
     blocked = daily_blocked(order, sample)
@@ -81,3 +80,33 @@ def advance(state: State, order: Order, item: Instrument, sample: Quote, now: da
             }
         )
     return updated
+
+
+def confirm_cutoff(order: Order, item: Instrument, now: datetime, *, allow_timeout: bool) -> Order:
+    """在截止后按最后候选区间水位确认结果，故障保护只控制数据超时。"""
+    cutoff = min(order.expires_at, order.cancel_at or order.expires_at)
+    if now < cutoff:
+        return order
+    last = last_candidate_end(item, order.active_at, cutoff)
+    reason = None
+    if last is None:
+        reason = "截止前没有可成交的完整区间"
+    elif order.last_sample_at is not None and order.last_sample_at >= last:
+        reason = "截止前全部可成交区间已处理，未满足条件"
+    if reason is not None:
+        return order.model_copy(
+            update={
+                "status": "cancelled" if order.cancel_at and order.cancel_at <= order.expires_at else "expired",
+                "status_reason": reason,
+                "confirmed_at": now,
+            }
+        )
+    if last is not None and allow_timeout and now > last + timedelta(minutes=20):
+        return order.model_copy(
+            update={
+                "status": "terminated",
+                "status_reason": "数据不足，未确认成交；释放占用，不回填迟到数据",
+                "confirmed_at": now,
+            }
+        )
+    return order

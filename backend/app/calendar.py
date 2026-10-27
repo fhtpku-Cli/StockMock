@@ -61,3 +61,14 @@ def prior_session_day(item: Instrument, active_at: datetime) -> date:
     cal = calendar(item.market)
     session = cal.date_to_session(str(active_at.astimezone(cal.tz).date()), direction="next")
     return cal.previous_session(session).to_pydatetime().date()
+
+
+def last_candidate_end(item: Instrument, active_at: datetime, cutoff: datetime) -> datetime | None:
+    """找出闭区间内最后一个完整五分钟连续交易区间的结束时刻。"""
+    end = cutoff.replace(second=0, microsecond=0) - timedelta(minutes=cutoff.minute % 5)
+    duration = timedelta(minutes=5)
+    while end - duration >= active_at:
+        if is_open(item, end - duration) and is_open(item, end - timedelta(microseconds=1)):
+            return end
+        end -= duration
+    return None

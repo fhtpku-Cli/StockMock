@@ -149,13 +149,14 @@ def test_cancel_can_lose_to_earlier_market_event(engine: Engine) -> None:
     assert engine.store.read().orders[0].status == "filled"
 
 
-def test_cancel_cutoff_equal_sample_never_fills(engine: Engine) -> None:
+def test_cancel_cutoff_equal_complete_sample_fills(engine: Engine) -> None:
     order = engine.place(request(), NOW)
-    _ = engine.cancel(order.id, NOW + timedelta(minutes=3))
-    engine.process(order.symbol, (sample(engine, order, "99", 3),), NOW + timedelta(minutes=5))
-    assert engine.store.read().orders[0].status == "cancelled"
-    assert available(engine.store.read(), "CNY") == Decimal(1000000)
-    assert not engine.store.read().ledger
+    _ = engine.cancel(order.id, NOW + timedelta(minutes=5))
+    engine.process(order.symbol, (sample(engine, order, "99", 5),), NOW + timedelta(minutes=6))
+    assert engine.store.read().orders[0].status == "filled"
+    assert available(engine.store.read(), "CNY") == Decimal("990095.05")
+    assert len(engine.store.read().ledger) == 2
+    assert "撤单未生效" in engine.store.read().orders[0].status_reason
 
 
 def test_idempotent_request_and_conflicting_reuse(engine: Engine) -> None:
@@ -272,8 +273,8 @@ def test_expiration_waits_for_delayed_preclose_bar(engine: Engine) -> None:
 
 def test_expiration_watermark_releases_without_trade(engine: Engine) -> None:
     order = engine.place(request(), NOW)
-    q = replace(sample(engine, order), market_time=order.expires_at)
-    engine.process(order.symbol, (q,), order.expires_at + timedelta(minutes=1))
+    q = replace(sample(engine, order), market_time=order.expires_at + timedelta(minutes=3))
+    engine.process(order.symbol, (q,), order.expires_at + timedelta(minutes=4))
     assert engine.store.read().orders[0].status == "expired"
     assert available(engine.store.read(), "CNY") == Decimal(1000000)
 

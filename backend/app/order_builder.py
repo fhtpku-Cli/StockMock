@@ -6,7 +6,7 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from typing import assert_never
 from uuid import uuid4
 
-from app.accounting import FEE, available, money, sellable
+from app.accounting import FEE, available, execution_amount, money, sellable
 from app.calendar import is_open, window
 from app.marketdata import FxRate, Quote
 from app.models import DomainError, Instrument, Order, OrderInput, State
@@ -70,7 +70,8 @@ def build_order(item: Instrument, state: State, request: OrderInput, context: Or
     cny = foreign = Decimal(0)
     match request.side:
         case "buy":
-            total = money(bound * request.quantity * (1 + FEE), reserve=True)
+            gross, fee = execution_amount(bound, request.quantity)
+            total = max(money(bound * request.quantity * (1 + FEE), reserve=True), gross + fee)
             foreign = min(total, available(state, item.currency)) if item.currency != "CNY" else Decimal(0)
             if item.currency != "CNY" and total > foreign and rate is None:
                 raise DomainError("fx_unavailable", "需自动换汇，但参考汇率不可用或过期")

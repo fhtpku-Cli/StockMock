@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import final
 
 import anyio
@@ -22,10 +22,15 @@ class Worker:
         """保存依赖并初始化本实例的状态。"""
         self.engine = engine
         self.view = WorkerView()
+        self.failed_since: dict[str, datetime] = {}
+        self.last_tick: datetime | None = None
 
     def tick(self) -> None:
         """读取活动订单并处理行情或数据超时。"""
         now = datetime.now(UTC)
+        if self.last_tick is None or now - self.last_tick > timedelta(minutes=5) or now < self.last_tick:
+            self.failed_since.clear()
+        self.last_tick = now
         failures: list[str] = []
         try:
             symbols = {o.symbol for o in self.engine.store.read().orders if o.status in ACTIVE}
@@ -33,15 +38,25 @@ class Worker:
             self.view = WorkerView(last_run=now, status="账户暂不可读，下轮重试")
             logging.getLogger(__name__).warning("账户读取失败 type=%s", type(error).__name__)
             return
+        self.failed_since = {symbol: since for symbol, since in self.failed_since.items() if symbol in symbols}
         for symbol in symbols:
             samples = ()
             try:
                 samples = self.engine.provider.intraday(symbol)
+                _ = self.failed_since.pop(symbol, None)
             except MarketDataError as error:
+                _ = self.failed_since.setdefault(symbol, now)
                 failures.append(error.code)
                 logging.getLogger(__name__).warning("行情获取失败 symbol=%s code=%s", symbol, error.code)
             try:
-                self.engine.process(symbol, samples, datetime.now(UTC))
+                completed = datetime.now(UTC)
+                failed_at = self.failed_since.get(symbol)
+                self.engine.process(
+                    symbol,
+                    samples,
+                    completed,
+                    allow_timeout=failed_at is None or completed - failed_at >= timedelta(minutes=20),
+                )
             except (DomainError, sqlite3.OperationalError) as error:
                 failures.append(type(error).__name__)
                 logging.getLogger(__name__).warning("订单处理失败 symbol=%s type=%s", symbol, type(error).__name__)

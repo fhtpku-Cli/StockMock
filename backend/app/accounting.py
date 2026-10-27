@@ -1,12 +1,12 @@
 """金额、预留和成交记账，所有更新由外层事务保护。"""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from typing import Final, assert_never
 from uuid import uuid4
 
-from app.calendar import sellable_time
+from app.calendar import calendar, sellable_time
 from app.marketdata import Quote
 from app.models import Currency, DomainError, Entry, Instrument, Lot, Order, State
 
@@ -18,6 +18,12 @@ ACTIVE: Final = frozenset({"accepted", "cancel_pending"})
 def money(value: Decimal, *, reserve: bool = False) -> Decimal:
     """按最小货币单位舍入，预留时向上取整。"""
     return value.quantize(CENT, rounding=ROUND_CEILING if reserve else ROUND_HALF_UP)
+
+
+def execution_amount(price: Decimal, quantity: int) -> tuple[Decimal, Decimal]:
+    """唯一成交金额算法：成交额和费用分别四舍五入到分。"""
+    gross = money(price * quantity)
+    return gross, money(gross * FEE)
 
 
 def reserved(state: State, currency: Currency) -> Decimal:
@@ -83,8 +89,13 @@ def fill(
 ) -> Order:
     """按有效样本同步更新现金、成本、份额和费用。"""
     price, event = sample.price, sample.market_time
-    gross = money(price * order.quantity)
-    fee = money(gross * FEE)
+    gross, fee = execution_amount(price, order.quantity)
+    reason = "按有效市场样本整笔成交；不模拟盘口排队"
+    if order.cancel_at is not None:
+        reason += "；撤单截止前已有满足条件的完整区间，撤单未生效"
+    if now - event > timedelta(minutes=20):
+        market_time = event.astimezone(calendar(item.market).tz).strftime("%H:%M")
+        reason += f"；后台延迟处理，按市场时间 {market_time} 的完整区间成交"
     cost_basis = realized_pnl = None
     match order.side:
         case "buy":
@@ -93,6 +104,7 @@ def fill(
             cny = cost if order.currency == "CNY" else money((cost - foreign) * order.fx_rate)
             if cny > order.reserved_cny or state.cash["CNY"] < cny or state.cash[order.currency] < foreign:
                 raise DomainError("reservation_insufficient", "预留资金不足，无法成交")
+            unlock = sellable_time(item, event)
             if order.currency != "CNY":
                 converted = cost - foreign
                 state.cash["CNY"] -= cny
@@ -114,7 +126,7 @@ def fill(
                     symbol=order.symbol,
                     quantity=order.quantity,
                     cost=cost,
-                    sellable_at=sellable_time(item, event),
+                    sellable_at=unlock,
                 )
             )
         case "sell":
@@ -128,7 +140,7 @@ def fill(
     return order.model_copy(
         update={
             "status": "filled",
-            "status_reason": "按有效市场样本整笔成交；不模拟盘口排队",
+            "status_reason": reason,
             "filled_at": event,
             "confirmed_at": now,
             "fill_price": price,

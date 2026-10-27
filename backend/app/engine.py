@@ -1,5 +1,6 @@
 """委托受理与事件时间撮合，行情获取在事务外执行。"""
 
+import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Protocol, final
@@ -10,7 +11,7 @@ from app.activated_registry import ActivatedRegistry
 from app.calendar import is_open, prior_session_day, window
 from app.catalog import CATALOG, from_rule, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
-from app.matching import advance
+from app.matching import advance, confirm_cutoff
 from app.models import DomainError, Instrument, Order, OrderInput, Preview
 from app.order_builder import OrderContext, build_order
 from app.order_requests import retry_order
@@ -210,7 +211,7 @@ class Engine:
                     return order
             raise DomainError("order_missing", "委托不存在", 404)
 
-    def process(self, symbol: str, samples: tuple[Quote, ...], now: datetime) -> None:
+    def process(self, symbol: str, samples: tuple[Quote, ...], now: datetime, *, allow_timeout: bool = True) -> None:
         """按市场时间处理新增样本，结束状态不可回填。"""
         item = instrument(symbol, self.catalog)
         if not item.tradable:
@@ -221,16 +222,19 @@ class Engine:
                 if original.symbol != symbol or original.status not in ACTIVE:
                     continue
                 order = original
-                cutoff = min(order.expires_at, order.cancel_at or order.expires_at)
-                for sample in sorted(samples, key=lambda quote: quote.market_time):
-                    order = advance(state, order, item, sample, now)
-                    if order.status not in ACTIVE:
-                        break
-                if order.status in ACTIVE and now > cutoff + timedelta(minutes=20):
+                try:
+                    for sample in sorted(samples, key=lambda quote: quote.market_time):
+                        order = advance(state, order, item, sample, now)
+                        if order.status not in ACTIVE:
+                            break
+                    if order.status in ACTIVE:
+                        order = confirm_cutoff(order, item, now, allow_timeout=allow_timeout)
+                except DomainError as error:
+                    logging.getLogger(__name__).warning("成交校验失败 code=%s", error.code)
                     order = order.model_copy(
                         update={
                             "status": "terminated",
-                            "status_reason": "数据不足，未确认成交；释放占用，不回填迟到数据",
+                            "status_reason": f"成交校验未通过（{error.code}），未成交并释放占用",
                             "confirmed_at": now,
                         }
                     )
