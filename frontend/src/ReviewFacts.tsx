@@ -59,6 +59,10 @@ export function ReviewFacts({ target }: { readonly target: ReviewTarget }) {
 								: ""}
 						</p>
 					)}
+					{(fact.type === "order_filled" || fact.type === "order_terminal") &&
+						fact.order?.status_reason && (
+							<p className="footnote">{fact.order.status_reason}</p>
+						)}
 					{fact.alert && (
 						<>
 							<p>
