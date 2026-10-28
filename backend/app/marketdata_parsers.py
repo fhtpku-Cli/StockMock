@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, Valid
 
 from app.discovery_models import ObservationInstrument, observation_identity
 from app.instrument_registry import resolve_rule
-from app.marketdata_models import SETTLE, Bar, Currency, FxRate, MarketDataError, Quote, interval_is_settled
+from app.marketdata_models import Bar, Currency, FxRate, MarketDataError, Quote
 
 if TYPE_CHECKING:
     from app.instrument_rules import InstrumentRule
@@ -84,7 +84,7 @@ def parse_quote(raw: bytes, symbol: str | InstrumentRule | ObservationInstrument
 
 
 def parse_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datetime) -> tuple[Quote, ...]:
-    """新浪五分钟时间标签为区间末端；只输出已定稿且有成交量的区间。"""
+    """新浪五分钟时间标签为区间末端；只输出原始取得时已结束且有成交量的区间。"""
     _, currency, zone, _ = instrument_config(symbol)
     symbol = resolve_rule(symbol).symbol
     if currency != "CNY":
@@ -94,13 +94,17 @@ def parse_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datet
         start, end = text.index("([") + 1, text.rindex("]);") + 1
         rows = TypeAdapter(list[_Minute]).validate_json(text[start:end])
         results: list[Quote] = []
+        seen: set[datetime] = set()
         for row in rows:
             valid_range = row.low <= min(row.open, row.close) <= max(row.open, row.close) <= row.high
             if row.day.tzinfo is not None or not valid_range:
                 raise MarketDataError("invalid_bar", symbol)
             stamp = row.day.replace(tzinfo=zone).astimezone(UTC)
-            if row.day.minute % 5 or row.day.second:
+            if row.day.minute % 5 or row.day.second or row.day.microsecond:
                 raise MarketDataError("invalid_bar_time", symbol)
+            if stamp in seen:
+                raise MarketDataError("duplicate_bar", symbol)
+            seen.add(stamp)
             if stamp <= retrieved_at and row.volume > 0:
                 results.append(
                     Quote(
@@ -115,13 +119,7 @@ def parse_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datet
                         volume=row.volume,
                     )
                 )
-        if len({row.market_time for row in results}) != len(results):
-            raise MarketDataError("duplicate_bar", symbol)
-        return tuple(
-            row
-            for row in sorted(results, key=lambda row: row.market_time)
-            if interval_is_settled(row.market_time, retrieved_at, SETTLE)
-        )
+        return tuple(sorted(results, key=lambda row: row.market_time))
     except (UnicodeError, ValueError) as exc:
         raise MarketDataError("invalid_response", symbol) from exc
 

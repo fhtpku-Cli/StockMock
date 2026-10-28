@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from app.instrument_registry import resolve_rule
 from app.instrument_rules import InstrumentRule
-from app.marketdata_models import US_SETTLE, MarketDataError, Quote, interval_is_settled
+from app.marketdata_models import MarketDataError, Quote
 
 
 class _UsBar(BaseModel):
@@ -23,7 +23,7 @@ class _UsBar(BaseModel):
 
 
 def parse_us_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: datetime) -> tuple[Quote, ...]:
-    """标签为美东区间末端；排除未定稿、零量及盘前盘后数据。"""
+    """标签为美东区间末端；排除原始取得时未结束、零量及盘前盘后数据。"""
     rule = resolve_rule(symbol)
     if rule.market != "US":
         raise MarketDataError("unsupported_market", rule.symbol)
@@ -57,8 +57,4 @@ def parse_us_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: da
                     volume=row.v,
                 )
             )
-    return tuple(
-        row
-        for row in sorted(quotes, key=lambda row: row.market_time)
-        if interval_is_settled(row.market_time, retrieved_at, US_SETTLE)
-    )
+    return tuple(sorted(quotes, key=lambda row: row.market_time))

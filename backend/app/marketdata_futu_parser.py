@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 from app.instrument_registry import resolve_rule
 from app.instrument_rules import InstrumentRule
 from app.marketdata_futu import MAX_TCP_PORT
-from app.marketdata_models import SETTLE, MarketDataError, Quote, interval_is_settled
+from app.marketdata_models import MarketDataError, Quote
 
 
 class _Row(BaseModel):
@@ -86,15 +86,15 @@ def parse_futu_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: 
     quotes: list[Quote] = []
     seen: set[datetime] = set()
     for row in payload.bars:
+        if row.time in seen:
+            raise MarketDataError("duplicate_bar", rule.symbol)
+        seen.add(row.time)
         if row.is_blank:
             continue
         start, end = row.interval(label)
         regular = (
             time(9, 30) <= start.time() < end.time() <= time(12) or time(13) <= start.time() < end.time() <= time(16)
         ) and start.weekday() in range(5)
-        if end in seen:
-            raise MarketDataError("duplicate_bar", rule.symbol)
-        seen.add(end)
         if regular and end <= retrieved_at and row.volume > 0:
             quotes.append(
                 Quote(
@@ -109,8 +109,4 @@ def parse_futu_intraday(raw: bytes, symbol: str | InstrumentRule, retrieved_at: 
                     volume=row.volume,
                 )
             )
-    return tuple(
-        row
-        for row in sorted(quotes, key=lambda row: row.market_time)
-        if interval_is_settled(row.market_time, retrieved_at, SETTLE)
-    )
+    return tuple(sorted(quotes, key=lambda row: row.market_time))

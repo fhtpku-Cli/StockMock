@@ -1,18 +1,11 @@
 """行情边界共享的不可变数据类型与明确错误。"""
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Final, Literal
+from typing import Literal
 
 Currency = Literal["CNY", "HKD", "USD"]
-SETTLE: Final = timedelta(seconds=90)
-US_SETTLE: Final = timedelta(seconds=1020)
-
-
-def interval_is_settled(end: datetime, retrieved_at: datetime, settle: timedelta) -> bool:
-    """统一检验来源的候选定稿余量；后继出现不能替代等待。"""
-    return end <= retrieved_at and retrieved_at >= end + settle
 
 
 class MarketDataError(Exception):
