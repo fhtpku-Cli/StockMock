@@ -60,7 +60,7 @@ def test_successful_retry_after_fill_supplement_and_reset_retains_original(engin
     original = submission(engine, plan.id)
     saved = save_conclusion(engine.store, ("plan", plan.id), original)
     order = engine.place(request().model_copy(update={"plan_id": plan.id, "plan_version": 1}), NOW)
-    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=6))
     retry = save_conclusion(engine.store, ("plan", plan.id), original)
     assert retry.conclusion == saved.conclusion
     assert retry.review.review_state == "needs_update"

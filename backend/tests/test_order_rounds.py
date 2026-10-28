@@ -33,7 +33,7 @@ def test_archived_retry_returns_final_order_after_reload(
     order = engine.place(payload, NOW)
     match terminal:
         case "filled":
-            engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=2))
+            engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=6))
         case "cancelled":
             _ = engine.cancel(order.id, NOW)
         case "terminated":

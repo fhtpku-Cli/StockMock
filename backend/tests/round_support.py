@@ -102,11 +102,12 @@ def earn_dollars(engine: Engine, http: httpx2.Client, url: str, now: datetime) -
     response = http.post(url + "/api/orders", json=buy_body.model_dump(mode="json"))
     assert response.status_code == 200, response.text
     buy = Order.model_validate_json(response.content)
-    engine.process(buy.symbol, (sample(engine, buy, "99"),), now + timedelta(minutes=2))
-    MarketClock.current = now + timedelta(minutes=3)
+    engine.process(buy.symbol, (sample(engine, buy, "99"),), now + timedelta(minutes=5))
+    MarketClock.current = now + timedelta(minutes=5)
     sell_body = buy_body.model_copy(update={"request_id": str(uuid4()), "side": "sell"})
     response = http.post(url + "/api/orders", json=sell_body.model_dump(mode="json"))
     assert response.status_code == 200, response.text
     sell = Order.model_validate_json(response.content)
-    engine.process(sell.symbol, (sample(engine, sell, "101"),), now + timedelta(minutes=5))
+    engine.process(sell.symbol, (sample(engine, sell, "101"),), now + timedelta(minutes=10))
+    MarketClock.current = now + timedelta(minutes=10)
     assert engine.store.read().cash["USD"] == Decimal("100.95")

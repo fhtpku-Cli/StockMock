@@ -1,14 +1,16 @@
 """金额、预留和成交记账，所有更新由外层事务保护。"""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from typing import Final, assert_never
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from app.calendar import calendar, sellable_time
 from app.marketdata import Quote
-from app.models import Currency, DomainError, Entry, Instrument, Lot, Order, State
+from app.models import Currency, DomainError, Entry, FillObservation, Instrument, Lot, Order, State
 
 CENT: Final = Decimal(".01")
 FEE: Final = Decimal(".0005")
@@ -88,6 +90,10 @@ def fill(
     now: datetime,
 ) -> Order:
     """按有效样本同步更新现金、成本、份额和费用。"""
+    try:
+        observation = FillObservation.model_validate(asdict(sample))
+    except ValidationError as error:
+        raise DomainError("fill_observation_invalid", "成交行情依据校验失败") from error
     price, event = sample.price, sample.market_time
     gross, fee = execution_amount(price, order.quantity)
     reason = "按有效市场样本整笔成交；不模拟盘口排队"
@@ -144,6 +150,7 @@ def fill(
             "filled_at": event,
             "confirmed_at": now,
             "fill_price": price,
+            "fill_observation": observation,
             "fee": fee,
             "cost_basis": cost_basis,
             "realized_pnl": realized_pnl,

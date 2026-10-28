@@ -26,7 +26,7 @@ def at(hour: int, minute: int) -> datetime:
 def test_lunch_when_last_candidate_processed(engine: Engine) -> None:
     # Given: 上午单最后候选 11:30 已处理，随后午休撤单。
     order = engine.place(request(), NOW)
-    q = replace(sample(engine, order, "101"), market_time=at(3, 30), interval_start=at(3, 25))
+    q = replace(sample(engine, order, "101"), market_time=at(3, 30), retrieved_at=at(3, 31), interval_start=at(3, 25))
     engine.process(order.symbol, (q,), at(3, 33))
     _ = engine.cancel(order.id, at(3, 40))
     # When: 下一轮无需新报价。
@@ -75,7 +75,7 @@ def test_delayed_fill_when_market_time_valid(engine: Engine, *, cancel: bool) ->
     order = engine.place(request(), NOW)
     if cancel:
         _ = engine.cancel(order.id, NOW + timedelta(minutes=10))
-    q = sample(engine, order, offset=5)
+    q = replace(sample(engine, order, offset=5), retrieved_at=NOW + timedelta(minutes=47))
     # When: 服务延迟 47 分钟后取得该区间。
     engine.process(order.symbol, (q,), NOW + timedelta(minutes=47))
     # Then: 成交时间按市场时间，确认时间按实际处理；T+1 与费用准确。
@@ -87,6 +87,8 @@ def test_delayed_fill_when_market_time_valid(engine: Engine, *, cancel: bool) ->
     assert "后台延迟处理，按市场时间 10:05" in saved.status_reason
     assert ("撤单未生效" in saved.status_reason) == cancel
     assert saved.fee == Decimal("4.95")
+    assert saved.fill_observation is not None
+    assert saved.fill_observation.retrieved_at == NOW + timedelta(minutes=47)
     assert state.cash["CNY"] == Decimal("990095.05")
     assert state.lots[0].sellable_at == sellable_time(instrument(order.symbol), q.market_time)
 
@@ -110,6 +112,7 @@ def test_us_last_bar_when_equal_cutoff(tmp_path: Path, price: str, expected: str
         provider.quote(order.symbol),
         price=Decimal(price),
         market_time=close,
+        retrieved_at=close + timedelta(minutes=1),
         interval_start=close - timedelta(minutes=5),
     )
     # When: 最后一根区间在定稿后处理。
@@ -153,7 +156,9 @@ def test_after_cutoff_bar_never_fills(engine: Engine, symbol: str) -> None:
     engine.provider = ControlledProvider(quote_time=now)
     order = engine.place(request().model_copy(update={"symbol": symbol}), now)
     event = order.expires_at + timedelta(minutes=3 if symbol == "600519.SS" else 5)
-    q = replace(sample(engine, order), market_time=event, interval_start=event - timedelta(minutes=5))
+    q = replace(
+        sample(engine, order), market_time=event, retrieved_at=event, interval_start=event - timedelta(minutes=5)
+    )
     # When: 收到截止后的区间。
     engine.process(symbol, (q,), event + timedelta(minutes=2))
     # Then: 正常到期，无现金和持仓变化。
@@ -166,7 +171,7 @@ def test_after_cutoff_bar_never_fills(engine: Engine, symbol: str) -> None:
 def test_cn_expiry_when_final_candidate_processed(engine: Engine) -> None:
     # Given: 14:55 区间未满足限价。
     order = engine.place(request(), NOW)
-    q = replace(sample(engine, order, "101"), market_time=at(6, 55), interval_start=at(6, 50))
+    q = replace(sample(engine, order, "101"), market_time=at(6, 55), retrieved_at=at(6, 55), interval_start=at(6, 50))
     engine.process(order.symbol, (q,), at(6, 56))
     # When: 到达 14:57，不需要 15:00 样本。
     engine.process(order.symbol, (), at(6, 57))
@@ -229,6 +234,8 @@ def test_failed_order_is_atomic_and_next_fills(engine: Engine, monkeypatch: pyte
     state = engine.store.read()
     assert [o.status for o in state.orders] == ["terminated", "filled"]
     assert "成交校验未通过" in state.orders[0].status_reason
+    assert state.orders[0].fill_observation is None
+    assert state.orders[1].fill_observation is not None
     assert state.cash["CNY"] == Decimal("990095.05")
     assert len(state.lots) == 1
     assert state.lots[0].quantity == 100
@@ -251,7 +258,12 @@ def test_real_calendar_end_is_atomic(engine: Engine) -> None:
             ),
         ]
         engine.store.save(connection, state)
-    q = replace(sample(engine, first), market_time=last + timedelta(minutes=5), interval_start=last)
+    q = replace(
+        sample(engine, first),
+        market_time=last + timedelta(minutes=5),
+        retrieved_at=last + timedelta(minutes=5),
+        interval_start=last,
+    )
     # When: 实际 sellable_time 无下一交易日。
     engine.process(first.symbol, (q,), last + timedelta(minutes=6))
     # Then: 该单终止，后单正常到期，账户无任何部分交易。

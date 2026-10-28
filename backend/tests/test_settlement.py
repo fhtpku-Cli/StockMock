@@ -21,18 +21,18 @@ def test_currency_buy_sell_retains_usd_and_reuses_it(engine: Engine) -> None:
     engine.provider = ControlledProvider(quote_time=now - timedelta(minutes=1))
     body = request().model_copy(update={"symbol": "AAPL", "quantity": 10})
     buy = engine.place(body, now)
-    engine.process("AAPL", (sample(engine, buy, "99"),), now + timedelta(minutes=2))
+    engine.process("AAPL", (sample(engine, buy, "99"),), now + timedelta(minutes=6))
     state = engine.store.read()
     assert state.cash["CNY"] == Decimal("993066.50")
     assert state.cash["USD"] == 0
-    engine.provider = ControlledProvider(quote_time=now + timedelta(minutes=2), fx_available=False)
+    engine.provider = ControlledProvider(quote_time=now + timedelta(minutes=10), fx_available=False)
     sell = engine.place(
         body.model_copy(update={"request_id": str(uuid4()), "side": "sell"}),
-        now + timedelta(minutes=2),
+        now + timedelta(minutes=10),
     )
-    engine.process("AAPL", (sample(engine, sell, "101"),), now + timedelta(minutes=4))
+    engine.process("AAPL", (sample(engine, sell, "101"),), now + timedelta(minutes=16))
     assert engine.store.read().cash["USD"] == Decimal("1009.49")
-    reuse = engine.place(body.model_copy(update={"request_id": str(uuid4())}), now + timedelta(minutes=4))
+    reuse = engine.place(body.model_copy(update={"request_id": str(uuid4())}), now + timedelta(minutes=16))
     assert reuse.reserved_cny == 0
     assert reuse.reserved_foreign == Decimal("1000.50")
 
@@ -41,12 +41,12 @@ def test_weighted_cost_after_two_buys_partial_sale(engine: Engine) -> None:
     now = datetime(2026, 10, 22, 14, 0, tzinfo=UTC)
     engine.provider = ControlledProvider(quote_time=now)
     body = request().model_copy(update={"symbol": "AAPL", "quantity": 10, "limit_price": Decimal(200)})
-    for offset, price in [(0, "100"), (2, "200")]:
+    for offset, price in [(0, "100"), (5, "200")]:
         buy = engine.place(
             body.model_copy(update={"request_id": str(uuid4())}),
             now + timedelta(minutes=offset),
         )
-        engine.process("AAPL", (sample(engine, buy, price),), now + timedelta(minutes=offset + 1))
+        engine.process("AAPL", (sample(engine, buy, price),), now + timedelta(minutes=offset + 5))
     sell = engine.place(
         body.model_copy(
             update={
@@ -56,9 +56,9 @@ def test_weighted_cost_after_two_buys_partial_sale(engine: Engine) -> None:
                 "quantity": 5,
             }
         ),
-        now + timedelta(minutes=4),
+        now + timedelta(minutes=10),
     )
-    engine.process("AAPL", (sample(engine, sell, "150"),), now + timedelta(minutes=5))
+    engine.process("AAPL", (sample(engine, sell, "150"),), now + timedelta(minutes=16))
     lots = engine.store.read().lots
     assert sum(lot.quantity for lot in lots) == 15
     assert sum(lot.cost for lot in lots) == Decimal("2251.12")
@@ -66,7 +66,7 @@ def test_weighted_cost_after_two_buys_partial_sale(engine: Engine) -> None:
     disposed = persisted.orders[-1]
     assert disposed.cost_basis == Decimal("750.38")
     assert disposed.realized_pnl == Decimal("-.76")
-    engine.process("AAPL", (sample(engine, sell, "150"),), now + timedelta(minutes=6))
+    engine.process("AAPL", (sample(engine, sell, "150"),), now + timedelta(minutes=17))
     assert engine.store.read() == persisted
 
 
@@ -101,8 +101,8 @@ def test_etf_average_cost_preserves_subcent_precision(engine: Engine) -> None:
     engine.provider = ControlledProvider(price=Decimal("4.189"))
     body = request().model_copy(update={"symbol": "510300.SS", "limit_price": Decimal("4.189")})
     buy = engine.place(body, NOW)
-    engine.process(buy.symbol, (sample(engine, buy, "4.189"),), NOW + timedelta(minutes=2))
-    view = portfolio(engine, NOW + timedelta(minutes=2), WorkerView())
+    engine.process(buy.symbol, (sample(engine, buy, "4.189"),), NOW + timedelta(minutes=6))
+    view = portfolio(engine, NOW + timedelta(minutes=10), WorkerView())
     assert view.positions[0].average_cost == Decimal("4.1911")
     assert view.positions[0].average_cost * 100 == sum(lot.cost for lot in engine.store.read().lots)
 

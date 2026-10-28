@@ -107,7 +107,7 @@ def test_q05_receivable_payment_composition_and_cash_statement(engine: Engine) -
     # Given: 受控临时账户的真实成交和应收登记。
 
     buy = engine.place(request(), NOW)
-    engine.process(buy.symbol, (sample(engine, buy, "100"),), NOW + timedelta(minutes=2))
+    engine.process(buy.symbol, (sample(engine, buy, "100"),), NOW + timedelta(minutes=6))
     later = NOW + timedelta(days=1)
     engine.provider = ControlledProvider(quote_time=later)
     registered = apply_action(

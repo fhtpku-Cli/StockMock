@@ -59,13 +59,13 @@ def test_q04_http_buy_sell_and_analysis(engine: Engine, monkeypatch: pytest.Monk
         assert client.post("/api/orders/preview", json=body).status_code == 200
         assert client.post("/api/orders", json=body).status_code == 200
         buy = engine.store.read().orders[-1]
-        engine.process(buy.symbol, (sample(engine, buy, "10"),), NOW + timedelta(minutes=2))
+        engine.process(buy.symbol, (sample(engine, buy, "10"),), NOW + timedelta(minutes=6))
         Clock.current = NOW + timedelta(days=1)
         engine.provider = ControlledProvider(price=Decimal(12), quote_time=Clock.current, history_day=NOW.date())
         sell_body = {**body, "request_id": str(uuid4()), "side": "sell", "quantity": 100, "limit_price": "12"}
         assert client.post("/api/orders", json=sell_body).status_code == 200
         sell = engine.store.read().orders[-1]
-        engine.process(sell.symbol, (sample(engine, sell, "12"),), Clock.current + timedelta(minutes=2))
+        engine.process(sell.symbol, (sample(engine, sell, "12"),), Clock.current + timedelta(minutes=6))
         engine.provider = ControlledProvider(price=Decimal(11), quote_time=Clock.current)
         before = engine.store.read()
         # When: HTTP读取资产、现金核对和完整CSV。

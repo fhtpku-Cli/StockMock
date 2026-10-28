@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer
 
 Currency = Literal["CNY", "USD", "HKD"]
 
@@ -79,6 +79,20 @@ class OrderInput(Model):
     stop_price: Decimal | None = Field(default=None, gt=0, max_digits=15, decimal_places=4)
 
 
+class FillObservation(Model):
+    """实际成交所采用的完整行情，金额以精确十进制持久化。"""
+
+    symbol: str
+    currency: Currency
+    source: str
+    interval_start: AwareDatetime
+    market_time: AwareDatetime
+    retrieved_at: AwareDatetime
+    price: Decimal = Field(gt=0, allow_inf_nan=False)
+    volume: Decimal = Field(gt=0, allow_inf_nan=False)
+    tradable: Literal[True]
+
+
 class Order(OrderInput):
     """持久化委托，保留市场时间和服务器确认时间。"""
 
@@ -94,6 +108,7 @@ class Order(OrderInput):
     filled_at: datetime | None = None
     confirmed_at: datetime | None = None
     fill_price: Decimal | None = None
+    fill_observation: FillObservation | None = None
     fee: Decimal | None = None
     cost_basis: Decimal | None = None
     realized_pnl: Decimal | None = None

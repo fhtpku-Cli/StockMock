@@ -115,3 +115,43 @@ def test_worker_restarts_failure_clock_when_symbol_returns(engine: Engine, monke
     # Then: 新失败起点是此次请求，未沿用旧记录，新单保持活动。
     assert worker.failed_since[order.symbol] == clock[0]
     assert engine.store.read().orders[-1].status == "accepted"
+
+
+@pytest.mark.parametrize("recover", [False, True])
+def test_duplicate_batch_uses_failure_protection(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch, *, recover: bool
+) -> None:
+    order = engine.place(request(), NOW)
+    _ = engine.cancel(order.id, NOW + timedelta(minutes=10))
+    clock = [NOW + timedelta(minutes=30)]
+    duplicate = [True]
+    quote = sample(engine, order, offset=5)
+
+    class Clock:
+        @staticmethod
+        def now(_tz: tzinfo | None = UTC) -> datetime:
+            return clock[0]
+
+    def fetch(_provider: ControlledProvider, _symbol: str) -> tuple[Quote, ...]:
+        return (quote, quote) if duplicate[0] else (quote,)
+
+    monkeypatch.setattr(worker_module, "datetime", Clock)
+    monkeypatch.setattr(ControlledProvider, "intraday", fetch)
+    worker = Worker(engine)
+    worker.tick()
+    assert worker.failed_since[order.symbol] == clock[0]
+    assert engine.store.read().orders[0].status == "cancel_pending"
+    assert engine.store.read().orders[0].last_sample_at is None
+    if recover:
+        duplicate[0] = False
+        clock[0] += timedelta(minutes=1)
+        worker.tick()
+        assert engine.store.read().orders[0].status == "filled"
+        assert not worker.failed_since
+    else:
+        for minute in range(1, 21):
+            clock[0] = NOW + timedelta(minutes=30 + minute)
+            worker.tick()
+            assert engine.store.read().orders[0].status == ("terminated" if minute == 20 else "cancel_pending")
+        assert not engine.store.read().ledger
+        assert available(engine.store.read(), "CNY") == 1000000

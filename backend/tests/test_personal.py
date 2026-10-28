@@ -111,7 +111,7 @@ def test_split_then_partial_sale_preserves_basis_and_realized_profit(engine: Eng
     later = NOW + timedelta(days=1)
     engine.provider = ControlledProvider(quote_time=later, price=Decimal(50), history_day=NOW.date())
     sell = engine.place(request().model_copy(update={"side": "sell", "limit_price": Decimal(50)}), later)
-    engine.process(sell.symbol, (sample(engine, sell, "55"),), later + timedelta(minutes=2))
+    engine.process(sell.symbol, (sample(engine, sell, "55"),), later + timedelta(minutes=6))
     state = Store(engine.store.path).read()
     assert state.orders[-1].cost_basis == Decimal(4500)
     assert state.orders[-1].realized_pnl == Decimal("997.25")

@@ -67,6 +67,7 @@ def facts(context: ReviewContext, subject: tuple[SubjectType, str], now: datetim
 
 def order_facts(order: Order) -> list[Fact]:
     """委托时间来自已有字段，缺失确认时间保留未知。"""
+    without_observation = order.model_copy(update={"fill_observation": None})
     result: list[Fact] = []
     result.append(
         Fact(
@@ -74,7 +75,7 @@ def order_facts(order: Order) -> list[Fact]:
             type="order_submitted",
             record_id=order.id,
             occurred_at=order.created_at,
-            order=order,
+            order=without_observation,
         )
     )
     if order.cancel_at is not None:
@@ -84,7 +85,7 @@ def order_facts(order: Order) -> list[Fact]:
                 type="cancel_requested",
                 record_id=order.id,
                 occurred_at=order.cancel_at,
-                order=order,
+                order=without_observation,
             )
         )
     match order.status:
@@ -107,7 +108,7 @@ def order_facts(order: Order) -> list[Fact]:
                         type="order_terminal",
                         record_id=order.id,
                         occurred_at=order.confirmed_at,
-                        order=order,
+                        order=without_observation,
                     )
                 )
         case "accepted" | "cancel_pending":

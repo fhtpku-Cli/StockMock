@@ -68,7 +68,7 @@ def test_star_sell_rejects_small_partial_but_accepts_final_remainder(
         limit_price=Decimal(100),
     )
     _ = engine.place(buy, NOW)
-    Clock.current += timedelta(minutes=6)
+    Clock.current += timedelta(minutes=10)
     engine.process(rule.symbol, engine.provider.intraday(rule.symbol), Clock.current)
     Clock.current += timedelta(days=1)
     # When: 部分卖出100股失败，201股成功；余下100股可以一次卖清。
@@ -77,10 +77,10 @@ def test_star_sell_rejects_small_partial_but_accepts_final_remainder(
         _ = engine.place(sell, Clock.current)
     assert error.value.code == "invalid_lot"
     _ = engine.place(sell.model_copy(update={"quantity": 201}), Clock.current)
-    Clock.current += timedelta(minutes=6)
+    Clock.current += timedelta(minutes=10)
     engine.process(rule.symbol, engine.provider.intraday(rule.symbol), Clock.current)
     _ = engine.place(sell.model_copy(update={"request_id": str(uuid4())}), Clock.current)
-    Clock.current += timedelta(minutes=6)
+    Clock.current += timedelta(minutes=10)
     engine.process(rule.symbol, engine.provider.intraday(rule.symbol), Clock.current)
     # Then: 完整持仓清空且三笔订单已成交，数量约束没有绕过。
     state = engine.store.read()
@@ -105,7 +105,7 @@ def test_persisted_rule_pause_blocks_enable_preview_and_fill(tmp_path: Path, mon
     _ = engine.place(request, NOW)
     restarted = isolated(tmp_path)
     restarted.paused = frozenset({rule.symbol})
-    Clock.current += timedelta(minutes=6)
+    Clock.current += timedelta(minutes=10)
     # When: 已持久化证券再次启用、预览、撮合。
     with TestClient(create_app(restarted, PASSWORD, run_worker=False)) as client:
         assert client.post("/api/auth/login", json={"password": PASSWORD}).status_code == 200

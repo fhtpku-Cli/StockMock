@@ -11,7 +11,7 @@ from app.activated_registry import ActivatedRegistry
 from app.calendar import is_open, prior_session_day, window
 from app.catalog import CATALOG, from_rule, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
-from app.matching import advance, confirm_cutoff
+from app.matching import advance, confirm_cutoff, valid_observation, validate_batch
 from app.models import DomainError, Instrument, Order, OrderInput, Preview
 from app.order_builder import OrderContext, build_order
 from app.order_requests import retry_order
@@ -213,6 +213,8 @@ class Engine:
 
     def process(self, symbol: str, samples: tuple[Quote, ...], now: datetime, *, allow_timeout: bool = True) -> None:
         """按市场时间处理新增样本，结束状态不可回填。"""
+        validate_batch(samples)
+        samples = tuple(sample for sample in samples if valid_observation(sample, now))
         item = instrument(symbol, self.catalog)
         if not item.tradable:
             samples = ()

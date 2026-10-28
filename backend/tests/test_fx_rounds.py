@@ -32,17 +32,18 @@ def test_conversion_waiting_for_fx_rejects_reset_even_when_new_round_has_dollars
             _ = http.post(url + "/api/auth/login", json={"password": PASSWORD})
         earn_dollars(engine, second, url, now)
         old_id = engine.store.read().id
-        MarketClock.current = now + timedelta(minutes=6)
+        MarketClock.current = now + timedelta(minutes=11)
         provider = BarrierProvider(base=base, pause_fx=True)
         engine.provider = provider
         with ThreadPoolExecutor(max_workers=1) as pool:
             pending = pool.submit(first.post, url + "/api/fx/convert", json=payload.model_dump(mode="json"))
             try:
                 assert provider.entered.wait(timeout=5)
-                MarketClock.current = now + timedelta(minutes=7)
+                MarketClock.current = now + timedelta(minutes=12)
                 reset_http(second, url)
                 if fund_new_round:
-                    earn_dollars(engine, second, url, now + timedelta(minutes=8))
+                    engine.provider = ControlledProvider(quote_time=now + timedelta(minutes=15))
+                    earn_dollars(engine, second, url, now + timedelta(minutes=15))
                 old = engine.store.read_round(old_id)
                 current = engine.store.read()
             finally:

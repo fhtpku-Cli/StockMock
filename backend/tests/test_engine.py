@@ -36,7 +36,7 @@ class ControlledProvider:
             self.price,
             currency,
             self.quote_time,
-            NOW,
+            max(NOW, self.quote_time),
             "controlled-test",
             tradable=True,
             interval_start=self.quote_time - timedelta(minutes=5),
@@ -94,14 +94,16 @@ def request() -> OrderInput:
 
 
 def sample(
-    engine: Engine, order: Order, price: str = "99", offset: int = 1, *, interval_start: datetime | None = None
+    engine: Engine, order: Order, price: str = "99", offset: int = 5, *, interval_start: datetime | None = None
 ) -> Quote:
     q = engine.provider.quote(order.symbol)
+    end = order.active_at + timedelta(minutes=offset)
     return replace(
         q,
         price=Decimal(price),
-        market_time=order.active_at + timedelta(minutes=offset),
-        interval_start=interval_start if interval_start is not None else order.active_at,
+        market_time=end,
+        retrieved_at=end,
+        interval_start=interval_start if interval_start is not None else end - timedelta(minutes=5),
     )
 
 
@@ -122,17 +124,17 @@ def test_old_quote_does_not_fill(engine: Engine) -> None:
 
 
 def test_complete_bar_cannot_overlap_submission(engine: Engine) -> None:
-    order = engine.place(request(), NOW)
-    q = sample(engine, order, interval_start=NOW - timedelta(minutes=1))
-    engine.process(order.symbol, (q,), NOW + timedelta(minutes=2))
+    order = engine.place(request(), NOW + timedelta(minutes=1))
+    q = replace(sample(engine, order, offset=4), interval_start=NOW)
+    engine.process(order.symbol, (q,), NOW + timedelta(minutes=6))
     assert engine.store.read().orders[0].status == "accepted"
 
 
 def test_limit_fills_once_at_better_price(engine: Engine) -> None:
     order = engine.place(request(), NOW)
-    quotes = (sample(engine, order, "101", 1), sample(engine, order, "99", 2))
-    engine.process(order.symbol, quotes, NOW + timedelta(minutes=3))
-    engine.process(order.symbol, quotes, NOW + timedelta(minutes=4))
+    quotes = (sample(engine, order, "101", 5), sample(engine, order, "99", 10))
+    engine.process(order.symbol, quotes, NOW + timedelta(minutes=11))
+    engine.process(order.symbol, quotes, NOW + timedelta(minutes=12))
     state = engine.store.read()
     assert state.orders[0].fill_price == Decimal(99)
     assert state.cash["CNY"] == Decimal("990095.05")
@@ -143,9 +145,9 @@ def test_limit_fills_once_at_better_price(engine: Engine) -> None:
 
 def test_cancel_can_lose_to_earlier_market_event(engine: Engine) -> None:
     order = engine.place(request(), NOW)
-    _ = engine.cancel(order.id, NOW + timedelta(minutes=3))
+    _ = engine.cancel(order.id, NOW + timedelta(minutes=6))
     assert available(engine.store.read(), "CNY") == Decimal("989995.00")
-    engine.process(order.symbol, (sample(engine, order, "99", 2),), NOW + timedelta(minutes=5))
+    engine.process(order.symbol, (sample(engine, order, "99", 5),), NOW + timedelta(minutes=7))
     assert engine.store.read().orders[0].status == "filled"
 
 
@@ -194,7 +196,7 @@ def test_stale_quote_rejected(engine: Engine) -> None:
 def test_market_protection_terminates(engine: Engine) -> None:
     body = request().model_copy(update={"order_type": "market", "limit_price": None})
     order = engine.place(body, NOW)
-    engine.process(order.symbol, (sample(engine, order, "103"),), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (sample(engine, order, "103"),), NOW + timedelta(minutes=6))
     assert engine.store.read().orders[0].status == "terminated"
     assert not engine.store.read().ledger
 
@@ -220,7 +222,7 @@ def test_round_reset_archives_and_old_request_does_not_duplicate(engine: Engine)
 
 def test_daily_limit_edge_does_not_fill(engine: Engine) -> None:
     order = engine.place(request().model_copy(update={"limit_price": Decimal(110)}), NOW)
-    engine.process(order.symbol, (sample(engine, order, "110"),), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (sample(engine, order, "110"),), NOW + timedelta(minutes=6))
     assert engine.store.read().orders[0].status == "accepted"
 
 
@@ -233,7 +235,7 @@ def test_closed_auction_rejects_market(engine: Engine) -> None:
 
 def test_future_sample_does_not_advance_or_fill(engine: Engine) -> None:
     order = engine.place(request(), NOW)
-    engine.process(order.symbol, (sample(engine, order, offset=10),), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (sample(engine, order, offset=10),), NOW + timedelta(minutes=6))
     assert engine.store.read().orders[0].status == "accepted"
     assert engine.store.read().orders[0].last_sample_at is None
     assert engine.store.read().ledger == []
@@ -243,7 +245,7 @@ def test_future_sample_does_not_advance_or_fill(engine: Engine) -> None:
 def test_interval_without_positive_volume_never_fills(engine: Engine, volume: Decimal | None) -> None:
     order = engine.place(request(), NOW)
     q = replace(sample(engine, order), volume=volume)
-    engine.process(order.symbol, (q,), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (q,), NOW + timedelta(minutes=6))
     assert engine.store.read().orders[0].status == "accepted"
     assert engine.store.read().ledger == []
 
@@ -251,7 +253,7 @@ def test_interval_without_positive_volume_never_fills(engine: Engine, volume: De
 def test_interval_missing_start_never_fills(engine: Engine) -> None:
     order = engine.place(request(), NOW)
     q = replace(sample(engine, order), interval_start=None)
-    engine.process(order.symbol, (q,), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (q,), NOW + timedelta(minutes=6))
     assert engine.store.read().orders[0].status == "accepted"
 
 
@@ -265,7 +267,9 @@ def test_future_reference_rejects_new_order(engine: Engine) -> None:
 def test_expiration_waits_for_delayed_preclose_bar(engine: Engine) -> None:
     order = engine.place(request(), NOW)
     event = order.expires_at - timedelta(minutes=2)
-    q = replace(sample(engine, order), market_time=event, interval_start=event - timedelta(minutes=5))
+    q = replace(
+        sample(engine, order), market_time=event, retrieved_at=event, interval_start=event - timedelta(minutes=5)
+    )
     engine.process(order.symbol, (q,), order.expires_at + timedelta(minutes=2))
     assert engine.store.read().orders[0].status == "filled"
     assert engine.store.read().orders[0].filled_at == event
@@ -273,7 +277,10 @@ def test_expiration_waits_for_delayed_preclose_bar(engine: Engine) -> None:
 
 def test_expiration_watermark_releases_without_trade(engine: Engine) -> None:
     order = engine.place(request(), NOW)
-    q = replace(sample(engine, order), market_time=order.expires_at + timedelta(minutes=3))
+    event = order.expires_at + timedelta(minutes=3)
+    q = replace(
+        sample(engine, order), market_time=event, retrieved_at=event, interval_start=event - timedelta(minutes=5)
+    )
     engine.process(order.symbol, (q,), order.expires_at + timedelta(minutes=4))
     assert engine.store.read().orders[0].status == "expired"
     assert available(engine.store.read(), "CNY") == Decimal(1000000)
@@ -281,7 +288,7 @@ def test_expiration_watermark_releases_without_trade(engine: Engine) -> None:
 
 def test_a_share_same_day_sell_rejected(engine: Engine) -> None:
     buy = engine.place(request(), NOW)
-    engine.process(buy.symbol, (sample(engine, buy),), NOW + timedelta(minutes=2))
+    engine.process(buy.symbol, (sample(engine, buy),), NOW + timedelta(minutes=6))
     body = request().model_copy(update={"side": "sell"})
     with pytest.raises(DomainError) as error:
         _ = engine.place(body, NOW + timedelta(minutes=3))
@@ -298,7 +305,7 @@ def test_closed_round_cannot_be_restarted_with_pending_orders(engine: Engine) ->
 def test_manual_symbol_pause_stops_fills_and_new_orders(engine: Engine) -> None:
     order = engine.place(request(), NOW)
     engine.catalog = tuple(item.model_copy(update={"tradable": False}) for item in engine.catalog)
-    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=6))
     assert engine.store.read().orders[0].status == "accepted"
     assert engine.store.read().ledger == []
     with pytest.raises(DomainError) as error:

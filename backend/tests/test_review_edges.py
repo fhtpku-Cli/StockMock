@@ -72,7 +72,7 @@ def test_ended_plan_allowed_but_linked_order_cross_round_and_archive_rejected(en
         save_conclusion(engine.store, ("plan", plan.id), submission(engine, plan.id)).review.review_state == "reviewed"
     )
     stale = submission(engine, plan.id)
-    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=6))
     _ = reset(engine, ResetInput(request_id=str(uuid4()), confirmation="重新开始"), NOW)
     with pytest.raises(DomainError, match="归档"):
         _ = save_conclusion(engine.store, ("plan", plan.id), stale)
@@ -91,7 +91,7 @@ def test_exact_saved_sale_profit_partial_position_and_sell_old_holding(engine: E
         ),
         NOW,
     )
-    engine.process(buy.symbol, (sample(engine, buy, "10"),), NOW + timedelta(minutes=2))
+    engine.process(buy.symbol, (sample(engine, buy, "10"),), NOW + timedelta(minutes=6))
     later = NOW + timedelta(days=1)
     engine.provider = ControlledProvider(quote_time=later, price=Decimal(12), history_day=NOW.date())
     sell = engine.place(
@@ -100,7 +100,7 @@ def test_exact_saved_sale_profit_partial_position_and_sell_old_holding(engine: E
         ),
         later,
     )
-    engine.process(sell.symbol, (sample(engine, sell, "12"),), later + timedelta(minutes=2))
+    engine.process(sell.symbol, (sample(engine, sell, "12"),), later + timedelta(minutes=6))
     summary = reviews(engine.store, engine.store.read(), later)[0]
     assert (summary.remaining_quantity, summary.account_quantity) == (100, 100)
     assert summary.realized_pnl == Decimal("198.90")
@@ -109,9 +109,9 @@ def test_exact_saved_sale_profit_partial_position_and_sell_old_holding(engine: E
         request().model_copy(
             update={"side": "sell", "limit_price": Decimal(12), "plan_id": another.id, "plan_version": 1}
         ),
-        later + timedelta(minutes=3),
+        later + timedelta(minutes=10),
     )
-    engine.process(sell_old.symbol, (sample(engine, sell_old, "12"),), later + timedelta(minutes=5))
+    engine.process(sell_old.symbol, (sample(engine, sell_old, "12"),), later + timedelta(minutes=16))
     summary = detail(read_context(engine.store), ("plan", another.id), later).review
     assert summary.remaining_quantity == -100
     assert summary.account_quantity == 0

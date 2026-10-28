@@ -4,8 +4,34 @@ from datetime import datetime, timedelta
 
 from app.accounting import fill
 from app.calendar import is_open, last_candidate_end
-from app.marketdata import Quote
+from app.marketdata import MarketDataError, Quote
 from app.models import Instrument, Order, State
+
+
+def validate_batch(samples: tuple[Quote, ...]) -> None:
+    """重复标签整批失败，不能按数组顺序选择修订版本。"""
+    labels = [sample.market_time for sample in samples]
+    if len(labels) != len(set(labels)):
+        raise MarketDataError("duplicate_samples", "重复市场区间，拒绝整批撮合")
+
+
+def valid_observation(sample: Quote, now: datetime) -> bool:
+    """先验证基础时间与数值，截止外样本也不能绕过此边界。"""
+    start, end, retrieved = sample.interval_start, sample.market_time, sample.retrieved_at
+    return (
+        start is not None
+        and all(value.utcoffset() is not None for value in (start, end, retrieved, now))
+        and start < end <= retrieved <= now
+        and end - start == timedelta(minutes=5)
+        and end.minute % 5 == 0
+        and end.second == end.microsecond == 0
+        and sample.price.is_finite()
+        and sample.price > 0
+        and sample.volume is not None
+        and sample.volume.is_finite()
+        and sample.volume > 0
+        and sample.tradable
+    )
 
 
 def eligible_time(order: Order, item: Instrument, sample: Quote) -> bool:
@@ -45,7 +71,8 @@ def advance(state: State, order: Order, item: Instrument, sample: Quote, now: da
     """只消费同源有效新样本，结束状态由调用者停止继续处理。"""
     event = sample.market_time
     if (
-        sample.symbol != order.symbol
+        not valid_observation(sample, now)
+        or sample.symbol != order.symbol
         or sample.source != order.source
         or sample.currency != item.currency
         or event > now

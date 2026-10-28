@@ -103,13 +103,13 @@ def test_q05_auto_and_manual_fx_reconcile_independently(engine: Engine) -> None:
     now = NOW.replace(hour=14)
     engine.provider = ControlledProvider(quote_time=now)
     buy = engine.place(request().model_copy(update={"symbol": "AAPL", "quantity": 10}), now)
-    engine.process("AAPL", (sample(engine, buy, "99"),), now + timedelta(minutes=2))
+    engine.process("AAPL", (sample(engine, buy, "99"),), now + timedelta(minutes=6))
     sell = engine.place(
-        request().model_copy(update={"symbol": "AAPL", "quantity": 10, "side": "sell"}), now + timedelta(minutes=2)
+        request().model_copy(update={"symbol": "AAPL", "quantity": 10, "side": "sell"}), now + timedelta(minutes=10)
     )
-    engine.process("AAPL", (sample(engine, sell, "101"),), now + timedelta(minutes=4))
+    engine.process("AAPL", (sample(engine, sell, "101"),), now + timedelta(minutes=16))
     convert(
-        engine, ConvertInput(request_id=str(uuid4()), currency="USD", amount=Decimal(10)), now + timedelta(minutes=4)
+        engine, ConvertInput(request_id=str(uuid4()), currency="USD", amount=Decimal(10)), now + timedelta(minutes=16)
     )
     before = engine.store.read()
     # When: 真实HTTP读取三币种核对。

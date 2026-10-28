@@ -83,7 +83,7 @@ def test_sizing_includes_fee_and_existing_reservations(engine: Engine) -> None:
 
 def test_same_effective_day_purchase_not_assumed_entitled(engine: Engine) -> None:
     order = engine.place(request(), NOW)
-    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=2))
+    engine.process(order.symbol, (sample(engine, order),), NOW + timedelta(minutes=6))
     with pytest.raises(DomainError) as error:
         _ = apply_action(engine, action(engine), NOW + timedelta(minutes=3))
     assert error.value.code == "later_trades"

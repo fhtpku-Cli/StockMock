@@ -104,7 +104,7 @@ def test_revision_change_during_quote_fetch_rejects_without_reservation(
 
 def test_archive_round_plan_isolation_and_snapshot_legacy_migration(engine: Engine) -> None:
     legacy = engine.place(request(), NOW)
-    engine.process(legacy.symbol, (sample(engine, legacy),), NOW + timedelta(minutes=2))
+    engine.process(legacy.symbol, (sample(engine, legacy),), NOW + timedelta(minutes=6))
     with engine.store.transaction() as connection:
         old_state = engine.store.load(connection)
         data = old_state.model_dump_json(exclude={"orders": {"__all__": {"plan_id", "plan_version", "plan_snapshot"}}})
@@ -133,11 +133,11 @@ def test_archive_round_plan_isolation_and_snapshot_legacy_migration(engine: Engi
 def test_plan_review_actual_fills_partial_sale_cancel_notes_and_missing_profit(engine: Engine) -> None:
     plan = create_plan(engine, body(), NOW)
     buy = engine.place(request().model_copy(update={"quantity": 200, "plan_id": plan.id, "plan_version": 1}), NOW)
-    engine.process(buy.symbol, (sample(engine, buy),), NOW + timedelta(minutes=2))
+    engine.process(buy.symbol, (sample(engine, buy),), NOW + timedelta(minutes=6))
     later = NOW + timedelta(days=1)
     engine.provider = ControlledProvider(quote_time=later, history_day=NOW.date())
     sell = engine.place(request().model_copy(update={"side": "sell", "plan_id": plan.id, "plan_version": 1}), later)
-    engine.process(sell.symbol, (sample(engine, sell, "100"),), later + timedelta(minutes=2))
+    engine.process(sell.symbol, (sample(engine, sell, "100"),), later + timedelta(minutes=6))
     review = reviews(engine.store, engine.store.read(), later)[0]
     assert review.status == "pending"
     assert (review.bought_quantity, review.sold_quantity, review.remaining_quantity, review.account_quantity) == (

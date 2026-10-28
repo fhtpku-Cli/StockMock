@@ -130,7 +130,7 @@ def test_new_security_http_worker_restart_sell(tmp_path: Path, monkeypatch: pyte
         result = client.post("/api/orders", json=payload)
         assert result.status_code == 200, result.text
         buy = Order.model_validate_json(result.content)
-    Clock.current += timedelta(minutes=6)
+    Clock.current += timedelta(minutes=10)
     restarted = isolated(tmp_path)
     Worker(restarted).tick()
     assert restarted.store.read().orders[0].status == "filled"
@@ -146,7 +146,7 @@ def test_new_security_http_worker_restart_sell(tmp_path: Path, monkeypatch: pyte
         result = client.post("/api/orders", json=payload)
         assert result.status_code == 200, result.text
         sell = Order.model_validate_json(result.content)
-        Clock.current += timedelta(minutes=6)
+        Clock.current += timedelta(minutes=10)
         Worker(restarted).tick()
         # Then: 新规则重启后仍可卖出、现金与持仓真实更新，基础目录未污染。
         state = restarted.store.read()

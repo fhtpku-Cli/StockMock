@@ -26,7 +26,7 @@ class RuleClient(MarketDataClient):
     def quote(self, symbol: str | InstrumentRule | ObservationInstrument) -> Quote:
         assert not isinstance(symbol, ObservationInstrument)
         rule = resolve_rule(symbol)
-        end = Clock.current - timedelta(minutes=1)
+        end = Clock.current.replace(minute=Clock.current.minute // 5 * 5, second=0, microsecond=0)
         return Quote(
             rule.symbol,
             Decimal(100),

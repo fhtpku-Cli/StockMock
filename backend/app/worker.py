@@ -10,6 +10,7 @@ import anyio
 from app.accounting import ACTIVE
 from app.engine import Engine
 from app.marketdata import MarketDataError
+from app.matching import validate_batch
 from app.models import DomainError, WorkerView
 from app.snapshots import capture
 
@@ -43,8 +44,10 @@ class Worker:
             samples = ()
             try:
                 samples = self.engine.provider.intraday(symbol)
+                validate_batch(samples)
                 _ = self.failed_since.pop(symbol, None)
             except MarketDataError as error:
+                samples = ()
                 _ = self.failed_since.setdefault(symbol, now)
                 failures.append(error.code)
                 logging.getLogger(__name__).warning("行情获取失败 symbol=%s code=%s", symbol, error.code)
