@@ -127,6 +127,18 @@ export const planSnapshotSchema = z.object({
 	created_at: z.string(),
 	updated_at: z.string(),
 });
+export const fillObservationSchema = z.object({
+	symbol: z.string(),
+	currency: z.string(),
+	source: z.string(),
+	interval_start: z.iso.datetime({ offset: true }),
+	market_time: z.iso.datetime({ offset: true }),
+	retrieved_at: z.iso.datetime({ offset: true }),
+	price: decimal,
+	volume: decimal,
+	tradable: z.boolean(),
+});
+export type FillObservation = z.infer<typeof fillObservationSchema>;
 export const orderSchema = z.object({
 	id: z.string(),
 	request_id: z.string(),
@@ -152,6 +164,7 @@ export const orderSchema = z.object({
 	filled_at: z.string().nullable(),
 	confirmed_at: z.string().nullable(),
 	fill_price: decimal.nullable(),
+	fill_observation: fillObservationSchema.nullable().optional(),
 	fee: decimal.nullable(),
 	currency: z.string(),
 	reserved_cny: decimal,

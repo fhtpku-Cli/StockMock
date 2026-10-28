@@ -1,4 +1,5 @@
 import { errorMessage, time } from "./api";
+import { FillObservationDetails } from "./FillObservationDetails";
 import { Pagination } from "./Pagination";
 import { factSchema, type ReviewTarget, targetPath } from "./reviewSchema";
 import { ErrorNotice, Loading } from "./ui";
@@ -63,6 +64,9 @@ export function ReviewFacts({ target }: { readonly target: ReviewTarget }) {
 						fact.order?.status_reason && (
 							<p className="footnote">{fact.order.status_reason}</p>
 						)}
+					{fact.type === "order_filled" && fact.order && (
+						<FillObservationDetails observation={fact.order.fill_observation} />
+					)}
 					{fact.alert && (
 						<>
 							<p>

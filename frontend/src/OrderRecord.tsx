@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { money, price, time } from "./api";
+import { fillObservationNotice } from "./FillObservationDetails";
 import { OrderDetails } from "./OrderDetails";
 import type { Order } from "./schema";
 import { Badge } from "./ui";
@@ -59,6 +60,13 @@ export function OrderRecord({
 				</span>
 			</div>
 			{o.status_reason && <p className="footnote">{o.status_reason}</p>}
+			{o.status === "filled" && (
+				<p className="footnote">
+					{o.fill_observation
+						? fillObservationNotice
+						: "历史记录未保存完整行情依据。"}
+				</p>
+			)}
 			<details open={expanded || undefined}>
 				<summary>时间与交易计划</summary>
 				<OrderDetails order={o} />

@@ -1,4 +1,5 @@
 import { money, price, time } from "./api";
+import { FillObservationDetails } from "./FillObservationDetails";
 import { PlanSummary } from "./PlanSummary";
 import type { Order } from "./schema";
 export function OrderDetails({ order: o }: { readonly order: Order }) {
@@ -35,13 +36,15 @@ export function OrderDetails({ order: o }: { readonly order: Order }) {
 					<dt>撤单请求时间</dt>
 					<dd>{time(o.cancel_at)}</dd>
 				</div>
-				<div>
-					<dt>成交行情来源</dt>
-					<dd>
-						{o.source || "历史记录未注明"} ·
-						以委托生效后的完整有效样本判断成交，不按图中高低价补成交。
-					</dd>
-				</div>
+				{o.status !== "filled" && (
+					<div>
+						<dt>委托行情来源</dt>
+						<dd>
+							{o.source || "历史记录未注明"} ·
+							以委托生效后的完整有效样本判断成交，不按图中高低价补成交。
+						</dd>
+					</div>
+				)}
 				{o.currency !== "CNY" && o.fx_source && o.fx_time && o.fx_rate && (
 					<div>
 						<dt>委托锁定换汇参考</dt>
@@ -110,6 +113,9 @@ export function OrderDetails({ order: o }: { readonly order: Order }) {
 					</dd>
 				</div>
 			</dl>
+			{o.status === "filled" && (
+				<FillObservationDetails observation={o.fill_observation} />
+			)}
 		</>
 	);
 }
