@@ -93,7 +93,7 @@ def event_cells(round_id: str, review: Review, fact: Fact) -> list[str | Decimal
         conclusion.deviation if conclusion else None,
         conclusion.next_action if conclusion else None,
         fact.occurred_at.isoformat() if fact.occurred_at else None,
-        fact.model_dump_json(),
+        fact.model_dump_json(exclude={"order": {"waiting"}}),
     ]
 
 

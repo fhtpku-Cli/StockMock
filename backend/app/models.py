@@ -190,10 +190,20 @@ class CandidateInterval(Model):
     reason: str
 
 
+class WaitingView(Model):
+    """活动委托的即时只读等待说明，不承诺来源覆盖全部成交。"""
+
+    code: Literal["paused", "source_failing", "after_cutoff", "not_active", "awaiting_first", "checked_not_met"]
+    message: str
+    checked_through: datetime | None = None
+    since: datetime | None = None
+
+
 class OrderView(Order):
     """只读传输投影，新增解释不进入持久委托。"""
 
     first_candidate_interval: CandidateInterval
+    waiting: WaitingView | None = None
 
 
 class Preview(Model):

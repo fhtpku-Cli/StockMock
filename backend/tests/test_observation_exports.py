@@ -36,6 +36,7 @@ def test_http_csv_only_filled_fact_retains_observation(engine: Engine) -> None:
         exported = client.get("/api/reviews/export.csv")
         assert exported.status_code == 200
         rows = list(csv.DictReader(io.StringIO(exported.text.lstrip("\ufeff"))))
+        assert all('"waiting":' not in row["事实JSON"] for row in rows)
         facts = [Fact.model_validate_json(row["事实JSON"]) for row in rows if row["事实JSON"]]
         assert {fact.type for fact in facts} == {"order_submitted", "cancel_requested", "order_filled"}
         for fact in facts:

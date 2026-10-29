@@ -126,6 +126,19 @@ const dateFormat = new Intl.DateTimeFormat("zh-CN", {
 export const time = (value: string | null): string =>
 	value ? dateFormat.format(new Date(value)) : "尚无记录";
 
+const fullDateFormat = new Intl.DateTimeFormat("sv-SE", {
+	timeZone: "Asia/Shanghai",
+	year: "numeric",
+	month: "2-digit",
+	day: "2-digit",
+	hour: "2-digit",
+	minute: "2-digit",
+	second: "2-digit",
+	hourCycle: "h23",
+});
+export const fullTime = (value: string): string =>
+	fullDateFormat.format(new Date(value));
+
 export const price = (
 	value: string | null,
 	currency: string,

@@ -3,7 +3,8 @@
 import logging
 import sqlite3
 from datetime import UTC, datetime, timedelta
-from typing import final
+from types import MappingProxyType
+from typing import TYPE_CHECKING, final
 
 import anyio
 
@@ -13,6 +14,9 @@ from app.marketdata import MarketDataError
 from app.matching import validate_batch
 from app.models import DomainError, WorkerView
 from app.snapshots import capture
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 @final
@@ -24,6 +28,7 @@ class Worker:
         self.engine = engine
         self.view = WorkerView()
         self.failed_since: dict[str, datetime] = {}
+        self.failures: Mapping[str, datetime] = MappingProxyType({})
         self.last_tick: datetime | None = None
 
     def tick(self) -> None:
@@ -37,6 +42,7 @@ class Worker:
             symbols = {o.symbol for o in self.engine.store.read().orders if o.status in ACTIVE}
         except (DomainError, sqlite3.OperationalError) as error:
             self.view = WorkerView(last_run=now, status="账户暂不可读，下轮重试")
+            self.failures = MappingProxyType(self.failed_since.copy())
             logging.getLogger(__name__).warning("账户读取失败 type=%s", type(error).__name__)
             return
         self.failed_since = {symbol: since for symbol, since in self.failed_since.items() if symbol in symbols}
@@ -69,6 +75,7 @@ class Worker:
             failures.append(type(error).__name__)
             logging.getLogger(__name__).warning("资产观察失败 type=%s", type(error).__name__)
         self.view = WorkerView(last_run=datetime.now(UTC), status="行情异常，按截止规则处理" if failures else "running")
+        self.failures = MappingProxyType(self.failed_since.copy())
 
     async def run(self) -> None:
         """持续后台处理，应用关闭时由任务组取消。"""

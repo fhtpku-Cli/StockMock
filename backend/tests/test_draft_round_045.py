@@ -100,7 +100,8 @@ def test_bound_request_retry_after_reset_returns_original_and_no_persistent_fiel
         result = http.post(url + "/api/orders", json=payload.model_dump(mode="json"))
         assert result.status_code == 200
         returned = OrderView.model_validate_json(result.content)
-        assert returned.model_dump(exclude={"first_candidate_interval"}) == final.model_dump()
+        assert returned.waiting is None
+        assert returned.model_dump(exclude={"first_candidate_interval", "waiting"}) == final.model_dump()
         conflict = http.post(
             url + "/api/orders", json=payload.model_copy(update={"quantity": 200}).model_dump(mode="json")
         )

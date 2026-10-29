@@ -166,8 +166,22 @@ export const fillObservationSchema = z.object({
 	tradable: z.boolean(),
 });
 export type FillObservation = z.infer<typeof fillObservationSchema>;
+export const waitingSchema = z.object({
+	code: z.enum([
+		"paused",
+		"source_failing",
+		"after_cutoff",
+		"not_active",
+		"awaiting_first",
+		"checked_not_met",
+	]),
+	message: z.string(),
+	checked_through: z.iso.datetime({ offset: true }).nullable(),
+	since: z.iso.datetime({ offset: true }).nullable(),
+});
 export const orderSchema = z.object({
 	first_candidate_interval: candidateIntervalSchema.optional(),
+	waiting: waitingSchema.nullable().optional(),
 	id: z.string(),
 	request_id: z.string(),
 	symbol: z.string(),

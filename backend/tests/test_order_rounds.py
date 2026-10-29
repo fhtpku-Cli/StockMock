@@ -68,10 +68,9 @@ def test_archived_retry_returns_final_order_after_reload(
         response = http.post(url + "/api/orders", json=payload.model_dump(mode="json"))
         # Then: 返回最终记录；不同请求体仍拒绝，所有轮次原始 JSON 均不写回。
         assert response.status_code == 200
-        assert (
-            OrderView.model_validate_json(response.content).model_dump(exclude={"first_candidate_interval"})
-            == final.model_dump()
-        )
+        returned = OrderView.model_validate_json(response.content)
+        assert returned.waiting is None
+        assert returned.model_dump(exclude={"first_candidate_interval", "waiting"}) == final.model_dump()
         conflict = http.post(
             url + "/api/orders", json=payload.model_copy(update={"quantity": 200}).model_dump(mode="json")
         )
@@ -143,8 +142,7 @@ def test_overlapping_duplicate_returns_saved_final_order_before_round_conflict(
             response = pending.result(timeout=5)
         # Then: 返回旧订单终态，不能误报轮次冲突或新建订单。
         assert response.status_code == 200
-        assert (
-            OrderView.model_validate_json(response.content).model_dump(exclude={"first_candidate_interval"})
-            == final.model_dump()
-        )
+        returned = OrderView.model_validate_json(response.content)
+        assert returned.waiting is None
+        assert returned.model_dump(exclude={"first_candidate_interval", "waiting"}) == final.model_dump()
         assert engine.store.read() == current

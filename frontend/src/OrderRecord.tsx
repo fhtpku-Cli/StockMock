@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { money, price, time } from "./api";
+import { fullTime, money, price, time } from "./api";
 import { fillObservationNotice } from "./FillObservationDetails";
 import { OrderDetails } from "./OrderDetails";
 import type { Order } from "./schema";
@@ -22,6 +22,8 @@ export function OrderRecord({
 	readonly actions?: ReactNode;
 	readonly expanded?: boolean;
 }) {
+	const waiting =
+		o.status === "accepted" || o.status === "cancel_pending" ? o.waiting : null;
 	return (
 		<article className="order-row" data-order-id={o.id}>
 			<div className="order-top">
@@ -59,7 +61,15 @@ export function OrderRecord({
 							: "尚未成交"}
 				</span>
 			</div>
-			{o.status_reason && <p className="footnote">{o.status_reason}</p>}
+			{(waiting?.message || o.status_reason) && (
+				<p className="footnote">{waiting?.message ?? o.status_reason}</p>
+			)}
+			{waiting?.checked_through && (
+				<p className="footnote">
+					本系统已处理至 {fullTime(waiting.checked_through)}
+					（北京时间），不代表市场全部成交。
+				</p>
+			)}
 			{o.status === "filled" && (
 				<p className="footnote">
 					{o.fill_observation

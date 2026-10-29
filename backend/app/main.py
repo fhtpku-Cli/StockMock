@@ -102,7 +102,7 @@ def create_app(
     register_auth_routes(app, auth)
     register_market_routes(app, engine, auth)
     register_admission_routes(app, engine, auth)
-    register_trading_routes(app, engine, auth)
+    register_trading_routes(app, engine, auth, worker)
     register_record_routes(app, engine, auth)
     register_asset_routes(app, engine, auth, worker, plan_worker)
     register_personal_routes(app, engine, auth)
