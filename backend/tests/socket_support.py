@@ -30,10 +30,10 @@ def client(context: ssl.SSLContext | None = None) -> httpx2.Client:
 
 
 @contextmanager
-def server(app: FastAPI, host: str = "127.0.0.1") -> Generator[str]:
+def server(app: FastAPI, host: str = "127.0.0.1", *, port: int = 0) -> Generator[str]:
     family = socket.AF_INET6 if host == "::1" else socket.AF_INET
     with socket.socket(family) as listener:
-        listener.bind((host, 0))
+        listener.bind((host, port))
         port = TypeAdapter(tuple[str, int] | tuple[str, int, int, int]).validate_python(listener.getsockname())[1]
         config = uvicorn.Config(
             app,

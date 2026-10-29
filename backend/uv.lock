@@ -634,7 +634,7 @@ wheels = [
 
 [[package]]
 name = "paper-investment"
-version = "0.4.5"
+version = "0.4.6"
 source = { virtual = "." }
 dependencies = [
     { name = "anyio" },

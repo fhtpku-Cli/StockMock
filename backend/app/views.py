@@ -7,7 +7,7 @@ from app.accounting import ACTIVE, money, reserved, sellable
 from app.catalog import instrument
 from app.composition import composition, percentage
 from app.engine import Engine
-from app.models import CashView, DomainError, Portfolio, PositionView, WorkerView
+from app.models import ActiveOrdersView, CashView, DomainError, Portfolio, PositionView, SellabilityView, WorkerView
 from app.valuation import value_account
 
 
@@ -39,6 +39,8 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
         item = instrument(symbol, engine.catalog)
         quantity = sum(lot.quantity for lot in state.lots if lot.symbol == symbol)
         cost = sum((lot.cost for lot in state.lots if lot.symbol == symbol), Decimal(0))
+        locked = [lot for lot in state.lots if lot.symbol == symbol and lot.sellable_at > now]
+        next_unlock = min((lot.sellable_at for lot in locked), default=None)
         price = valuation.prices.get(symbol)
         value = pnl = None
         status = "行情不可用，收益待核对"
@@ -61,6 +63,11 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
                     valuation.total,
                 ),
                 price_time=valuation.times.get(symbol),
+                sellability=SellabilityView(
+                    locked_quantity=sum(lot.quantity for lot in locked),
+                    next_unlock_at=next_unlock,
+                    next_unlock_quantity=sum(lot.quantity for lot in locked if lot.sellable_at == next_unlock),
+                ),
                 symbol=symbol,
                 name=item.name,
                 currency=item.currency,
@@ -77,8 +84,13 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView) -> Portfolio:
             )
         )
     assets = valuation.total
+    active_statuses = [order.status for order in state.orders if order.status in ACTIVE]
     return Portfolio(
         round_id=state.id,
+        active_orders=ActiveOrdersView(
+            accepted_count=active_statuses.count("accepted"),
+            cancel_pending_count=active_statuses.count("cancel_pending"),
+        ),
         composition=composition(state, positions, valuation),
         total_assets_cny=assets,
         pnl_cny=money(assets - Decimal(1000000)) if assets is not None else None,

@@ -221,6 +221,21 @@ class CashView(Model):
     available: Decimal
 
 
+class ActiveOrdersView(Model):
+    """当前轮次真实活动状态计数。"""
+
+    accepted_count: int = Field(ge=0, strict=True)
+    cancel_pending_count: int = Field(ge=0, strict=True)
+
+
+class SellabilityView(Model):
+    """剩余批次的未来解锁摘要，不包含卖单占用。"""
+
+    locked_quantity: int = Field(ge=0, strict=True)
+    next_unlock_at: AwareDatetime | None
+    next_unlock_quantity: int = Field(ge=0, strict=True)
+
+
 class PositionView(Model):
     """持仓数量与明确标记的参考估值。"""
 
@@ -230,6 +245,7 @@ class PositionView(Model):
     market_value_cny: Decimal | None = None
     weight_percent: Percentage | None = None
     price_time: datetime | None = None
+    sellability: SellabilityView | None = None
     symbol: str
     name: str
     currency: Currency
@@ -283,6 +299,7 @@ class Portfolio(Model):
     """个人活动轮次的资产视图。"""
 
     round_id: str
+    active_orders: ActiveOrdersView | None = None
     composition: Composition | None = None
     initial_capital: Decimal = Decimal("1000000.00")
     total_assets_cny: Decimal | None
