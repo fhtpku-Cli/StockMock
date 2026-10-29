@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { ApiError, api, errorMessage } from "./api";
+import { ApiError, api, errorMessage, fullTime } from "./api";
 import { PlanPicker } from "./PlanPicker";
 import { type Plan, planSchema } from "./planSchema";
 import type { Instrument, Order } from "./schema";
@@ -118,12 +118,15 @@ export function Trade({
 		...(draft.target ? { target_price: draft.target } : {}),
 		...(draft.stop ? { stop_price: draft.stop } : {}),
 	};
-	const [unresolved, setUnresolved] = useState<typeof payload | null>(null);
+	type Submission = typeof payload & { readonly expected_expires_at: string };
+	const [unresolved, setUnresolved] = useState<Submission | null>(null);
+	const [validityNotice, setValidityNotice] = useState("");
 	const preview = useMutation({
 		onSettled: () => {
 			actionLock.current = false;
 		},
 		mutationFn: async () => {
+			setValidityNotice("");
 			await assertRound();
 			return api("orders/preview", previewSchema, payload);
 		},
@@ -148,12 +151,12 @@ export function Trade({
 		onSettled: () => {
 			actionLock.current = false;
 		},
-		mutationFn: async (original: typeof payload) => {
+		mutationFn: async (original: Submission) => {
 			if (!attempted.current.has(original.request_id)) await assertRound();
 			attempted.current.add(original.request_id);
 			return api("orders", orderSchema, original);
 		},
-		onError: (error, original) => {
+		onError: async (error, original) => {
 			if (
 				error instanceof ApiError &&
 				error.status !== undefined &&
@@ -164,6 +167,21 @@ export function Trade({
 				attempted.current.delete(original.request_id);
 				setUnresolved(null);
 				preview.reset();
+			}
+			if (error instanceof ApiError && error.code === "validity_changed") {
+				const previous = `原预览有效至 ${fullTime(original.expected_expires_at)}（北京时间）`;
+				setValidityNotice(`${previous}；正在核对新的有效期。草稿已保留。`);
+				try {
+					const current = await api("orders/preview", previewSchema, original);
+					setValidityNotice(
+						`${previous}；当前有效至 ${fullTime(current.expires_at)}（北京时间）。本次提交未受理，请重新预览后确认。`,
+					);
+				} catch (previewError) {
+					if (!(previewError instanceof Error)) throw previewError;
+					setValidityNotice(
+						`${previous}；新有效期暂无法取得，请重新预览。草稿已保留。`,
+					);
+				}
 			}
 		},
 		onSuccess: async () => {
@@ -192,6 +210,7 @@ export function Trade({
 		}));
 		preview.reset();
 		submit.reset();
+		setValidityNotice("");
 	};
 	if (
 		!instrument.tradable ||
@@ -232,8 +251,12 @@ export function Trade({
 					actionLock.current = true;
 					if (unresolved) submit.mutate(unresolved);
 					else if (preview.isSuccess) {
-						setUnresolved(payload);
-						submit.mutate(payload);
+						const submission = {
+							...payload,
+							expected_expires_at: preview.data.expires_at,
+						};
+						setUnresolved(submission);
+						submit.mutate(submission);
 					} else preview.mutate();
 				}}
 			>
@@ -463,6 +486,11 @@ export function Trade({
 					<ErrorNotice message={errorMessage(preview.error)} />
 				)}{" "}
 				{submit.isError && <ErrorNotice message={errorMessage(submit.error)} />}
+				{validityNotice && (
+					<p className="notice" role="status">
+						{validityNotice}
+					</p>
+				)}
 				{unresolved && !submit.isPending && (
 					<p className="notice" role="status">
 						委托结果尚未确认。请联网后重试确认结果；将核对原委托，不会重复创建。确认前暂不能修改交易内容。

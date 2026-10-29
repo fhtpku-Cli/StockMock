@@ -83,6 +83,7 @@ class OrderInput(OrderParameters):
     """请求可绑定草稿所属轮次，旧请求缺省不改变历史兼容。"""
 
     expected_round_id: str | None = Field(default=None, max_length=36)
+    expected_expires_at: AwareDatetime | None = None
 
 
 class FillObservation(Model):

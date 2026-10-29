@@ -212,6 +212,8 @@ class Engine:
                 request,
                 OrderContext(quote, rate, now, reference),
             )
+            if request.expected_expires_at is not None and request.expected_expires_at != order.expires_at:
+                raise DomainError("validity_changed", "委托有效期已变化，请重新预览后提交", 409)
             snapshot = order_snapshot(connection, state, request)
             order = order.model_copy(
                 update={"plan_id": request.plan_id, "plan_version": request.plan_version, "plan_snapshot": snapshot}
