@@ -9,8 +9,16 @@ from pydantic import Field
 from app.models import Currency, Model
 
 
+class SnapshotFailure(Model):
+    """首次不完整观察的原始时间与原因，恢复时仍保留。"""
+
+    captured_at: datetime
+    status: Literal["stale", "missing"]
+    issues: list[str]
+
+
 class ValuationSnapshot(Model):
-    """每天首次实际观察；缺失数据不补算成连续曲线。"""
+    """当天首次完整观察；不补算过去缺失日。"""
 
     id: str
     round_id: str
@@ -21,6 +29,7 @@ class ValuationSnapshot(Model):
     status: Literal["complete", "stale", "missing"]
     issues: list[str]
     price_times: dict[str, datetime]
+    first_failure: SnapshotFailure | None = None
 
 
 class AdjustmentInput(Model):

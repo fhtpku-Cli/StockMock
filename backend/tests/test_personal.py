@@ -132,7 +132,7 @@ def test_fractional_split_and_pending_orders_rollback(engine: Engine) -> None:
     assert records(engine.store, before.id) == []
 
 
-def test_snapshot_immutable_missing_and_offline_gaps(engine: Engine) -> None:
+def test_snapshot_recovers_same_day_and_preserves_offline_gaps(engine: Engine) -> None:
     held(engine)
     engine.provider = ControlledProvider(quote_time=NOW - timedelta(hours=2))
     capture(engine, NOW)
@@ -142,7 +142,12 @@ def test_snapshot_immutable_missing_and_offline_gaps(engine: Engine) -> None:
     assert points[0].total_assets_cny is None
     engine.provider = ControlledProvider(quote_time=NOW)
     capture(engine, NOW + timedelta(minutes=1))
-    assert snapshots(engine.store, engine.store.read().id) == points
+    recovered = snapshots(engine.store, engine.store.read().id)[0]
+    assert recovered.id == points[0].id
+    assert recovered.status == "complete"
+    assert recovered.first_failure is not None
+    assert recovered.first_failure.captured_at == points[0].captured_at
+    assert recovered.first_failure.issues == points[0].issues
     capture(engine, NOW + timedelta(days=3))
     assert len(snapshots(engine.store, engine.store.read().id)) == 2
 

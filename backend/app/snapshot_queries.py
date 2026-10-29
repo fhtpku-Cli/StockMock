@@ -70,7 +70,19 @@ def snapshot_csv(result: SnapshotRange) -> Response:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(
-        ["轮次", "北京时间记录日", "实际采集时间", "人民币总资产", "本轮收益", "状态", "问题", "行情及汇率时间"]
+        [
+            "轮次",
+            "北京时间记录日",
+            "实际采集时间",
+            "人民币总资产",
+            "本轮收益",
+            "状态",
+            "问题",
+            "行情及汇率时间",
+            "首次失败时间",
+            "首次失败状态",
+            "首次失败原因",
+        ]
     )
     for point in result.items:
         writer.writerow(
@@ -83,6 +95,9 @@ def snapshot_csv(result: SnapshotRange) -> Response:
                 point.status,
                 safe_cell("；".join(point.issues)),
                 json.dumps({key: value.isoformat() for key, value in point.price_times.items()}, ensure_ascii=False),
+                point.first_failure.captured_at.isoformat() if point.first_failure else "",
+                point.first_failure.status if point.first_failure else "",
+                safe_cell("；".join(point.first_failure.issues)) if point.first_failure else "",
             ]
         )
     return Response(

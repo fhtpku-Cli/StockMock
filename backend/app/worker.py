@@ -64,7 +64,7 @@ class Worker:
                 failures.append(type(error).__name__)
                 logging.getLogger(__name__).warning("订单处理失败 symbol=%s type=%s", symbol, type(error).__name__)
         try:
-            capture(self.engine, datetime.now(UTC))
+            capture(self.engine)
         except (DomainError, sqlite3.OperationalError) as error:
             failures.append(type(error).__name__)
             logging.getLogger(__name__).warning("资产观察失败 type=%s", type(error).__name__)
