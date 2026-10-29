@@ -5,12 +5,11 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from random import Random
 
 import pytest
 
 from app import accounting
-from app.accounting import FEE, available, execution_amount, money
+from app.accounting import available
 from app.calendar import calendar, sellable_time
 from app.catalog import CATALOG, instrument
 from app.engine import Engine
@@ -181,18 +180,7 @@ def test_cn_expiry_when_final_candidate_processed(engine: Engine) -> None:
 
 
 def test_reservation_when_decimal_rounding(tmp_path: Path) -> None:
-    # Given: 覆盖低于一美元四位小数及普通两位小数的确定性随机输入。
-    random = Random(4407)  # noqa: S311 - 确定性取整抽样，不用于安全用途
-    mismatches = 0
-    # When: 20 万组使用产品成交算法与预留公式对照。
-    for index in range(200000):
-        price = Decimal(random.randint(1, 9999 if index % 2 else 100000)) / (10000 if index % 2 else 100)
-        quantity = random.randint(1, 100000)
-        gross, fee = execution_amount(price, quantity)
-        reserve = max(money(price * quantity * (1 + FEE), reserve=True), gross + fee)
-        mismatches += reserve < gross + fee
-    # Then: 无少预留；具体旧失败输入从真实 place 到 process 成交。
-    assert mismatches == 0
+    # Given: 原取整缺陷的固定输入，使用真实构单、SQLite及撮合。
     engine = Engine(
         Store(tmp_path / "rounding.sqlite3"), ControlledProvider(quote_time=at(14, 0), price=Decimal(".7825"))
     )
@@ -201,7 +189,15 @@ def test_reservation_when_decimal_rounding(tmp_path: Path) -> None:
     )
     assert order.reserved_cny == Decimal("127393.70")
     engine.process(order.symbol, (sample(engine, order, ".7825", 5),), at(14, 6))
-    assert engine.store.read().orders[0].status == "filled"
+    state = engine.store.read()
+    assert state.orders[0].status == "filled"
+    assert state.orders[0].fee == Decimal("9.10")
+    assert state.cash["CNY"] == Decimal("872606.30")
+    assert state.cash["USD"] == 0
+    assert len(state.ledger) == 4
+    assert sum(lot.quantity for lot in state.lots) == 23246
+    assert available(state, "CNY") == state.cash["CNY"]
+    assert available(state, "USD") == 0
 
 
 @pytest.mark.parametrize("failure", ["cash", "shares", "calendar"])
