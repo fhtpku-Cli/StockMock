@@ -14,16 +14,18 @@ import { Journal } from "./Journal";
 import { Login } from "./Login";
 import { Orders } from "./Orders";
 import { PortfolioView } from "./Portfolio";
+import { ReorderTrade } from "./ReorderTrade";
 import { Settings } from "./Settings";
 import type { Page } from "./Sidebar";
 import { navigation, Sidebar } from "./Sidebar";
-import type { Instrument } from "./schema";
+import type { Instrument, Order } from "./schema";
 import { instrumentSchema, sessionSchema } from "./schema";
 import { Trade } from "./Trade";
 import { ErrorNotice, Loading } from "./ui";
 
 type Overlay =
 	| { readonly kind: "none" }
+	| { readonly kind: "reorder"; readonly order: Order }
 	| { readonly kind: "settings" }
 	| { readonly kind: "cash" }
 	| { readonly kind: "detail"; readonly instrument: Instrument }
@@ -195,6 +197,7 @@ export function App() {
 						)}{" "}
 						{page === "orders" && (
 							<Orders
+								onReorder={(order) => setOverlay({ kind: "reorder", order })}
 								onJournal={(id) => {
 									setJournalOrder(id);
 									setPage("journal");
@@ -242,6 +245,17 @@ export function App() {
 					}
 				/>
 			)}{" "}
+			{overlay.kind === "reorder" && (
+				<ReorderTrade
+					key={overlay.order.id}
+					order={overlay.order}
+					onClose={close}
+					onSuccess={() => {
+						close();
+						setPage("orders");
+					}}
+				/>
+			)}
 			{overlay.kind === "trade" && (
 				<Trade
 					instrument={overlay.instrument}

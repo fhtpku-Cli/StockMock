@@ -100,7 +100,15 @@ export const historySchema = z.array(
 		volume: z.union([decimal, z.number()]),
 	}),
 );
+export const candidateIntervalSchema = z.object({
+	status: z.enum(["available", "none", "unknown"]),
+	start: z.string().nullable(),
+	end: z.string().nullable(),
+	reason: z.string(),
+});
 export const previewSchema = z.object({
+	active_at: z.string().optional(),
+	first_candidate_interval: candidateIntervalSchema.optional(),
 	price_bound: decimal,
 	estimated_fee: decimal,
 	reserved_cny: decimal,
@@ -140,6 +148,7 @@ export const fillObservationSchema = z.object({
 });
 export type FillObservation = z.infer<typeof fillObservationSchema>;
 export const orderSchema = z.object({
+	first_candidate_interval: candidateIntervalSchema.optional(),
 	id: z.string(),
 	request_id: z.string(),
 	symbol: z.string(),

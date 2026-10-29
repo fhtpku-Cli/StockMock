@@ -23,7 +23,7 @@ export function OrderRecord({
 	readonly expanded?: boolean;
 }) {
 	return (
-		<article className="order-row">
+		<article className="order-row" data-order-id={o.id}>
 			<div className="order-top">
 				<div>
 					<strong>{o.symbol}</strong>

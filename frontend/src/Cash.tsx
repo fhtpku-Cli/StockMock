@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, errorMessage, money, time } from "./api";
+import { api, errorMessage, money } from "./api";
 import { CashStatement } from "./CashStatement";
+import { fxDate, fxRate } from "./fxDisplay";
 import { fxSchema, portfolioSchema } from "./schema";
 import { ErrorNotice, Loading, Modal } from "./ui";
 import { useOnline } from "./useOnline";
@@ -64,9 +65,9 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 				<div className="fx-rates">
 					{fx.data.map((rate) => (
 						<p key={rate.currency}>
-							1 {rate.currency} = {rate.cny_per_unit} CNY
+							1 {rate.currency} = {fxRate(rate.cny_per_unit)} CNY
 							<small>
-								{rate.source} · {time(rate.market_time)}
+								{rate.source} · {fxDate(rate.market_time)}
 							</small>
 						</p>
 					))}

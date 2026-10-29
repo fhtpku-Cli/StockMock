@@ -10,8 +10,14 @@ export function PlanPicker({
 	symbol,
 	selected,
 	onSelect,
+	preserveDraft = false,
+	onReload,
+	onInvalid,
 }: {
 	readonly symbol: string;
+	readonly preserveDraft?: boolean;
+	readonly onReload?: (plan: Plan) => void;
+	readonly onInvalid?: (message: string) => void;
 	readonly selected: Plan | null;
 	readonly onSelect: (plan: Plan | null) => void;
 }) {
@@ -23,7 +29,22 @@ export function PlanPicker({
 	const reload = useMutation({
 		mutationFn: () =>
 			api(`plans/${encodeURIComponent(selected?.id ?? "")}`, planSchema),
-		onSuccess: (plan) => onSelect(plan.status === "ended" ? null : plan),
+		onSuccess: (plan) => {
+			if (plan.status === "ended") {
+				onInvalid?.("所选计划已结束，请重新选择，或明确不关联计划。");
+				return;
+			}
+			if (selected && plan.round_id !== selected.round_id) {
+				onInvalid?.("所选计划已归档，请重新选择。");
+				return;
+			}
+			if (preserveDraft && onReload) onReload(plan);
+			else onSelect(plan);
+		},
+		onError: (error) =>
+			onInvalid?.(
+				`无法重新核对计划：${errorMessage(error)}；请重试或明确不关联计划。`,
+			),
 	});
 	const available = plans.items.filter((plan) => plan.status !== "ended");
 	return (

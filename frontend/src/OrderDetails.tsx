@@ -1,5 +1,7 @@
 import { money, price, time } from "./api";
+import { CandidateInterval } from "./CandidateInterval";
 import { FillObservationDetails } from "./FillObservationDetails";
+import { fxDate, fxRate } from "./fxDisplay";
 import { PlanSummary } from "./PlanSummary";
 import type { Order } from "./schema";
 export function OrderDetails({ order: o }: { readonly order: Order }) {
@@ -12,6 +14,10 @@ export function OrderDetails({ order: o }: { readonly order: Order }) {
 					本单没有关联独立计划；下单时填写的理由与参考价仍保留在下方。
 				</p>
 			)}
+			<CandidateInterval
+				interval={o.first_candidate_interval}
+				terminal={!["accepted", "cancel_pending"].includes(o.status)}
+			/>
 			<dl className="summary-list">
 				<div>
 					<dt>生效时间（北京时间）</dt>
@@ -49,8 +55,9 @@ export function OrderDetails({ order: o }: { readonly order: Order }) {
 					<div>
 						<dt>委托锁定换汇参考</dt>
 						<dd>
-							1 {o.currency} = {o.fx_rate} CNY · {o.fx_source || "未注明"} ·{" "}
-							{time(o.fx_time)} · 实际换汇以资金流水为准
+							1 {o.currency} = {fxRate(o.fx_rate)} CNY ·{" "}
+							{o.fx_source || "未注明"} · {fxDate(o.fx_time)} ·
+							实际换汇以资金流水为准
 						</dd>
 					</div>
 				)}

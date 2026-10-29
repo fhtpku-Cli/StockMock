@@ -8,13 +8,16 @@ import {
 	RecordFilters,
 	recordMatches,
 } from "./RecordFilters";
-import { orderSchema } from "./schema";
+import { canReorder } from "./ReorderTrade";
+import { type Order, orderSchema } from "./schema";
 import { Empty, ErrorNotice, Loading, Panel } from "./ui";
 import { useOnline } from "./useOnline";
 export function Orders({
 	onJournal,
+	onReorder,
 }: {
 	readonly onJournal: (id: string) => void;
+	readonly onReorder: (order: Order) => void;
 }) {
 	const online = useOnline();
 	const [recordFilter, setRecordFilter] = useState(initialRecordFilter);
@@ -100,6 +103,16 @@ export function Orders({
 										>
 											写复盘
 										</button>
+										{canReorder(o) && (
+											<button
+												type="button"
+												className="button small"
+												disabled={!online}
+												onClick={() => onReorder(o)}
+											>
+												按原参数再下单
+											</button>
+										)}
 										{o.status === "accepted" && (
 											<button
 												type="button"

@@ -90,7 +90,7 @@ export function AssetHistory({ roundId }: { readonly roundId?: string }) {
 			<p className="footnote">
 				北京时间自然日。
 				{roundId ? "快捷范围截至本轮归档日。" : "快捷范围截至今天。"}
-				只展示后台实际留存的记录，不补画历史；采集时资产不是收盘净值。
+				只展示后台实际留存的记录，不补画历史；采集时资产不是收盘净值。当天不完整记录可恢复为当天首次成功保存的完整观察，保留首次失败说明；刷新或重入可查看恢复结果，不会重新取得历史价格。
 			</p>
 			{query.isPending ? (
 				<Loading />

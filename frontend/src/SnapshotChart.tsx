@@ -78,7 +78,19 @@ export function SnapshotChart({
 								<tr key={r.id}>
 									<td>
 										{r.day}
-										<small>记录于 {time(r.captured_at)}</small>
+										<small>
+											{r.status === "complete"
+												? "当天完整观察时间"
+												: "未完整观察时间"}
+											：{time(r.captured_at)}
+										</small>
+										{r.first_failure && (
+											<small>
+												首次未完整：{time(r.first_failure.captured_at)} ·{" "}
+												{r.first_failure.status === "missing" ? "缺失" : "过时"}{" "}
+												· {r.first_failure.issues.join("；")}
+											</small>
+										)}
 									</td>
 									<td>
 										{money(r.total_assets_cny)}

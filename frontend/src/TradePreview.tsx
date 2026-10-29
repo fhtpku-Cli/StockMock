@@ -1,5 +1,7 @@
 import type { z } from "zod";
 import { money, price, time } from "./api";
+import { CandidateInterval } from "./CandidateInterval";
+import { fxDate, fxRate } from "./fxDisplay";
 import type { previewSchema } from "./schema";
 export function TradePreview({
 	preview,
@@ -28,6 +30,10 @@ export function TradePreview({
 	return (
 		<div className="preview-box">
 			<h3>确认这笔委托</h3>
+			<CandidateInterval
+				interval={preview.first_candidate_interval}
+				activeAt={preview.active_at}
+			/>
 			<dl className="summary-list">
 				<div>
 					<dt>价格边界</dt>
@@ -49,8 +55,8 @@ export function TradePreview({
 					<div>
 						<dt>换汇参考</dt>
 						<dd>
-							1 {currency} = {preview.fx_rate} CNY · {preview.fx_source} ·{" "}
-							{time(preview.fx_time)}（北京时间）
+							1 {currency} = {fxRate(preview.fx_rate)} CNY · {preview.fx_source}{" "}
+							· {fxDate(preview.fx_time)}
 						</dd>
 					</div>
 				)}

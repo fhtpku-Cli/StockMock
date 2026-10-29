@@ -5,6 +5,14 @@ export const snapshotSchema = z.object({
 	round_id: z.string(),
 	day: z.string(),
 	captured_at: z.string(),
+	first_failure: z
+		.object({
+			captured_at: z.string(),
+			status: z.enum(["missing", "stale"]),
+			issues: z.array(z.string()),
+		})
+		.nullable()
+		.optional(),
 	total_assets_cny: decimal.nullable(),
 	pnl_cny: decimal.nullable(),
 	status: z.enum(["complete", "stale", "missing"]),

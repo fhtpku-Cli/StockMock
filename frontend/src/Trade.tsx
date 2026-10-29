@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ApiError, api, errorMessage } from "./api";
 import { PlanPicker } from "./PlanPicker";
-import type { Plan } from "./planSchema";
-import type { Instrument } from "./schema";
-import { orderSchema, previewSchema } from "./schema";
+import { type Plan, planSchema } from "./planSchema";
+import type { Instrument, Order } from "./schema";
+import { orderSchema, portfolioSchema, previewSchema } from "./schema";
 import { TradePreview } from "./TradePreview";
 import { ErrorNotice, Modal } from "./ui";
 import { useOnline } from "./useOnline";
@@ -25,30 +25,87 @@ export function Trade({
 	side,
 	onClose,
 	onSuccess,
+	original,
+	draftRoundId,
 }: {
 	readonly instrument: Instrument;
 	readonly side: Side;
+	readonly original?: Order;
+	readonly draftRoundId?: string;
 	readonly onClose: () => void;
 	readonly onSuccess: () => void;
 }) {
 	const online = useOnline();
 	const [draft, setDraft] = useState<Draft>({
-		quantity: String(
-			side === "buy"
-				? (instrument.min_buy_quantity ?? instrument.lot_size)
-				: (instrument.quantity_step ?? instrument.lot_size),
-		),
-		price: "",
-		type: "limit",
-		reason: "",
-		target: "",
-		stop: "",
+		quantity: original
+			? String(original.quantity)
+			: String(
+					side === "buy"
+						? (instrument.min_buy_quantity ?? instrument.lot_size)
+						: (instrument.quantity_step ?? instrument.lot_size),
+				),
+		price: original?.limit_price ?? "",
+		type: original?.order_type ?? "limit",
+		reason: original?.reason ?? "",
+		target: original?.target_price ?? "",
+		stop: original?.stop_price ?? "",
 		requestId: crypto.randomUUID(),
 	});
 	const client = useQueryClient();
 	const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+	const [planBlocked, setPlanBlocked] = useState(Boolean(original?.plan_id));
+	const [planNotice, setPlanNotice] = useState(
+		original?.plan_id ? "正在核对原关联计划…" : "",
+	);
+	const attempted = useRef(new Set<string>());
+	const actionLock = useRef(false);
+	const assertRound = async () => {
+		if (
+			draftRoundId &&
+			(await api("portfolio", portfolioSchema)).round_id !== draftRoundId
+		)
+			throw new ApiError(
+				"round_changed",
+				"练习轮次已变化，草稿已保留。请关闭后在当前轮重新建立委托。",
+				409,
+			);
+	};
+	const loadOriginalPlan = useMutation({
+		mutationFn: async () => {
+			await assertRound();
+			const plan = await api(
+				`plans/${encodeURIComponent(original?.plan_id ?? "")}`,
+				planSchema,
+			);
+			if (plan.round_id !== draftRoundId)
+				throw new Error("原关联计划已归档，不能关联新委托。");
+			if (plan.status === "ended")
+				throw new Error("原关联计划已结束，不能关联新委托。");
+			return plan;
+		},
+		onSuccess: (plan) => {
+			setSelectedPlan(plan);
+			setPlanBlocked(false);
+			setPlanNotice(
+				plan.version !== original?.plan_version
+					? `原计划已由版本 ${original?.plan_version ?? "未知"} 更新至 ${plan.version}；关联当前版本，保留原委托理由与参考价。`
+					: "已核对原关联计划，保留原委托理由与参考价。",
+			);
+			change({});
+		},
+		onError: (error) => {
+			setPlanBlocked(true);
+			setPlanNotice(
+				`无法关联原计划：${errorMessage(error)} 请重试，或明确选择不关联计划。`,
+			);
+		},
+	});
+	useEffect(() => {
+		if (original?.plan_id) loadOriginalPlan.mutate();
+	}, [original?.plan_id, loadOriginalPlan.mutate]);
 	const payload = {
 		request_id: draft.requestId,
+		...(draftRoundId ? { expected_round_id: draftRoundId } : {}),
 		...(selectedPlan
 			? { plan_id: selectedPlan.id, plan_version: selectedPlan.version }
 			: {}),
@@ -63,7 +120,13 @@ export function Trade({
 	};
 	const [unresolved, setUnresolved] = useState<typeof payload | null>(null);
 	const preview = useMutation({
-		mutationFn: () => api("orders/preview", previewSchema, payload),
+		onSettled: () => {
+			actionLock.current = false;
+		},
+		mutationFn: async () => {
+			await assertRound();
+			return api("orders/preview", previewSchema, payload);
+		},
 	});
 	const sizing = useMutation({
 		mutationFn: (percent: number) =>
@@ -82,9 +145,15 @@ export function Trade({
 		},
 	});
 	const submit = useMutation({
-		mutationFn: (original: typeof payload) =>
-			api("orders", orderSchema, original),
-		onError: (error) => {
+		onSettled: () => {
+			actionLock.current = false;
+		},
+		mutationFn: async (original: typeof payload) => {
+			if (!attempted.current.has(original.request_id)) await assertRound();
+			attempted.current.add(original.request_id);
+			return api("orders", orderSchema, original);
+		},
+		onError: (error, original) => {
 			if (
 				error instanceof ApiError &&
 				error.status !== undefined &&
@@ -92,6 +161,7 @@ export function Trade({
 				error.status < 500 &&
 				error.status !== 408
 			) {
+				attempted.current.delete(original.request_id);
 				setUnresolved(null);
 				preview.reset();
 			}
@@ -141,10 +211,25 @@ export function Trade({
 			title={`${side === "buy" ? "模拟买入" : "模拟卖出"} · ${instrument.name}`}
 			onClose={onClose}
 		>
+			{original && (
+				<p className="notice">
+					已按原参数建立新草稿，原委托和历史计划不变。请重新预览并确认提交。
+				</p>
+			)}
 			<form
 				onSubmit={(e) => {
 					e.preventDefault();
-					if (!online) return;
+					if (
+						!online ||
+						actionLock.current ||
+						planBlocked ||
+						loadOriginalPlan.isPending ||
+						sizing.isPending ||
+						preview.isPending ||
+						submit.isPending
+					)
+						return;
+					actionLock.current = true;
 					if (unresolved) submit.mutate(unresolved);
 					else if (preview.isSuccess) {
 						setUnresolved(payload);
@@ -155,17 +240,73 @@ export function Trade({
 				<fieldset
 					disabled={
 						!!unresolved ||
+						loadOriginalPlan.isPending ||
 						!online ||
 						sizing.isPending ||
 						preview.isPending ||
 						submit.isPending
 					}
 				>
+					{original?.plan_id && (
+						<div className="notice" role="status">
+							<p>{planNotice}</p>
+							<div className="button-row">
+								<button
+									type="button"
+									className="button small"
+									disabled={loadOriginalPlan.isPending}
+									onClick={() => {
+										setPlanBlocked(true);
+										loadOriginalPlan.mutate();
+									}}
+								>
+									重新核对原计划
+								</button>
+								<button
+									type="button"
+									className="button small"
+									disabled={loadOriginalPlan.isPending}
+									onClick={() => {
+										setSelectedPlan(null);
+										setPlanBlocked(false);
+										setPlanNotice(
+											"已明确选择不关联计划；保留原委托理由与参考价。",
+										);
+										change({});
+									}}
+								>
+									明确不关联计划
+								</button>
+							</div>
+						</div>
+					)}
+					{!original?.plan_id && planBlocked && (
+						<p className="notice" role="status">
+							{planNotice}
+						</p>
+					)}
 					<PlanPicker
+						preserveDraft={Boolean(original)}
+						onReload={(plan) => {
+							setPlanBlocked(false);
+							setPlanNotice("已重新核对所选计划，保留原委托理由与参考价。");
+							setSelectedPlan(plan);
+							change({});
+						}}
+						onInvalid={(message) => {
+							setPlanBlocked(true);
+							setPlanNotice(message);
+						}}
 						symbol={instrument.symbol}
 						selected={selectedPlan}
 						onSelect={(plan) => {
 							setSelectedPlan(plan);
+							setPlanNotice(
+								plan
+									? "已明确选择计划，带入该计划的理由与参考价。"
+									: "已明确选择不关联计划，保留交易理由与参考价。",
+							);
+							setPlanBlocked(false);
 							change(
 								plan
 									? {
@@ -341,7 +482,12 @@ export function Trade({
 					className="button primary full"
 					type="submit"
 					disabled={
-						!online || sizing.isPending || preview.isPending || submit.isPending
+						!online ||
+						planBlocked ||
+						loadOriginalPlan.isPending ||
+						sizing.isPending ||
+						preview.isPending ||
+						submit.isPending
 					}
 				>
 					{submit.isPending
