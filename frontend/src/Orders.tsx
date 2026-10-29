@@ -15,18 +15,22 @@ import { useOnline } from "./useOnline";
 export function Orders({
 	onJournal,
 	onReorder,
+	initialFilter,
 }: {
 	readonly onJournal: (id: string) => void;
 	readonly onReorder: (order: Order) => void;
+	readonly initialFilter: "all" | "active";
 }) {
 	const online = useOnline();
 	const [recordFilter, setRecordFilter] = useState(initialRecordFilter);
-	const [filter, setFilter] = useState("all");
+	const [filter, setFilter] = useState<string>(initialFilter);
 	const client = useQueryClient();
 	const query = useQuery({
 		queryKey: ["orders"],
-		queryFn: () => api("orders", z.array(orderSchema)),
+		queryFn: ({ signal }) =>
+			api("orders", z.array(orderSchema), undefined, { signal }),
 		refetchInterval: 15000,
+		refetchOnMount: "always",
 	});
 	const cancel = useMutation({
 		mutationFn: (id: string) =>

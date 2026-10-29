@@ -41,6 +41,18 @@ export function App() {
 		retry: false,
 	});
 	const [page, setPage] = useState<Page>("assets");
+	const [ordersEntry, setOrdersEntry] = useState<{
+		readonly id: number;
+		readonly filter: "all" | "active";
+	}>({ id: 0, filter: "all" });
+	const openOrders = (filter: "all" | "active") => {
+		setOrdersEntry((entry) => ({ id: entry.id + 1, filter }));
+		setPage("orders");
+	};
+	const navigate = (next: Page) => {
+		if (next === "orders") openOrders("all");
+		else setPage(next);
+	};
 	const [overlay, setOverlay] = useState<Overlay>({ kind: "none" });
 	const [journalOrder, setJournalOrder] = useState<string | null>(null);
 	const [online, setOnline] = useState(navigator.onLine);
@@ -128,7 +140,7 @@ export function App() {
 			</a>
 			<Sidebar
 				page={page}
-				setPage={setPage}
+				setPage={navigate}
 				onSettings={() => setOverlay({ kind: "settings" })}
 			/>
 			<main id="main" className="main-scroll">
@@ -183,6 +195,7 @@ export function App() {
 					<div className="page-view">
 						{page === "assets" && (
 							<PortfolioView
+								onOrders={() => openOrders("active")}
 								onExplore={() => setPage("watchlist")}
 								onCash={() => setOverlay({ kind: "cash" })}
 								onSymbol={(s) => void openSymbol(s)}
@@ -197,6 +210,8 @@ export function App() {
 						)}{" "}
 						{page === "orders" && (
 							<Orders
+								key={ordersEntry.id}
+								initialFilter={ordersEntry.filter}
 								onReorder={(order) => setOverlay({ kind: "reorder", order })}
 								onJournal={(id) => {
 									setJournalOrder(id);
@@ -252,7 +267,7 @@ export function App() {
 					onClose={close}
 					onSuccess={() => {
 						close();
-						setPage("orders");
+						openOrders("all");
 					}}
 				/>
 			)}
@@ -263,7 +278,7 @@ export function App() {
 					onClose={close}
 					onSuccess={() => {
 						close();
-						setPage("orders");
+						openOrders("all");
 					}}
 				/>
 			)}

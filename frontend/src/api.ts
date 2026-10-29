@@ -39,7 +39,11 @@ export async function api<T>(
 	path: string,
 	schema: z.ZodType<T>,
 	body?: Readonly<Record<string, unknown>>,
-	options?: { readonly timeout?: number; readonly method?: "post" | "put" },
+	options?: {
+		readonly timeout?: number;
+		readonly method?: "post" | "put";
+		readonly signal?: AbortSignal;
+	},
 ): Promise<T> {
 	try {
 		if (body && !navigator.onLine)

@@ -6,6 +6,7 @@ import {
 	Wallet,
 } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
+import { ActiveOrdersSummary } from "./ActiveOrdersSummary";
 import { Alerts } from "./Alerts";
 import { AssetHistory } from "./AssetHistory";
 import { api, errorMessage, money, time } from "./api";
@@ -17,14 +18,17 @@ export function PortfolioView({
 	onExplore,
 	onCash,
 	onSymbol,
+	onOrders,
 }: {
 	readonly onExplore: () => void;
 	readonly onCash: () => void;
 	readonly onSymbol: (symbol: string) => void;
+	readonly onOrders: () => void;
 }) {
 	const query = useQuery({
 		queryKey: ["portfolio"],
-		queryFn: () => api("portfolio", portfolioSchema),
+		queryFn: ({ signal }) =>
+			api("portfolio", portfolioSchema, undefined, { signal }),
 		refetchInterval: 30000,
 	});
 	if (query.isPending) return <Loading />;
@@ -77,6 +81,7 @@ export function PortfolioView({
 					{w}
 				</div>
 			))}
+			<ActiveOrdersSummary value={p.active_orders} onOrders={onOrders} />
 			{p.composition && <Composition value={p.composition} />}
 			<Alerts onSymbol={onSymbol} compact />
 			<div className="metric-grid">

@@ -68,6 +68,51 @@
 .positions-table {
 	min-width: 720px;
 }
+.active-orders-summary {
+	padding: var(--s4) var(--s6);
+	margin-bottom: var(--s5);
+}
+.active-orders-summary .section-heading {
+	flex-wrap: wrap;
+	margin-bottom: 0;
+}
+.active-orders-summary .text-button {
+	min-height: 44px;
+}
+.sellability-details {
+	width: 200px;
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.sellability-details small {
+	margin-top: var(--s1);
+}
+.position-sellability-list {
+	display: none;
+}
+@media (max-width: 700px) {
+	.positions-table .sellability-details {
+		display: none;
+	}
+	.position-sellability-list {
+		display: block;
+	}
+	.position-sellability-list section {
+		padding-block: var(--s4);
+		border-bottom: 1px solid var(--line);
+		overflow-wrap: anywhere;
+	}
+	.position-sellability-list strong {
+		font-size: 12px;
+	}
+	.position-sellability-list .sellability-details {
+		width: auto;
+	}
+	.position-sellability-list small {
+		display: block;
+	}
+}
 .statement-entries > article {
 	padding-block: var(--s4);
 	border-bottom: 1px solid var(--line);

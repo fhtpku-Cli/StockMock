@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Adjustments } from "./Adjustments";
 import { Archive } from "./Archive";
 import { api, errorMessage, time } from "./api";
+import { refreshAfterRoundReset } from "./refreshAfterRoundReset";
 import { acknowledgmentSchema, roundsSchema } from "./schema";
 import { ErrorNotice, Loading, Modal } from "./ui";
 import { useOnline } from "./useOnline";
@@ -31,7 +32,7 @@ export function Settings({
 				confirmation,
 			}),
 		onSuccess: async () => {
-			await client.invalidateQueries();
+			await refreshAfterRoundReset(client);
 			onClose();
 		},
 	});

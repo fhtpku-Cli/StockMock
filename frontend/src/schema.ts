@@ -39,7 +39,25 @@ export const compositionSchema = z.object({
 	price_times: z.record(z.string(), z.string()),
 	issues: z.array(z.string()),
 });
+export const activeOrdersSchema = z.object({
+	accepted_count: z.number().int().nonnegative(),
+	cancel_pending_count: z.number().int().nonnegative(),
+});
+export const sellabilitySchema = z
+	.object({
+		locked_quantity: z.number().int().nonnegative(),
+		next_unlock_at: z.iso.datetime({ offset: true }).nullable(),
+		next_unlock_quantity: z.number().int().nonnegative(),
+	})
+	.refine((value) =>
+		value.locked_quantity === 0
+			? value.next_unlock_at === null && value.next_unlock_quantity === 0
+			: value.next_unlock_at !== null &&
+				value.next_unlock_quantity > 0 &&
+				value.next_unlock_quantity <= value.locked_quantity,
+	);
 export const portfolioSchema = z.object({
+	active_orders: activeOrdersSchema.nullable().optional(),
 	composition: compositionSchema.optional(),
 	round_id: z.string(),
 	initial_capital: decimal,
@@ -68,6 +86,7 @@ export const portfolioSchema = z.object({
 			weight_percent: decimal.nullable(),
 			price_time: z.string().nullable(),
 			reserved: z.number(),
+			sellability: sellabilitySchema.nullable().optional(),
 			average_cost: decimal,
 			market_price: decimal.nullable(),
 			market_value: decimal.nullable(),

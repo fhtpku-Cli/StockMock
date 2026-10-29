@@ -8,6 +8,7 @@ import {
 	sortPositions,
 } from "./analysis";
 import { money, number, price, time } from "./api";
+import { SellabilityDetails } from "./SellabilityDetails";
 import { Empty, Panel } from "./ui";
 export function Positions({
 	positions,
@@ -144,6 +145,10 @@ export function Positions({
 												{number(row.quantity)}
 												<small>可卖 {number(row.sellable)}</small>
 												<small>卖单占用 {number(row.reserved)}</small>
+												<SellabilityDetails
+													value={row.sellability}
+													reserved={row.reserved}
+												/>
 											</td>
 											<td>
 												{money(row.market_value, row.currency)}
@@ -176,6 +181,26 @@ export function Positions({
 							</table>
 						</div>
 					)}
+					<div className="position-sellability-list">
+						{rows
+							.filter(
+								(row) =>
+									!row.sellability ||
+									row.sellability.locked_quantity > 0 ||
+									row.reserved > 0,
+							)
+							.map((row) => (
+								<section key={row.symbol} aria-label={`${row.name}可卖说明`}>
+									<strong>
+										{row.name} · {row.symbol}
+									</strong>
+									<SellabilityDetails
+										value={row.sellability}
+										reserved={row.reserved}
+									/>
+								</section>
+							))}
+					</div>
 					<p className="footnote">
 						收益率以剩余持仓含买入费用成本计算，不计尚未发生的卖出费；不同币种的原币盈亏金额不相加。
 					</p>
