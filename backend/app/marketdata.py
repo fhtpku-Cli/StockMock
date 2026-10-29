@@ -56,10 +56,16 @@ class MarketDataClient:
         self._lock: LockType = Lock()
         self._cache: dict[str, tuple[float, datetime, bytes | MarketDataError]] = {}
 
-    def _load(self, url: str, ttl: int) -> tuple[bytes, datetime]:
+    def _load(self, url: str, ttl: int, *, retrieved_not_before: datetime | None = None) -> tuple[bytes, datetime]:
         with self._lock:
             entry = self._cache.get(url)
-            if entry is None or entry[0] <= monotonic():
+            early = (
+                entry is not None
+                and isinstance(entry[2], bytes)
+                and retrieved_not_before is not None
+                and entry[1] < retrieved_not_before
+            )
+            if entry is None or entry[0] <= monotonic() or early:
                 value: bytes | MarketDataError
                 duration = ttl
                 try:
@@ -140,16 +146,23 @@ class MarketDataClient:
         raw, retrieved_at = self._load(url, 60)
         return parser(raw, rule, retrieved_at)
 
-    def history(self, symbol: str | InstrumentRule | ObservationInstrument) -> tuple[Bar, ...]:
-        """美股最多 252 条、其余最多 30 条原始日线；实际数量由来源决定。"""
+    def history(
+        self,
+        symbol: str | InstrumentRule | ObservationInstrument,
+        *,
+        retrieved_not_before: datetime | None = None,
+    ) -> tuple[Bar, ...]:
+        """读取未复权日线；可按实际取得时刻刷新过早缓存，失败不回退。"""
+        if retrieved_not_before is not None and retrieved_not_before.utcoffset() is None:
+            raise MarketDataError("invalid_retrieval_boundary", "日线取得时刻约束必须带时区")
         rule = observation_identity(symbol)
         if rule.market == "US":
             sdk, _ = self._load(SDK_URL, 86400)
             url = f"https://finance.sina.com.cn/us_stock/company/hisdata/klc_kl_{rule.symbol}.js"
-            raw, retrieved_at = self._load(url, 3600)
+            raw, retrieved_at = self._load(url, 3600, retrieved_not_before=retrieved_not_before)
             return parse_daily(decode_daily(raw, sdk, rule.symbol), rule, retrieved_at)
         url = tencent_history_url(rule, 30)
-        raw, retrieved_at = self._load(url, 3600)
+        raw, retrieved_at = self._load(url, 3600, retrieved_not_before=retrieved_not_before)
         return parse_history(raw, symbol, retrieved_at)
 
     def fx_rates(self) -> tuple[FxRate, ...]:
