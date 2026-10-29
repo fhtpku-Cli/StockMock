@@ -12,6 +12,7 @@ import { Detail } from "./Detail";
 import { Discover } from "./Discover";
 import { Journal } from "./Journal";
 import { Login } from "./Login";
+import { refreshWithMarketSession } from "./marketSessionQuery";
 import { Orders } from "./Orders";
 import { PortfolioView } from "./Portfolio";
 import { ReorderTrade } from "./ReorderTrade";
@@ -62,7 +63,7 @@ export function App() {
 	useEffect(() => {
 		const up = () => {
 			setOnline(true);
-			void client.invalidateQueries();
+			void refreshWithMarketSession(client);
 		};
 		const down = () => setOnline(false);
 		window.addEventListener("online", up);
@@ -157,7 +158,7 @@ export function App() {
 							type="button"
 							className="icon-button"
 							aria-label="刷新数据"
-							onClick={() => void client.invalidateQueries()}
+							onClick={() => void refreshWithMarketSession(client)}
 						>
 							<ArrowClockwise size={20} />
 						</button>

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Alerts } from "./Alerts";
 import { api, errorMessage, money, price, time } from "./api";
+import { MarketSession } from "./MarketSession";
 import { Plans } from "./Plans";
 import type { Instrument } from "./schema";
 import { historySchema, portfolioSchema, quoteSchema } from "./schema";
@@ -69,6 +70,7 @@ export function Detail({
 					{instrument.tradable ? "可模拟交易" : "仅观察"}
 				</Badge>
 			</div>
+			<MarketSession market={instrument.market} symbol={instrument.symbol} />
 			{quote.isPending ? (
 				<Loading />
 			) : quote.isError ? (

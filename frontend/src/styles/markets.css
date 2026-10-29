@@ -158,3 +158,21 @@
 	justify-content: flex-end;
 	gap: 16px;
 }
+
+.market-session {
+	margin: 16px 0;
+	padding: 16px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	overflow-wrap: anywhere;
+}
+.market-session-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.market-session p {
+	line-height: 1.7;
+}
