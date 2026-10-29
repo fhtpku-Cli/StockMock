@@ -9,7 +9,7 @@ from typing import Protocol, final
 from app.accounting import ACTIVE, FEE, money
 from app.action_guard import check_actions
 from app.activated_registry import ActivatedRegistry
-from app.calendar import is_open, prior_session_close, prior_session_day, window
+from app.calendar import is_open, previous_segment_end, prior_session_close, prior_session_day, segment_start, window
 from app.catalog import CATALOG, from_rule, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
 from app.matching import advance, confirm_cutoff, valid_observation, validate_batch
@@ -103,7 +103,17 @@ class Engine:
             or quote.volume <= 0
         ):
             raise DomainError("quote_unverified", "当前行情不能用于成交，请等待已核验样本")
-        if is_open(item, now) and now - quote.market_time > timedelta(minutes=20):
+        stale = is_open(item, now) and now - quote.market_time > timedelta(minutes=20)
+        start = segment_start(item, now) if stale else None
+        previous_end = previous_segment_end(item, now) if stale else None
+        opening_limit = (
+            request.order_type == "limit"
+            and start is not None
+            and previous_end is not None
+            and now - start <= timedelta(minutes=20)
+            and previous_end - timedelta(minutes=20) <= quote.market_time <= start
+        )
+        if stale and not opening_limit:
             raise DomainError("quote_stale", "行情超过容忍时效，暂停新订单")
         with self.store.transaction() as connection:
             state = self.store.load(connection)

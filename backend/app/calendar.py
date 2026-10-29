@@ -47,6 +47,31 @@ def is_open(item: Instrument, at: datetime) -> bool:
         return False
 
 
+def segment_start(item: Instrument, at: datetime) -> datetime | None:
+    """返回所在支持段起点；非支持时段与is_open一致地返回空。"""
+    if not is_open(item, at):
+        return None
+    local = at.astimezone(calendar(item.market).tz)
+    if item.market in {"CN", "HK"} and local.time() >= time(13):
+        return local.replace(hour=13, minute=0, second=0, microsecond=0).astimezone(UTC)
+    opening, _ = window(item, at)
+    return opening
+
+
+def previous_segment_end(item: Instrument, at: datetime) -> datetime | None:
+    """返回当前支持段的上一段截止，沿用午休、假日和提前收盘日历。"""
+    start = segment_start(item, at)
+    if start is None:
+        return None
+    cal = calendar(item.market)
+    local = start.astimezone(cal.tz)
+    if item.market in {"CN", "HK"} and local.time() == time(13):
+        lunch = time(11, 30) if item.market == "CN" else time(12)
+        return local.replace(hour=lunch.hour, minute=lunch.minute).astimezone(UTC)
+    adjustment = timedelta(minutes=3) if item.market == "CN" else timedelta(0)
+    return prior_session_close(item, start) - adjustment
+
+
 def sellable_time(item: Instrument, event: datetime) -> datetime:
     """将交易日约束转换为实际可卖时刻。"""
     if item.settlement_days == 0:
