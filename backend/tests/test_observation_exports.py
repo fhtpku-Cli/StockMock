@@ -12,7 +12,7 @@ from pydantic import TypeAdapter
 from app.api_models import ResetInput
 from app.engine import Engine
 from app.main import create_app
-from app.models import Order
+from app.models import OrderView
 from app.operations import reset
 from app.review_models import Fact, FactPage
 from app.storage import Store, read_rows
@@ -30,7 +30,7 @@ def test_http_csv_only_filled_fact_retains_observation(engine: Engine) -> None:
         assert client.post("/api/auth/login", json={"password": PASSWORD}).status_code == 200
         response = client.get("/api/orders")
         assert response.status_code == 200
-        orders = TypeAdapter(list[Order]).validate_json(response.content)
+        orders = TypeAdapter(list[OrderView]).validate_json(response.content)
         assert orders[0].fill_observation is not None
         assert orders[0].fill_observation.price == Decimal("99.1234")
         exported = client.get("/api/reviews/export.csv")

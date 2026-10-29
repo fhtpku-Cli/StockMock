@@ -63,7 +63,7 @@ class PlanSnapshot(Model):
     updated_at: datetime
 
 
-class OrderInput(Model):
+class OrderParameters(Model):
     """验证数量、价格与重复请求编号。"""
 
     plan_id: str | None = Field(default=None, max_length=36)
@@ -77,6 +77,12 @@ class OrderInput(Model):
     reason: str = Field(default="", max_length=2000)
     target_price: Decimal | None = Field(default=None, gt=0, max_digits=15, decimal_places=4)
     stop_price: Decimal | None = Field(default=None, gt=0, max_digits=15, decimal_places=4)
+
+
+class OrderInput(OrderParameters):
+    """请求可绑定草稿所属轮次，旧请求缺省不改变历史兼容。"""
+
+    expected_round_id: str | None = Field(default=None, max_length=36)
 
 
 class FillObservation(Model):
@@ -93,7 +99,7 @@ class FillObservation(Model):
     tradable: Literal[True]
 
 
-class Order(OrderInput):
+class Order(OrderParameters):
     """持久化委托，保留市场时间和服务器确认时间。"""
 
     id: str
@@ -175,9 +181,26 @@ class State(Model):
     watchlist: list[str] = Field(default_factory=list)
 
 
+class CandidateInterval(Model):
+    """按生效时刻推导的首个候选，不是预计成交或下一未处理区间。"""
+
+    status: Literal["available", "none", "unknown"]
+    start: datetime | None = None
+    end: datetime | None = None
+    reason: str
+
+
+class OrderView(Order):
+    """只读传输投影，新增解释不进入持久委托。"""
+
+    first_candidate_interval: CandidateInterval
+
+
 class Preview(Model):
     """订单价格边界、费用与预留预览。"""
 
+    active_at: datetime
+    first_candidate_interval: CandidateInterval
     price_bound: Decimal
     estimated_fee: Decimal
     reserved_cny: Decimal

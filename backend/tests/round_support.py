@@ -16,7 +16,7 @@ import pytest
 from app import asset_routes, record_routes, trading_routes
 from app.engine import Engine
 from app.marketdata import Bar, FxRate, Quote
-from app.models import Order, OrderInput
+from app.models import Order, OrderInput, OrderView
 from tests.test_engine import NOW, ControlledProvider, request, sample
 
 
@@ -58,8 +58,8 @@ class BarrierProvider:
             self.wait_once()
         return self.base.intraday(symbol)
 
-    def history(self, symbol: str) -> tuple[Bar, ...]:
-        return self.base.history(symbol)
+    def history(self, symbol: str, *, retrieved_not_before: datetime | None = None) -> tuple[Bar, ...]:
+        return self.base.history(symbol, retrieved_not_before=retrieved_not_before)
 
     def fx_rates(self) -> tuple[FxRate, ...]:
         if self.pause_fx:
@@ -101,13 +101,13 @@ def earn_dollars(engine: Engine, http: httpx2.Client, url: str, now: datetime) -
     buy_body = request().model_copy(update={"symbol": "AAPL", "quantity": 1})
     response = http.post(url + "/api/orders", json=buy_body.model_dump(mode="json"))
     assert response.status_code == 200, response.text
-    buy = Order.model_validate_json(response.content)
+    buy = OrderView.model_validate_json(response.content)
     engine.process(buy.symbol, (sample(engine, buy, "99"),), now + timedelta(minutes=5))
     MarketClock.current = now + timedelta(minutes=5)
     sell_body = buy_body.model_copy(update={"request_id": str(uuid4()), "side": "sell"})
     response = http.post(url + "/api/orders", json=sell_body.model_dump(mode="json"))
     assert response.status_code == 200, response.text
-    sell = Order.model_validate_json(response.content)
+    sell = OrderView.model_validate_json(response.content)
     engine.process(sell.symbol, (sample(engine, sell, "101"),), now + timedelta(minutes=10))
     MarketClock.current = now + timedelta(minutes=10)
     assert engine.store.read().cash["USD"] == Decimal("100.95")

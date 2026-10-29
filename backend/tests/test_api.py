@@ -14,7 +14,7 @@ import app.trading_routes as routes_module
 from app.api_models import RoundDetail, RoundResult
 from app.engine import Engine
 from app.main import create_app
-from app.models import Entry, Journal, Order, Portfolio, WorkerView
+from app.models import Entry, Journal, OrderView, Portfolio, WorkerView
 from app.storage import Store
 from app.worker import Worker
 from tests.test_engine import NOW, ControlledProvider, sample
@@ -109,7 +109,7 @@ def test_http_order_validation_and_worker_without_browser(engine: Engine, monkey
     engine.process(order.symbol, (q,), q.market_time + timedelta(seconds=1))
     with TestClient(create_app(engine, PASSWORD, run_worker=False)) as restarted:
         _ = restarted.post("/api/auth/login", json={"password": PASSWORD})
-        orders = TypeAdapter(list[Order]).validate_json(restarted.get("/api/orders").content)
+        orders = TypeAdapter(list[OrderView]).validate_json(restarted.get("/api/orders").content)
         assert orders[0].status == "filled"
         assert len(TypeAdapter(list[Entry]).validate_json(restarted.get("/api/ledger").content)) == 2
         assert restarted.get("/api/portfolio").json()["positions"][0]["quantity"] == 100

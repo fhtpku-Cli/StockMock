@@ -22,7 +22,7 @@ from app.engine import Engine
 from app.instrument_rules import CATALOG_RULES, InstrumentRule
 from app.main import create_app
 from app.marketdata import MarketDataClient, MarketDataError
-from app.models import Instrument, Order
+from app.models import Instrument, OrderView
 from app.storage import Store, read_rows
 from app.worker import Worker
 from tests.admission_support import Clock, RuleClient
@@ -129,7 +129,7 @@ def test_new_security_http_worker_restart_sell(tmp_path: Path, monkeypatch: pyte
         assert client.post("/api/orders/size?percent=25", json=payload).status_code == 200
         result = client.post("/api/orders", json=payload)
         assert result.status_code == 200, result.text
-        buy = Order.model_validate_json(result.content)
+        buy = OrderView.model_validate_json(result.content)
     Clock.current += timedelta(minutes=10)
     restarted = isolated(tmp_path)
     Worker(restarted).tick()
@@ -145,7 +145,7 @@ def test_new_security_http_worker_restart_sell(tmp_path: Path, monkeypatch: pyte
             Clock.current += timedelta(days=1)
         result = client.post("/api/orders", json=payload)
         assert result.status_code == 200, result.text
-        sell = Order.model_validate_json(result.content)
+        sell = OrderView.model_validate_json(result.content)
         Clock.current += timedelta(minutes=10)
         Worker(restarted).tick()
         # Then: 新规则重启后仍可卖出、现金与持仓真实更新，基础目录未污染。

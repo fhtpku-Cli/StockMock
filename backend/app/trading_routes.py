@@ -9,10 +9,11 @@ from app.auth import Auth
 from app.engine import Engine
 from app.models import (
     DomainError,
-    Order,
     OrderInput,
+    OrderView,
     Preview,
 )
+from app.order_views import order_view
 from app.personal_models import Sizing
 from app.sizing import size_order
 
@@ -32,15 +33,15 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return size_order(engine, body, datetime.now(UTC), percent)
 
     @app.post("/api/orders", dependencies=[Depends(auth.require)])
-    def place(body: OrderInput) -> Order:
+    def place(body: OrderInput) -> OrderView:
         """以请求编号保证委托受理幂等。"""
-        return engine.place(body, datetime.now(UTC))
+        return order_view(engine.place(body, datetime.now(UTC)), engine.catalog)
 
     @app.get("/api/orders", dependencies=[Depends(auth.require)])
-    def orders() -> list[Order]:
-        return list(reversed(engine.store.read().orders))
+    def orders() -> list[OrderView]:
+        return [order_view(o, engine.catalog) for o in reversed(engine.store.read().orders)]
 
     @app.post("/api/orders/{order_id}/cancel", dependencies=[Depends(auth.require)])
-    def cancel(order_id: str) -> Order:
+    def cancel(order_id: str) -> OrderView:
         """记录撤单截止，延迟确认前保持资源占用。"""
-        return engine.cancel(order_id, datetime.now(UTC))
+        return order_view(engine.cancel(order_id, datetime.now(UTC)), engine.catalog)

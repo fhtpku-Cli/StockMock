@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from app.models import Currency, Journal, Model, Order, PlanSnapshot
+from app.models import Currency, Journal, Model, OrderView, PlanSnapshot
 from app.review_core_models import Coverage, Market, ReviewState, SubjectType
 
 
@@ -83,7 +83,7 @@ class Review(Model):
 
     id: str
     plan: Plan | None = None
-    legacy_order: Order | None = None
+    legacy_order: OrderView | None = None
     notes: list[Journal]
     order_count: int
     filled_count: int

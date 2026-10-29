@@ -8,6 +8,7 @@ from app.catalog import instrument
 from app.engine import Engine
 from app.models import DomainError, OrderInput
 from app.order_builder import OrderContext, build_order
+from app.order_requests import check_expected_round
 from app.order_rules import maximum_quantity
 from app.personal_models import Sizing
 
@@ -19,6 +20,7 @@ def size_order(engine: Engine, request: OrderInput, now: datetime, percent: int)
     quote, rate, reference = engine.prepare(request, now)
     item = instrument(request.symbol, engine.catalog)
     state = engine.store.read()
+    check_expected_round(request, state.id)
     step = item.quantity_step or item.lot_size
     minimum = item.min_buy_quantity or item.lot_size
     limit = maximum_quantity(item, request.order_type)

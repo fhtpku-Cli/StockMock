@@ -10,6 +10,7 @@ from app.accounting import FEE, available, execution_amount, money, sellable
 from app.calendar import is_open, window
 from app.marketdata import FxRate, Quote
 from app.models import DomainError, Instrument, Order, OrderInput, State
+from app.order_requests import check_expected_round
 from app.order_rules import tick_size, validate_quantity
 
 
@@ -49,6 +50,7 @@ def price_bound(item: Instrument, request: OrderInput, quote: Quote, now: dateti
 
 def build_order(item: Instrument, state: State, request: OrderInput, context: OrderContext) -> Order:
     """校验价格与数量，计算订单参考汇率及资源预留。"""
+    check_expected_round(request, state.id)
     quote, rate, now, reference = context.quote, context.rate, context.now, context.reference
     validate_quantity(item, state, request)
     opening, closing = window(item, now)

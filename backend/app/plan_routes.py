@@ -8,7 +8,8 @@ from fastapi import Depends, FastAPI, Query, Response
 
 from app.auth import Auth
 from app.engine import Engine
-from app.models import Order, State
+from app.models import OrderView, State
+from app.order_views import order_view
 from app.plan_exports import export_plans
 from app.plan_models import Page, Plan, PlanInput, PlanUpdate
 from app.plan_queries import PageQuery, PlanQuery, page
@@ -54,6 +55,9 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return update_plan(engine, str(plan_id), body)
 
     @app.get("/api/plans/{plan_id}/orders", dependencies=[Depends(auth.require)])
-    def orders(plan_id: UUID, query: Annotated[PageQuery, Query()]) -> Page[Order]:
+    def orders(plan_id: UUID, query: Annotated[PageQuery, Query()]) -> Page[OrderView]:
         plan = get_plan(engine.store, str(plan_id))
-        return page([o for o in reversed(state_for(plan.round_id).orders) if o.plan_id == plan.id], query)
+        return page(
+            [order_view(o, engine.catalog) for o in reversed(state_for(plan.round_id).orders) if o.plan_id == plan.id],
+            query,
+        )

@@ -8,7 +8,7 @@ import pytest
 
 from app.engine import Engine
 from app.main import create_app
-from app.models import Order
+from app.models import OrderView
 from app.plans import create_plan
 from app.storage import Store, read_rows
 from tests.round_support import BarrierProvider, MarketClock, reset_http, retry_in_new_process, set_clock
@@ -68,7 +68,10 @@ def test_archived_retry_returns_final_order_after_reload(
         response = http.post(url + "/api/orders", json=payload.model_dump(mode="json"))
         # Then: 返回最终记录；不同请求体仍拒绝，所有轮次原始 JSON 均不写回。
         assert response.status_code == 200
-        assert Order.model_validate_json(response.content) == final
+        assert (
+            OrderView.model_validate_json(response.content).model_dump(exclude={"first_candidate_interval"})
+            == final.model_dump()
+        )
         conflict = http.post(
             url + "/api/orders", json=payload.model_copy(update={"quantity": 200}).model_dump(mode="json")
         )
@@ -130,7 +133,7 @@ def test_overlapping_duplicate_returns_saved_final_order_before_round_conflict(
             try:
                 assert provider.entered.wait(timeout=5)
                 response = second.post(url + "/api/orders", json=payload.model_dump(mode="json"))
-                order = Order.model_validate_json(response.content)
+                order = OrderView.model_validate_json(response.content)
                 final = engine.cancel(order.id, NOW)
                 reset_http(second, url)
                 current = engine.store.read()
@@ -140,5 +143,8 @@ def test_overlapping_duplicate_returns_saved_final_order_before_round_conflict(
             response = pending.result(timeout=5)
         # Then: 返回旧订单终态，不能误报轮次冲突或新建订单。
         assert response.status_code == 200
-        assert Order.model_validate_json(response.content) == final
+        assert (
+            OrderView.model_validate_json(response.content).model_dump(exclude={"first_candidate_interval"})
+            == final.model_dump()
+        )
         assert engine.store.read() == current

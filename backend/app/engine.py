@@ -1,20 +1,22 @@
 """委托受理与事件时间撮合，行情获取在事务外执行。"""
 
 import logging
-from datetime import datetime, timedelta
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Protocol, final
 
 from app.accounting import ACTIVE, FEE, money
 from app.action_guard import check_actions
 from app.activated_registry import ActivatedRegistry
-from app.calendar import is_open, prior_session_day, window
+from app.calendar import is_open, prior_session_close, prior_session_day, window
 from app.catalog import CATALOG, from_rule, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
 from app.matching import advance, confirm_cutoff, valid_observation, validate_batch
 from app.models import DomainError, Instrument, Order, OrderInput, Preview
 from app.order_builder import OrderContext, build_order
-from app.order_requests import retry_order
+from app.order_requests import check_expected_round, retry_order
+from app.order_views import candidate_interval
 from app.plans import order_snapshot
 from app.storage import Store
 
@@ -34,7 +36,7 @@ class Provider(Protocol):
         """返回完整成交样本。"""
         ...
 
-    def history(self, symbol: str) -> tuple[Bar, ...]:
+    def history(self, symbol: str, *, retrieved_not_before: datetime | None = None) -> tuple[Bar, ...]:
         """返回未复权日线。"""
         ...
 
@@ -48,8 +50,11 @@ class Engine:
         store: Store,
         provider: Provider,
         catalog: tuple[Instrument, ...] = CATALOG,
+        *,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         """保存依赖并初始化本实例的状态。"""
+        self.clock = clock
         self.store = store
         self.provider = provider
         self.plan_provider: Provider = provider
@@ -77,6 +82,7 @@ class Engine:
 
     def prepare(self, request: OrderInput, now: datetime) -> tuple[Quote, FxRate | None, Decimal | None]:
         """在写事务外获取委托所需的行情和参考汇率。"""
+        check_expected_round(request, self.store.read().id)
         item = instrument(request.symbol, self.catalog)
         if not item.tradable:
             raise DomainError("observation_only", item.restriction)
@@ -107,10 +113,27 @@ class Engine:
         if item.market == "CN":
             opening, _ = window(item, now)
             reference_day = prior_session_day(item, opening)
-            previous = [b for b in self.provider.history(item.symbol) if b.day == reference_day]
+            reference_close = prior_session_close(item, opening)
+            if now < reference_close:
+                raise DomainError("reference_not_closed", "请等待参考交易日实际收盘后取得日线，再提交预挂委托")
+            history = self.provider.history(item.symbol, retrieved_not_before=reference_close)
+            checked_at = self.clock()
+            previous = [b for b in history if b.day == reference_day]
             if not previous:
                 raise DomainError("reference_unavailable", "缺少前一交易日未复权收盘价")
-            reference = max(previous, key=lambda b: b.day).close
+            bar = previous[-1]
+            if (
+                bar.symbol != item.symbol
+                or bar.currency != item.currency
+                or bar.source != "tencent-public"
+                or not bar.close.is_finite()
+                or bar.close <= 0
+                or bar.retrieved_at.tzinfo is None
+                or bar.retrieved_at.utcoffset() is None
+                or not reference_close <= bar.retrieved_at <= checked_at
+            ):
+                raise DomainError("reference_unverified", "参考日线身份、价格或取得时间未通过校验，请等待有效收盘参考")
+            reference = bar.close
         return quote, rate, reference
 
     def optional_rate(self, item: Instrument, request: OrderInput, now: datetime) -> FxRate | None:
@@ -131,7 +154,9 @@ class Engine:
     def preview(self, request: OrderInput, now: datetime) -> Preview:
         """检查委托资源并返回预览，不改变账户。"""
         with self.store.transaction() as connection:
-            _ = order_snapshot(connection, self.store.load(connection), request)
+            state = self.store.load(connection)
+            check_expected_round(request, state.id)
+            _ = order_snapshot(connection, state, request)
         quote, rate, reference = self.prepare(request, now)
         order = build_order(
             instrument(request.symbol, self.catalog),
@@ -141,6 +166,8 @@ class Engine:
         )
         conversion_rate = rate if order.reserved_cny > 0 else None
         return Preview(
+            active_at=order.active_at,
+            first_candidate_interval=candidate_interval(order, self.catalog),
             price_bound=order.price_bound,
             estimated_fee=money(order.price_bound * order.quantity * FEE),
             reserved_cny=order.reserved_cny,
@@ -159,6 +186,7 @@ class Engine:
             if saved is not None:
                 return saved
             round_id = self.store.load(connection).id
+            check_expected_round(request, round_id)
         quote, rate, reference = self.prepare(request, now)
         with self.store.transaction() as connection:
             saved = retry_order(connection, request)

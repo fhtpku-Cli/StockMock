@@ -9,7 +9,8 @@ from app.analysis_models import LedgerPage, LedgerQuery
 from app.auth import Auth
 from app.cash_queries import ledger_page
 from app.engine import Engine
-from app.models import Journal, Order
+from app.models import Journal, OrderView
+from app.order_views import order_view
 from app.plan_models import Page
 from app.plan_queries import PageQuery, page
 from app.review_journal import journal_page
@@ -21,8 +22,10 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
     """提供超过旧详情五百条的完整访问路径。"""
 
     @app.get("/api/rounds/{round_id}/orders", dependencies=[Depends(auth.require)])
-    def round_orders(round_id: UUID, query: Annotated[PageQuery, Query()]) -> Page[Order]:
-        return page(list(reversed(engine.store.read_round(str(round_id)).orders)), query)
+    def round_orders(round_id: UUID, query: Annotated[PageQuery, Query()]) -> Page[OrderView]:
+        return page(
+            [order_view(o, engine.catalog) for o in reversed(engine.store.read_round(str(round_id)).orders)], query
+        )
 
     @app.get("/api/rounds/{round_id}/journal", dependencies=[Depends(auth.require)])
     def round_journal(round_id: UUID, query: Annotated[RecordQuery, Query()]) -> Page[Journal]:

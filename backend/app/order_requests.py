@@ -31,3 +31,9 @@ def retry_order(connection: sqlite3.Connection, request: OrderInput) -> Order | 
         if order is not None:
             return order
     return saved
+
+
+def check_expected_round(request: OrderInput, round_id: str) -> None:
+    """新草稿不可跨轮受理；已成功的幂等请求必须在调用前优先返回。"""
+    if request.expected_round_id is not None and request.expected_round_id != round_id:
+        raise DomainError("round_changed", "草稿所属练习轮次已变化，请刷新后重新建立委托")

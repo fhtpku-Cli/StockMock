@@ -46,7 +46,8 @@ class ControlledProvider:
     def intraday(self, symbol: str) -> tuple[Quote, ...]:
         return (self.quote(symbol),)
 
-    def history(self, symbol: str) -> tuple[Bar, ...]:
+    def history(self, symbol: str, *, retrieved_not_before: datetime | None = None) -> tuple[Bar, ...]:
+        _ = retrieved_not_before
         q = self.quote(symbol)
         return (
             Bar(
@@ -59,8 +60,8 @@ class ControlledProvider:
                 Decimal(1000),
                 q.currency,
                 self.quote_time,
-                NOW,
-                "controlled-test",
+                self.quote_time,
+                "tencent-public",
             ),
         )
 

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import assert_never
 
 from app.models import Order
+from app.order_views import order_view
 from app.review_conclusions import detail
 from app.review_core_models import SubjectType
 from app.review_models import Fact, ReviewDetail
@@ -75,7 +76,7 @@ def order_facts(order: Order) -> list[Fact]:
             type="order_submitted",
             record_id=order.id,
             occurred_at=order.created_at,
-            order=without_observation,
+            order=order_view(without_observation),
         )
     )
     if order.cancel_at is not None:
@@ -85,7 +86,7 @@ def order_facts(order: Order) -> list[Fact]:
                 type="cancel_requested",
                 record_id=order.id,
                 occurred_at=order.cancel_at,
-                order=without_observation,
+                order=order_view(without_observation),
             )
         )
     match order.status:
@@ -97,7 +98,7 @@ def order_facts(order: Order) -> list[Fact]:
                     record_id=order.id,
                     occurred_at=order.confirmed_at,
                     market_time=order.filled_at,
-                    order=order,
+                    order=order_view(order),
                 )
             )
         case "cancelled" | "expired" | "terminated":
@@ -108,7 +109,7 @@ def order_facts(order: Order) -> list[Fact]:
                         type="order_terminal",
                         record_id=order.id,
                         occurred_at=order.confirmed_at,
-                        order=without_observation,
+                        order=order_view(without_observation),
                     )
                 )
         case "accepted" | "cancel_pending":

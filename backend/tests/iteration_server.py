@@ -96,7 +96,8 @@ class Provider:
             FxRate("HKD", Decimal(".9"), Clock.current, Clock.current, "0.2.0受控汇率"),
         )
 
-    def history(self, symbol: str) -> tuple[Bar, ...]:
+    def history(self, symbol: str, *, retrieved_not_before: datetime | None = None) -> tuple[Bar, ...]:
+        _ = retrieved_not_before
         quote = self.quote(symbol)
         return tuple(
             Bar(
@@ -110,7 +111,7 @@ class Provider:
                 quote.currency,
                 quote.market_time,
                 Clock.current,
-                "0.2.0受控日线",
+                "tencent-public",
             )
             for day in range(30, 0, -1)
         )

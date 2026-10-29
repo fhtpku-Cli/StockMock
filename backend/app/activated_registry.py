@@ -2,6 +2,7 @@
 
 import logging
 from concurrent.futures import Future
+from datetime import datetime
 from threading import Lock
 from typing import final
 
@@ -102,9 +103,9 @@ class RuleProvider:
         """获取已核验规则的完整分钟线。"""
         return self.client.intraday(self.registry.resolve(symbol))
 
-    def history(self, symbol: str) -> tuple[Bar, ...]:
+    def history(self, symbol: str, *, retrieved_not_before: datetime | None = None) -> tuple[Bar, ...]:
         """获取已核验规则的未复权日线。"""
-        return self.client.history(self.registry.resolve(symbol))
+        return self.client.history(self.registry.resolve(symbol), retrieved_not_before=retrieved_not_before)
 
     def fx_rates(self) -> tuple[FxRate, ...]:
         """复用真实汇率入口。"""

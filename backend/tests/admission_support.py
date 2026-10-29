@@ -44,7 +44,9 @@ class RuleClient(MarketDataClient):
         return (self.quote(symbol),)
 
     @override
-    def history(self, symbol: str | InstrumentRule | ObservationInstrument) -> tuple[Bar, ...]:
+    def history(
+        self, symbol: str | InstrumentRule | ObservationInstrument, *, retrieved_not_before: datetime | None = None
+    ) -> tuple[Bar, ...]:
         quote = self.quote(symbol)
         return (
             Bar(
@@ -58,7 +60,7 @@ class RuleClient(MarketDataClient):
                 quote.currency,
                 quote.market_time,
                 quote.retrieved_at,
-                quote.source,
+                "tencent-public",
             ),
         )
 

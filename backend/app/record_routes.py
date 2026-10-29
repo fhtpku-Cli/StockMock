@@ -23,6 +23,7 @@ from app.models import (
     State,
 )
 from app.operations import reset
+from app.order_views import order_view
 from app.plan_exports import safe_cell
 from app.plan_reviews import attach_note
 from app.plans import load_plan
@@ -108,7 +109,7 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
             created_at=state.created_at,
             archived_at=state.archived_at,
             cash=state.cash,
-            orders=list(reversed(state.orders[-DETAIL_LIMIT:])),
+            orders=[order_view(o, engine.catalog) for o in reversed(state.orders[-DETAIL_LIMIT:])],
             journal=list(reversed(state.journal[-DETAIL_LIMIT:])),
             ledger=list(reversed(state.ledger[-DETAIL_LIMIT:])),
             truncated=any(len(items) > DETAIL_LIMIT for items in (state.orders, state.journal, state.ledger)),

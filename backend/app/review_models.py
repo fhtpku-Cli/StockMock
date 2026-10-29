@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from app.models import Journal, Model, Order
+from app.models import Journal, Model, OrderView
 from app.plan_models import Alert, Page, Plan, Review
 from app.review_core_models import Conclusion, Coverage, Market, SubjectType
 
@@ -15,7 +15,7 @@ class ReviewDetail(Model):
     read_only: bool
     review: Review
     coverage: Coverage
-    orders: list[Order]
+    orders: list[OrderView]
     conclusions: list[Conclusion]
 
 
@@ -67,7 +67,7 @@ class Fact(Model):
     record_id: str
     occurred_at: datetime | None
     market_time: datetime | None = None
-    order: Order | None = None
+    order: OrderView | None = None
     alert: Alert | None = None
     note: Journal | None = None
     conclusion: Conclusion | None = None

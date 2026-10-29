@@ -5,6 +5,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from app.models import DomainError, Journal, Order, State
+from app.order_views import order_view
 from app.plan_models import Plan, Review
 from app.plans import ensure_current
 from app.review_core_models import Coverage
@@ -48,7 +49,7 @@ def summarize(state: State, plan: Plan | None, orders: list[Order], now: datetim
     return Review(
         id=plan.id if plan else orders[0].id,
         plan=plan,
-        legacy_order=None if plan else orders[0],
+        legacy_order=None if plan else order_view(orders[0]),
         notes=notes,
         order_count=len(orders),
         filled_count=len(fills),

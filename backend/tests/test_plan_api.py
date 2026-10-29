@@ -13,7 +13,7 @@ from app.analysis_models import LedgerPage
 from app.api_models import ResetInput
 from app.engine import Engine
 from app.main import create_app
-from app.models import Entry, Journal, Order
+from app.models import Entry, Journal, OrderView
 from app.operations import reset
 from app.plan_alerts import alerts, due_alert
 from app.plan_models import AlertPage, Page, Plan, Review
@@ -50,13 +50,13 @@ def test_two_http_clients_share_plans_conflicts_snapshots_and_notes(
         assert preview.status_code == 200
         created = first.post(url + "/api/orders", json=order_input.model_dump(mode="json"))
         assert created.status_code == 200
-        order = Order.model_validate_json(created.content)
+        order = OrderView.model_validate_json(created.content)
         assert order.plan_snapshot is not None
         assert order.plan_snapshot.id == plan.id
         changed = second.put(url + f"/api/plans/{plan.id}", json=edit(plan).model_dump(mode="json"))
         assert changed.status_code == 200
         assert first.put(url + f"/api/plans/{plan.id}", json=edit(plan).model_dump(mode="json")).status_code == 409
-        persisted = Page[Order].model_validate_json(first.get(url + f"/api/plans/{plan.id}/orders").content)
+        persisted = Page[OrderView].model_validate_json(first.get(url + f"/api/plans/{plan.id}/orders").content)
         assert persisted.items[0].plan_snapshot == order.plan_snapshot
         note = second.post(
             url + "/api/journal", json={"plan_id": plan.id, "order_id": order.id, "text": "保留原判断，等待成交"}
@@ -172,7 +172,9 @@ def test_more_than_500_orders_remain_accessible_and_exported(engine: Engine) -> 
         for route in (f"/api/rounds/{plan.round_id}/orders", f"/api/plans/{plan.id}/orders"):
             ids: list[str] = []
             for offset in range(0, 507, 100):
-                result = Page[Order].model_validate_json(http.get(url + f"{route}?offset={offset}&limit=100").content)
+                result = Page[OrderView].model_validate_json(
+                    http.get(url + f"{route}?offset={offset}&limit=100").content
+                )
                 assert result.total == 507
                 ids.extend(order.id for order in result.items)
             assert len(set(ids)) == 507

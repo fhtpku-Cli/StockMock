@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from app.models import Currency, Entry, Journal, Model, Order
+from app.models import Currency, Entry, Journal, Model, OrderView
 
 
 class SymbolInput(Model):
@@ -87,7 +87,7 @@ class RoundDetail(RoundView):
     """轮次只读详情；页面最多返回各集合最近五百项。"""
 
     cash: dict[Currency, Decimal]
-    orders: list[Order] = Field(max_length=500)
+    orders: list[OrderView] = Field(max_length=500)
     journal: list[Journal] = Field(max_length=500)
     ledger: list[Entry] = Field(max_length=500)
     truncated: bool

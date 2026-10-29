@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from app.models import DomainError
+from app.order_views import order_view
 from app.plan_reviews import context_reviews
 from app.review_core_models import Conclusion, ConclusionInput, SubjectType
 from app.review_models import ConclusionResult, ReviewDetail
@@ -26,7 +27,7 @@ def detail(context: ReviewContext, subject: tuple[SubjectType, str], now: dateti
         read_only=context.state.archived_at is not None,
         review=review,
         coverage=review.coverage,
-        orders=[o for o in orders if o is not None],
+        orders=[order_view(o) for o in orders if o is not None],
         conclusions=[c for c in context.conclusions if (c.subject_type, c.subject_id) == subject],
     )
 

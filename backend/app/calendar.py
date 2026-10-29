@@ -72,3 +72,29 @@ def last_candidate_end(item: Instrument, active_at: datetime, cutoff: datetime) 
             return end
         end -= duration
     return None
+
+
+def prior_session_close(item: Instrument, active_at: datetime) -> datetime:
+    """参考日实际交易所收盘，不使用应用的提前截止。"""
+    cal = calendar(item.market)
+    session = cal.date_to_session(str(prior_session_day(item, active_at)), direction="previous")
+    return cal.session_close(session).to_pydatetime()
+
+
+def first_candidate_interval(
+    item: Instrument, active_at: datetime, cutoff: datetime
+) -> tuple[datetime, datetime] | None:
+    """复用连续时段和闭区间规则，向上取整五分钟起点。"""
+    cal = calendar(item.market)
+    _ = cal.date_to_session(str(active_at.astimezone(cal.tz).date()), direction="next")
+    _ = cal.date_to_session(str(cutoff.astimezone(cal.tz).date()), direction="previous")
+    start = active_at.replace(second=0, microsecond=0) - timedelta(minutes=active_at.minute % 5)
+    duration = timedelta(minutes=5)
+    if start < active_at:
+        start += duration
+    while start + duration <= cutoff:
+        end = start + duration
+        if is_open(item, start) and is_open(item, end - timedelta(microseconds=1)):
+            return start, end
+        start = end
+    return None
