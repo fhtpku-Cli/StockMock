@@ -73,7 +73,7 @@ def create_app(
             yield
             group.cancel_scope.cancel()
 
-    app = FastAPI(title="个人模拟投资", version="0.4.6", lifespan=lifespan)
+    app = FastAPI(title="个人模拟投资", version="0.4.7", lifespan=lifespan)
     app.state.engine = engine
     app.state.worker = worker
     app.state.plan_worker = plan_worker

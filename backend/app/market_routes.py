@@ -1,8 +1,9 @@
 """启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, Query, Response
 
 from app.api_models import (
     HistoryView,
@@ -14,10 +15,18 @@ from app.auth import Auth
 from app.discovery import Discovery, persist_observation
 from app.discovery_models import ObservationInstrument, SearchResult, merge_search, symbol_identity
 from app.engine import Engine
+from app.market_session import project
+from app.market_session_models import Market, MarketSessionView
 from app.models import (
     Instrument,
 )
 from app.order_rules import tick_size
+
+
+def market_session(market: Market, response: Response) -> MarketSessionView:
+    """独立查询市场支持时段，不访问证券、行情或账本。"""
+    response.headers["Cache-Control"] = "no-store"
+    return project(market, datetime.now(UTC))
 
 
 def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
@@ -28,6 +37,8 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return next(
             (item for item in engine.catalog if symbol_identity(item.symbol) == symbol_identity(symbol)), None
         ) or discovery.lookup(symbol, engine.store)
+
+    _ = app.get("/api/markets/{market}/session", dependencies=[Depends(auth.require)])(market_session)
 
     @app.get("/api/instruments/search", dependencies=[Depends(auth.require)])
     def search(q: Annotated[str, Query(max_length=80)] = "") -> SearchResult:
