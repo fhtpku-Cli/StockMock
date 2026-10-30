@@ -8,6 +8,8 @@ import {
 	sortPositions,
 } from "./analysis";
 import { money, number, price, time } from "./api";
+import { ChangeLine } from "./ChangeLine";
+import { changeDisplay } from "./marketView";
 import { SellabilityDetails } from "./SellabilityDetails";
 import { Empty, Panel } from "./ui";
 export function Positions({
@@ -22,6 +24,7 @@ export function Positions({
 	const [market, setMarket] = useState("");
 	const [currency, setCurrency] = useState("");
 	const [sort, setSort] = useState<PositionSort>("market_value_cny");
+	const now = new Date();
 	const rows = sortPositions(
 		positions.filter(
 			(row) =>
@@ -119,6 +122,7 @@ export function Positions({
 								<thead>
 									<tr>
 										<th>标的 / 行情时间</th>
+										<th className="change-column">今日涨跌（每股）</th>
 										<th>持仓 / 可卖</th>
 										<th>原币市值 / 成本</th>
 										<th>人民币市值 / 占比</th>
@@ -126,57 +130,68 @@ export function Positions({
 									</tr>
 								</thead>
 								<tbody>
-									{rows.map((row) => (
-										<tr key={row.symbol} data-position={row.symbol}>
-											<td>
-												<button
-													type="button"
-													className="symbol-link"
-													onClick={() => onSymbol(row.symbol)}
-												>
-													{row.name}
+									{rows.map((row) => {
+										const change = changeDisplay(row, row.market, now);
+										return (
+											<tr key={row.symbol} data-position={row.symbol}>
+												<td>
+													<button
+														type="button"
+														className="symbol-link"
+														onClick={() => onSymbol(row.symbol)}
+													>
+														{row.name}
+														<small>
+															{row.symbol} · {marketName(row.market)}
+														</small>
+													</button>
+													<small>{time(row.price_time)}</small>
+													<span className="change-inline">
+														<ChangeLine value={change} compact />
+													</span>
+												</td>
+												<td className="change-column">
+													<ChangeLine value={change} compact />
+												</td>
+												<td>
+													{number(row.quantity)}
+													<small>可卖 {number(row.sellable)}</small>
+													<small>卖单占用 {number(row.reserved)}</small>
+													<SellabilityDetails
+														value={row.sellability}
+														reserved={row.reserved}
+													/>
+												</td>
+												<td>
+													{money(row.market_value, row.currency)}
 													<small>
-														{row.symbol} · {marketName(row.market)}
+														单位成本 {price(row.average_cost, row.currency)}
 													</small>
-												</button>
-												<small>{time(row.price_time)}</small>
-											</td>
-											<td>
-												{number(row.quantity)}
-												<small>可卖 {number(row.sellable)}</small>
-												<small>卖单占用 {number(row.reserved)}</small>
-												<SellabilityDetails
-													value={row.sellability}
-													reserved={row.reserved}
-												/>
-											</td>
-											<td>
-												{money(row.market_value, row.currency)}
-												<small>
-													单位成本 {price(row.average_cost, row.currency)}
-												</small>
-												<small>剩余成本 {money(row.cost, row.currency)}</small>
-											</td>
-											<td>
-												{money(row.market_value_cny)}
-												<small>占总资产 {percent(row.weight_percent)}</small>
-												{row.market_value_cny === null && (
-													<small>人民币估值缺失，请查看上方估值说明</small>
-												)}
-											</td>
-											<td>
-												{money(row.pnl, row.currency)}
-												<small>{percent(row.pnl_percent)}</small>
-												<small>
-													{row.market_value === null
-														? "原币估值缺失，请查看上方说明"
-														: row.market_value_cny === null
-															? "原币可估；人民币估值缺失"
-															: "参考估值；公司行动需核对"}
-												</small>
-											</td>
-										</tr>
-									))}
+													<small>
+														剩余成本 {money(row.cost, row.currency)}
+													</small>
+												</td>
+												<td>
+													{money(row.market_value_cny)}
+													<small>占总资产 {percent(row.weight_percent)}</small>
+													{row.market_value_cny === null && (
+														<small>人民币估值缺失，请查看上方估值说明</small>
+													)}
+												</td>
+												<td>
+													{money(row.pnl, row.currency)}
+													<small>{percent(row.pnl_percent)}</small>
+													<small>
+														{row.market_value === null
+															? "原币估值缺失，请查看上方说明"
+															: row.market_value_cny === null
+																? "原币可估；人民币估值缺失"
+																: "参考估值；公司行动需核对"}
+													</small>
+												</td>
+											</tr>
+										);
+									})}
 								</tbody>
 							</table>
 						</div>
@@ -202,7 +217,7 @@ export function Positions({
 							))}
 					</div>
 					<p className="footnote">
-						收益率以剩余持仓含买入费用成本计算，不计尚未发生的卖出费；不同币种的原币盈亏金额不相加。
+						收益率以剩余持仓含买入费用成本计算，不计尚未发生的卖出费；不同币种的原币盈亏金额不相加。今日涨跌为每股相对供应商昨收，不换算持仓金额。
 					</p>
 				</>
 			)}

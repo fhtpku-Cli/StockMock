@@ -12,6 +12,8 @@ import { canReorder } from "./ReorderTrade";
 import { type Order, orderSchema } from "./schema";
 import { Empty, ErrorNotice, Loading, Panel } from "./ui";
 import { useOnline } from "./useOnline";
+export const CANCEL_CONFIRM =
+	"撤单申请提交后不能撤回；委托生效后，系统要等撤单前的延迟数据确认，期间仍可能成交。";
 export function Orders({
 	onJournal,
 	onReorder,
@@ -122,7 +124,10 @@ export function Orders({
 												type="button"
 												className="button small"
 												disabled={!online || cancel.isPending}
-												onClick={() => cancel.mutate(o.id)}
+												onClick={() => {
+													if (window.confirm(CANCEL_CONFIRM))
+														cancel.mutate(o.id);
+												}}
 											>
 												{cancel.isPending ? "处理中…" : "申请撤单"}
 											</button>

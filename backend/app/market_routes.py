@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Query, Response
 
+from app.activated_registry import RuleProvider
 from app.api_models import (
     HistoryView,
     Ok,
@@ -17,10 +18,12 @@ from app.discovery_models import ObservationInstrument, SearchResult, merge_sear
 from app.engine import Engine
 from app.market_session import project
 from app.market_session_models import Market, MarketSessionView
+from app.marketdata_models import Bar, Quote
 from app.models import (
     Instrument,
 )
 from app.order_rules import tick_size
+from app.views import CLOSE_BUFFER, Change, bar_complete, quote_change
 
 
 def market_session(market: Market, response: Response) -> MarketSessionView:
@@ -29,7 +32,31 @@ def market_session(market: Market, response: Response) -> MarketSessionView:
     return project(market, datetime.now(UTC))
 
 
-def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
+def _reference(
+    item: Instrument | ObservationInstrument, engine: Engine, discovery: Discovery, display: RuleProvider | None
+) -> tuple[Quote, Change]:
+    """展示读取源存在时，价格与涨跌全部出自同一次报价响应；报价本身失败照旧抛出。"""
+    if isinstance(item, ObservationInstrument):
+        reference = discovery.quote_reference(item)
+    elif display is not None:
+        reference = display.quote_reference(item.symbol)
+    else:
+        return engine.provider.quote(item.symbol), Change()
+    return reference.quote, quote_change(item.market, reference)
+
+
+def _bars(
+    item: Instrument | ObservationInstrument, engine: Engine, discovery: Discovery, display: RuleProvider | None
+) -> tuple[tuple[Bar, ...], bool]:
+    """图表优先使用约一年日线；未接展示源时保持原 30 条且不标注定稿状态。"""
+    if isinstance(item, ObservationInstrument):
+        return discovery.chart_history(item), True
+    if display is not None:
+        return display.chart_history(item.symbol), True
+    return engine.provider.history(item.symbol), False
+
+
+def register(app: FastAPI, engine: Engine, auth: Auth, display: RuleProvider | None = None) -> None:
     """注册本模块的个人账户 HTTP 接口。"""
     discovery = Discovery()
 
@@ -52,7 +79,7 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
     def quote(symbol: str) -> QuoteView:
         """返回带来源与市场时间的估值快照。"""
         item = lookup(symbol)
-        data = discovery.quote(item) if isinstance(item, ObservationInstrument) else engine.provider.quote(item.symbol)
+        data, change = _reference(item, engine, discovery, display)
         return QuoteView(
             symbol=item.symbol,
             price=data.price,
@@ -63,15 +90,19 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
             source=data.source,
             status="reference",
             message="估值快照；成交使用独立完整分钟线" if item.tradable else item.restriction,
+            previous_close=change.previous_close,
+            change=change.change,
+            change_percent=change.change_percent,
+            change_day=change.change_day,
+            change_base_day=change.change_base_day,
+            change_status=change.change_status,
         )
 
     @app.get("/api/instruments/{symbol}/history", dependencies=[Depends(auth.require)])
     def history(symbol: str) -> list[HistoryView]:
-        """返回仅供绘图的未复权日线。"""
+        """返回仅供绘图的未复权日线；展示读取源存在时为约一年并标注取得时刻与是否定稿。"""
         item = lookup(symbol)
-        bars = (
-            discovery.history(item) if isinstance(item, ObservationInstrument) else engine.provider.history(item.symbol)
-        )
+        bars, labelled = _bars(item, engine, discovery, display)
         return [
             HistoryView(
                 time=b.day.isoformat(),
@@ -80,6 +111,10 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
                 low=b.low,
                 close=b.close,
                 volume=b.volume,
+                retrieved_at=b.retrieved_at if labelled else None,
+                complete=bar_complete(item.market, b.day, b.retrieved_at, CLOSE_BUFFER[item.market])
+                if labelled
+                else None,
             )
             for b in bars
         ]

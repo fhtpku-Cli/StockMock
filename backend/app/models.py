@@ -247,6 +247,11 @@ class SellabilityView(Model):
     next_unlock_quantity: int = Field(ge=0, strict=True)
 
 
+ChangeStatus = Literal[
+    "available", "pre_open", "no_previous_close", "no_price", "quote_changed", "market_disabled", "unknown"
+]
+
+
 class PositionView(Model):
     """持仓数量与明确标记的参考估值。"""
 
@@ -268,6 +273,12 @@ class PositionView(Model):
     market_value: Decimal | None
     pnl: Decimal | None
     valuation_status: str
+    previous_close: Decimal | None = None
+    change: Decimal | None = None
+    change_percent: Percentage | None = None
+    change_day: date | None = None
+    change_base_day: date | None = None
+    change_status: ChangeStatus | None = None
 
 
 class WorkerView(Model):

@@ -219,3 +219,42 @@ details .footnote {
 		flex-wrap: wrap;
 	}
 }
+.chart-range {
+	margin-block: 8px;
+}
+.price-chart .trade-mark.buy {
+	fill: var(--accent);
+}
+.price-chart .trade-mark.sell {
+	fill: var(--error);
+}
+.trade-list ul {
+	list-style: none;
+	padding: 0;
+	margin: 8px 0;
+	display: grid;
+	gap: 6px;
+	font-variant-numeric: tabular-nums;
+}
+.trade-list li small {
+	display: block;
+	color: var(--muted);
+}
+.trade-glyph {
+	margin-right: 6px;
+}
+.trade-glyph.buy {
+	color: var(--accent);
+}
+.trade-glyph.sell {
+	color: var(--error);
+}
+.reference-line {
+	font-size: 13px;
+	margin: 4px 0 12px;
+	overflow-wrap: anywhere;
+}
+.change-line {
+	display: block;
+	font-variant-numeric: tabular-nums;
+}

@@ -12,6 +12,7 @@ from app.discovery import Discovery
 from app.instrument_registry import catalog_rules, validate_rule
 from app.instrument_rules import InstrumentRule
 from app.marketdata import Bar, FxRate, MarketDataClient, MarketDataError, Quote
+from app.marketdata_reference import QuoteReference
 from app.models import DomainError, Instrument
 from app.storage import Store, read_rows
 
@@ -110,3 +111,11 @@ class RuleProvider:
     def fx_rates(self) -> tuple[FxRate, ...]:
         """复用真实汇率入口。"""
         return self.client.fx_rates()
+
+    def quote_reference(self, symbol: str) -> QuoteReference:
+        """获取已核验规则的展示报价与供应商昨收。"""
+        return self.client.quote_reference(self.registry.resolve(symbol))
+
+    def chart_history(self, symbol: str) -> tuple[Bar, ...]:
+        """获取已核验规则的图表专用长日线。"""
+        return self.client.chart_history(self.registry.resolve(symbol))

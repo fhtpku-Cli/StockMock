@@ -18,6 +18,7 @@ from app.marketdata_futu import FutuOpenD
 from app.marketdata_futu_parser import futu_port, parse_futu_intraday
 from app.marketdata_models import Bar, Currency, FxRate, MarketDataError, Quote
 from app.marketdata_parsers import instrument_config, parse_fx, parse_history, parse_intraday, parse_quote
+from app.marketdata_reference import QuoteReference, checked_chart_bars, parse_previous_close
 from app.marketdata_urls import tencent_history_url
 from app.marketdata_us import parse_us_intraday
 
@@ -169,3 +170,17 @@ class MarketDataClient:
         """取得有日期的 CNY/HKD/USD 日频参考汇率。"""
         raw, retrieved_at = self._load("https://api.frankfurter.dev/v2/rates?base=CNY&quotes=USD,HKD", 3600)
         return parse_fx(raw, retrieved_at)
+
+    def quote_reference(self, symbol: str | InstrumentRule | ObservationInstrument) -> QuoteReference:
+        """与 quote() 共用同一缓存项；现价与昨收出自同一次响应，仅供展示。"""
+        code, _, _, _ = instrument_config(symbol)
+        raw, retrieved_at = self._load(f"https://qt.gtimg.cn/q={code}", 60)
+        return QuoteReference(parse_quote(raw, symbol, retrieved_at), parse_previous_close(raw, code))
+
+    def chart_history(self, symbol: str | InstrumentRule | ObservationInstrument) -> tuple[Bar, ...]:
+        """图表专用约一年未复权日线；下单参考仍走 history() 的 30 条接口。"""
+        rule = observation_identity(symbol)
+        if rule.market == "US":
+            return checked_chart_bars(self.history(symbol))
+        raw, retrieved_at = self._load(tencent_history_url(rule, 252), 3600)
+        return checked_chart_bars(parse_history(raw, symbol, retrieved_at))

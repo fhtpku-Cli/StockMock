@@ -36,17 +36,23 @@ from app.trading_routes import register as register_trading_routes
 from app.worker import Worker
 
 
-def configured_engine() -> Engine:
-    """从本地环境配置建立真实行情与可人工暂停的标的清单。"""
+def configured_parts() -> tuple[Engine, RuleProvider]:
+    """建立引擎，并返回赋给 engine.provider 的同一展示读取实例。"""
     paused = frozenset(filter(None, os.getenv("PAPER_PAUSED_SYMBOLS", "").split(",")))
     client = MarketDataClient()
     engine = Engine(Store(Path(os.getenv("PAPER_DB", "data/paper.sqlite3"))), client)
     for symbol in paused:
         _ = instrument(symbol, engine.catalog)
     engine.paused = paused
-    engine.provider = RuleProvider(engine.registry, client)
+    provider = RuleProvider(engine.registry, client)
+    engine.provider = provider
     engine.plan_provider = RuleProvider(engine.registry, MarketDataClient())
-    return engine
+    return engine, provider
+
+
+def configured_engine() -> Engine:
+    """从本地环境配置建立真实行情与可人工暂停的标的清单。"""
+    return configured_parts()[0]
 
 
 def create_app(
@@ -54,9 +60,12 @@ def create_app(
     password: str | None = None,
     *,
     run_worker: bool = True,
+    display: RuleProvider | None = None,
 ) -> FastAPI:
-    """创建个人应用；测试通过构造依赖隔离外部行情。"""
-    engine = engine or configured_engine()
+    """创建个人应用；测试通过构造依赖隔离外部行情，展示读取源显式传入。"""
+    if engine is None:
+        engine, configured = configured_parts()
+        display = display if display is not None else configured
     auth = Auth(
         password if password is not None else os.getenv("PAPER_PASSWORD", ""),
         secure=os.getenv("PAPER_SECURE_COOKIE") == "1",
@@ -100,11 +109,11 @@ def create_app(
         )
 
     register_auth_routes(app, auth)
-    register_market_routes(app, engine, auth)
+    register_market_routes(app, engine, auth, display)
     register_admission_routes(app, engine, auth)
     register_trading_routes(app, engine, auth, worker)
     register_record_routes(app, engine, auth)
-    register_asset_routes(app, engine, auth, worker, plan_worker)
+    register_asset_routes(app, engine, auth, worker, plan_worker, display=display)
     register_personal_routes(app, engine, auth)
     register_plan_routes(app, engine, auth)
     register_review_routes(app, engine, auth)

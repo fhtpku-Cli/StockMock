@@ -1,15 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Alerts } from "./Alerts";
 import { api, errorMessage, money, price, time } from "./api";
+import { ChangeLine } from "./ChangeLine";
 import { MarketSession } from "./MarketSession";
+import { changeDisplay } from "./marketView";
 import { Plans } from "./Plans";
+import { PriceHistory } from "./PriceHistory";
 import type { Instrument } from "./schema";
 import { historySchema, portfolioSchema, quoteSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 import { useEnableInstrument } from "./useEnableInstrument";
 import { useOnline } from "./useOnline";
 import { useWatchlist } from "./useWatchlist";
-import { VolumeHistory } from "./VolumeHistory";
 export function Detail({
 	instrument,
 	onClose,
@@ -50,16 +52,9 @@ export function Detail({
 			),
 	});
 	const tickSize = quote.data?.tick_size ?? instrument.tick_size;
-	const prices = history.data?.map((p) => Number(p.close)) ?? [];
-	const low = Math.min(...prices);
-	const high = Math.max(...prices);
-	const range = high - low || 1;
-	const points = prices
-		.map(
-			(p, i) =>
-				`${20 + (i / Math.max(prices.length - 1, 1)) * 660},${160 - ((p - low) / range) * 130}`,
-		)
-		.join(" ");
+	const change = quote.data
+		? changeDisplay(quote.data, instrument.market, new Date())
+		: null;
 	return (
 		<Modal title={instrument.name} onClose={onClose} wide>
 			<div className="detail-meta">
@@ -87,6 +82,7 @@ export function Detail({
 							tickSize ?? undefined,
 						)}
 					</div>
+					{change && <ChangeLine value={change} />}
 					<p className="footnote">
 						报价时间 {time(quote.data.market_time)}（北京时间） ·{" "}
 						{quote.data.source}
@@ -109,35 +105,14 @@ export function Detail({
 					message="历史价格与成交量暂不可用。"
 					retry={() => void history.refetch()}
 				/>
-			) : prices.length < 2 ? (
-				<p className="chart-empty">历史样本不足，暂不绘制走势。</p>
 			) : (
-				<figure className="price-chart">
-					<svg
-						viewBox="0 0 700 190"
-						role="img"
-						aria-label={`${instrument.name}近 ${prices.length} 个样本收盘价，最低 ${low}，最高 ${high} ${instrument.currency}`}
-					>
-						<path d="M20 30H680 M20 95H680 M20 160H680" className="grid-line" />
-						<polyline
-							points={points}
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2.5"
-							vectorEffect="non-scaling-stroke"
-						/>
-					</svg>
-					<figcaption>
-						<span>{history.data?.[0]?.time.slice(0, 10)}</span>
-						<span>{history.data?.at(-1)?.time.slice(0, 10)}</span>
-					</figcaption>
-				</figure>
-			)}
-			{history.isSuccess && (
-				<VolumeHistory
+				<PriceHistory
 					key={instrument.symbol}
-					rows={history.data}
+					symbol={instrument.symbol}
+					name={instrument.name}
 					market={instrument.market}
+					currency={instrument.currency}
+					rows={history.data}
 				/>
 			)}
 			<dl className="summary-list">

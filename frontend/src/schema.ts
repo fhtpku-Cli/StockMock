@@ -1,5 +1,15 @@
 import { z } from "zod";
 export const decimal = z.string().regex(/^-?\d+(\.\d+)?$/);
+// 0.5.0 展示字段全部可选，旧后端缺少时页面显示“不可用”。
+export const changeStatusSchema = z.enum([
+	"available",
+	"pre_open",
+	"no_previous_close",
+	"no_price",
+	"quote_changed",
+	"market_disabled",
+	"unknown",
+]);
 export const instrumentSchema = z.object({
 	symbol: z.string(),
 	name: z.string(),
@@ -92,6 +102,12 @@ export const portfolioSchema = z.object({
 			market_value: decimal.nullable(),
 			pnl: decimal.nullable(),
 			valuation_status: z.string(),
+			previous_close: decimal.nullable().optional(),
+			change: decimal.nullable().optional(),
+			change_percent: decimal.nullable().optional(),
+			change_day: z.string().nullable().optional(),
+			change_base_day: z.string().nullable().optional(),
+			change_status: changeStatusSchema.nullable().optional(),
 		}),
 	),
 	worker: z.object({ last_run: z.string().nullable(), status: z.string() }),
@@ -108,7 +124,14 @@ export const quoteSchema = z.object({
 	tick_size: decimal.nullable().optional(),
 	status: z.string(),
 	message: z.string(),
+	previous_close: decimal.nullable().optional(),
+	change: decimal.nullable().optional(),
+	change_percent: decimal.nullable().optional(),
+	change_day: z.string().nullable().optional(),
+	change_base_day: z.string().nullable().optional(),
+	change_status: changeStatusSchema.nullable().optional(),
 });
+export type Quote = z.infer<typeof quoteSchema>;
 export const historySchema = z.array(
 	z.object({
 		time: z.string(),
@@ -117,8 +140,11 @@ export const historySchema = z.array(
 		low: decimal,
 		close: decimal,
 		volume: z.union([decimal, z.number()]),
+		retrieved_at: z.string().nullable().optional(),
+		complete: z.boolean().nullable().optional(),
 	}),
 );
+export type HistoryRow = z.infer<typeof historySchema>[number];
 export const candidateIntervalSchema = z.object({
 	status: z.enum(["available", "none", "unknown"]),
 	start: z.string().nullable(),

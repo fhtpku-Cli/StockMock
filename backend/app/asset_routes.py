@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI
 
+from app.activated_registry import RuleProvider
 from app.api_models import (
     ConvertInput,
 )
@@ -20,7 +21,15 @@ from app.views import portfolio
 from app.worker import Worker
 
 
-def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker, plan_worker: PlanWorker) -> None:
+def register(  # noqa: PLR0913 展示读取源必须显式传入，不从 engine.provider 隐式推断。
+    app: FastAPI,
+    engine: Engine,
+    auth: Auth,
+    worker: Worker,
+    plan_worker: PlanWorker,
+    *,
+    display: RuleProvider | None = None,
+) -> None:
     """注册本模块的个人账户 HTTP 接口。"""
 
     @app.get("/api/health", dependencies=[Depends(auth.require)])
@@ -29,7 +38,7 @@ def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker, plan_work
 
     @app.get("/api/portfolio", dependencies=[Depends(auth.require)])
     def account() -> Portfolio:
-        return portfolio(engine, datetime.now(UTC), worker.view)
+        return portfolio(engine, datetime.now(UTC), worker.view, display)
 
     @app.get("/api/fx", dependencies=[Depends(auth.require)])
     def fx() -> tuple[FxRate, ...]:

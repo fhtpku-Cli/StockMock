@@ -157,3 +157,20 @@
 		max-width: 100%;
 	}
 }
+.change-line.up {
+	color: var(--accent);
+}
+.change-line.down {
+	color: var(--error);
+}
+.change-inline {
+	display: none;
+}
+@media (max-width: 700px) {
+	.positions-table .change-column {
+		display: none;
+	}
+	.change-inline {
+		display: block;
+	}
+}

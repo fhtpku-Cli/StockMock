@@ -1,12 +1,12 @@
 """辅助 HTTP 边界模型。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
 from pydantic import Field
 
-from app.models import Currency, Entry, Journal, Model, OrderView
+from app.models import ChangeStatus, Currency, Entry, Journal, Model, OrderView, Percentage
 
 
 class SymbolInput(Model):
@@ -64,6 +64,12 @@ class QuoteView(Model):
     source: str
     status: str
     message: str
+    previous_close: Decimal | None = None
+    change: Decimal | None = None
+    change_percent: Percentage | None = None
+    change_day: date | None = None
+    change_base_day: date | None = None
+    change_status: ChangeStatus | None = None
 
 
 class HistoryView(Model):
@@ -75,6 +81,8 @@ class HistoryView(Model):
     low: Decimal
     close: Decimal
     volume: Decimal
+    retrieved_at: datetime | None = None
+    complete: bool | None = None
 
 
 class Ok(Model):
