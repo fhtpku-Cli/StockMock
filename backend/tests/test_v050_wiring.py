@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
-from app import asset_routes, views
+from app import asset_routes, marketdata, views
 from app.activated_registry import RuleProvider
 from app.admission_sources import AdmissionSources
 from app.api_models import HistoryView, QuoteView
@@ -94,6 +94,8 @@ def test_factory_path_wires_previous_close_everywhere(
     responses, _ = network
     monkeypatch.setattr(views, "CHANGE_DISABLED_MARKETS", frozenset[views.Market]())
     monkeypatch.setattr(asset_routes, "datetime", Clock)
+    # 行情缓存记录真实取得时刻；固定到受控交易日，避免次日把当日日线误判为已定稿。
+    monkeypatch.setattr(marketdata, "datetime", Clock)
     responses["q=sh600519"] = quote_raw("sh600519", "20261030150000", price="100", previous="98")
     responses["q=hk00700"] = quote_raw("hk00700", "2026/10/30 16:08:00", price="500", previous="490")
     responses["q=hk09618"] = quote_raw("hk09618", "2026/10/30 16:08:00", price="130", previous="125")
