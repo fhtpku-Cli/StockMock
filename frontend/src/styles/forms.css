@@ -166,6 +166,7 @@ details .footnote {
 .price-chart svg {
 	width: 100%;
 	display: block;
+	aspect-ratio: 700 / 190;
 }
 .price-chart .grid-line {
 	stroke: var(--line);
