@@ -33,6 +33,9 @@ export function Positions({
 		),
 		sort,
 	);
+	const showChangeColumn = rows.some(
+		(row) => row.change_status !== "market_disabled",
+	);
 	return (
 		<Panel
 			title="我的持仓"
@@ -122,7 +125,9 @@ export function Positions({
 								<thead>
 									<tr>
 										<th>标的 / 行情时间</th>
-										<th className="change-column">今日涨跌（每股）</th>
+										{showChangeColumn && (
+											<th className="change-column">今日涨跌（每股）</th>
+										)}
 										<th>持仓 / 可卖</th>
 										<th>原币市值 / 成本</th>
 										<th>人民币市值 / 占比</th>
@@ -146,13 +151,19 @@ export function Positions({
 														</small>
 													</button>
 													<small>{time(row.price_time)}</small>
-													<span className="change-inline">
-														<ChangeLine value={change} compact />
-													</span>
+													{row.change_status !== "market_disabled" && (
+														<span className="change-inline">
+															<ChangeLine value={change} compact />
+														</span>
+													)}
 												</td>
-												<td className="change-column">
-													<ChangeLine value={change} compact />
-												</td>
+												{showChangeColumn && (
+													<td className="change-column">
+														{row.change_status !== "market_disabled" && (
+															<ChangeLine value={change} compact />
+														)}
+													</td>
+												)}
 												<td>
 													{number(row.quantity)}
 													<small>可卖 {number(row.sellable)}</small>

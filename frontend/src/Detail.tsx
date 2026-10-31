@@ -52,9 +52,10 @@ export function Detail({
 			),
 	});
 	const tickSize = quote.data?.tick_size ?? instrument.tick_size;
-	const change = quote.data
-		? changeDisplay(quote.data, instrument.market, new Date())
-		: null;
+	const change =
+		quote.data && quote.data.change_status !== "market_disabled"
+			? changeDisplay(quote.data, instrument.market, new Date())
+			: null;
 	return (
 		<Modal title={instrument.name} onClose={onClose} wide>
 			<div className="detail-meta">
