@@ -130,7 +130,10 @@ def test_factory_path_wires_previous_close_everywhere(
     assert (position.previous_close, position.change_status) == (Decimal(98), "available")
 
 
-def test_change_is_disabled_until_verification(network: tuple[Responses, list[str]]) -> None:
+def test_change_is_disabled_until_verification(
+    network: tuple[Responses, list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(views, "CHANGE_DISABLED_MARKETS", frozenset({"HK"}))
     responses, _ = network
     responses["q=hk00700"] = quote_raw("hk00700", "2026/10/30 16:08:00", price="500", previous="490")
     with TestClient(create_app(password=PASSWORD, run_worker=False)) as client:

@@ -229,5 +229,5 @@ def test_stale_position_does_not_request_reference(tmp_path: Path) -> None:
     assert (row.market_price, row.change_status, client.calls) == (None, "no_price", [])
 
 
-def test_all_markets_disabled_until_previous_close_verification() -> None:
-    assert {"CN", "HK", "US"} == FORMAL_DISABLED
+def test_all_markets_enabled_after_previous_close_verification() -> None:
+    assert frozenset() == FORMAL_DISABLED

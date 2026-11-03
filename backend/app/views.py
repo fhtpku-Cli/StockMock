@@ -29,9 +29,9 @@ Market = Literal["CN", "HK", "US"]
 
 # 当日日线在收盘后多久视为定稿；None 是实测前的过渡值，当日日线一律不算完整。
 CLOSE_BUFFER: Final[dict[Market, timedelta | None]] = {"CN": None, "HK": None, "US": None}
-# 供应商昨收分时段核对未全部通过前整体不显示涨跌。2026-10-30 首轮采样：美股、港股出现不符，
-# A 股仅完成一个时段；开放哪个市场由 PM 根据 outputs/行情接入实测.md 决定后再改此常量。
-CHANGE_DISABLED_MARKETS: Final[frozenset[Market]] = frozenset({"CN", "HK", "US"})
+# 2026-11-03 三市场已按计划第 14 节通过分时段核对并开放涨跌，依据见 outputs/行情接入实测.md。
+# 保留按市场关闭涨跌的机制；港股开放仅涉及展示，不改变交易权限。
+CHANGE_DISABLED_MARKETS: Final[frozenset[Market]] = frozenset()
 _CHANGE_ERRORS: Final = (MarketDataError, ValueError, IndexError, DomainError)
 
 
