@@ -1,9 +1,13 @@
+import { acceptCancelDialog } from "./cancel-dialog.mjs";
 import { launchBrowser, baseUrl } from "./browser.mjs";
 import { chromium, expect, devices } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { readFile, writeFile } from "node:fs/promises";
-const output = new URL("../../.omo/evidence/frontend/", import.meta.url)
-	.pathname;
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+const output = new URL(
+	process.env.FRONTEND_TEST_OUTPUT ?? "../../.omo/evidence/frontend/",
+	import.meta.url,
+).pathname;
+await mkdir(output, { recursive: true });
 const browser = await launchBrowser();
 const context = await browser.newContext({
 	viewport: { width: 1440, height: 1000 },
@@ -24,16 +28,17 @@ const capture = async (name) => {
 	observations.push({ name, text: await page.locator("body").innerText() });
 };
 try {
-	await page.goto("http://127.0.0.1:8001");
+	await page.goto(process.env.FRONTEND_TEST_URL ?? "http://127.0.0.1:8001");
 	await page
 		.getByLabel("访问密码")
 		.fill(
-			(
-				await readFile(
-					new URL("../../backend/.local-password", import.meta.url),
-					"utf8",
-				)
-			).trim(),
+			process.env.FRONTEND_TEST_PASSWORD ??
+				(
+					await readFile(
+						new URL("../../backend/.local-password", import.meta.url),
+						"utf8",
+					)
+				).trim(),
 		);
 	await page.getByRole("button", { name: "进入我的空间" }).click();
 	await page.getByRole("heading", { name: "资产概览" }).waitFor();
@@ -66,14 +71,15 @@ try {
 	await expect(page.locator(".metric").nth(1)).toContainText("10,005.00");
 	await capture("controlled-reserved");
 	await page.getByRole("button", { name: "委托", exact: true }).click();
+	acceptCancelDialog(page);
 	await page.getByRole("button", { name: "申请撤单" }).click();
 	await expect(page.locator(".order-row")).toContainText(/已撤单|撤单确认中/);
 	await capture("controlled-cancel");
 	await page.getByRole("button", { name: "写复盘" }).click();
-	await expect(page.getByText(/关联委托/)).toBeVisible();
+	await expect(page.getByText(/^关联委托 /)).toBeVisible();
 	await page.getByLabel("复盘内容").fill("受控测试委托复盘，保留决策记录。");
 	await page.getByRole("button", { name: "保存记录", exact: true }).click();
-	await page.getByText("已保存到本轮复盘。", { exact: true }).waitFor();
+	await page.getByText("普通笔记已保存。", { exact: true }).waitFor();
 	await capture("controlled-linked-journal");
 	await page.getByRole("button", { name: /个人账户/ }).click();
 	await page.getByLabel("输入“重新开始”以确认").fill("重新开始");

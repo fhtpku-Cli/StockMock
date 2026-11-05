@@ -1,3 +1,4 @@
+import { acceptCancelDialog } from "./cancel-dialog.mjs";
 import { readFile, writeFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect } from "@playwright/test";
@@ -164,6 +165,7 @@ try {
 		"使用已有外币现金",
 	);
 	await shot("funded-buy-no-fx-reference");
+	acceptCancelDialog(page);
 	await page
 		.locator(".order-row")
 		.first()

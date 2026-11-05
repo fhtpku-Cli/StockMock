@@ -1,8 +1,12 @@
+import { acceptCancelDialog } from "./cancel-dialog.mjs";
 import { expect } from "@playwright/test";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { launchBrowser, baseUrl } from "./browser.mjs";
-const output = new URL("../../.omo/evidence/frontend/", import.meta.url)
-	.pathname;
+const output = new URL(
+	process.env.FRONTEND_TEST_OUTPUT ?? "../../.omo/evidence/frontend/",
+	import.meta.url,
+).pathname;
+await mkdir(output, { recursive: true });
 const browser = await launchBrowser();
 const context = await browser.newContext({
 	viewport: { width: 1440, height: 1000 },
@@ -37,18 +41,19 @@ try {
 	await page
 		.getByLabel("访问密码")
 		.fill(
-			(
-				await readFile(
-					new URL("../../backend/.local-password", import.meta.url),
-					"utf8",
-				)
-			).trim(),
+			process.env.FRONTEND_TEST_PASSWORD ??
+				(
+					await readFile(
+						new URL("../../backend/.local-password", import.meta.url),
+						"utf8",
+					)
+				).trim(),
 		);
 	await page.getByRole("button", { name: "进入我的空间" }).click();
 	await page.getByRole("heading", { name: "资产概览" }).waitFor();
 	await page.getByRole("button", { name: "自选", exact: true }).click();
 	const row = page.locator(".security-row").filter({ hasText: "平安银行" });
-	await expect(row).toContainText("可交易");
+	await expect(row).toContainText("可模拟交易");
 	await row.locator(".security-main").click();
 	await expect(
 		page.getByRole("button", { name: "模拟买入", exact: true }),
@@ -73,6 +78,7 @@ try {
 		.first();
 	await expect(order).toContainText("等待成交");
 	await capture("live-cn-accepted");
+	acceptCancelDialog(page);
 	await order.getByRole("button", { name: "申请撤单" }).click();
 	await expect(order).toContainText("已撤单");
 	await capture("live-cn-cancelled");

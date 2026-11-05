@@ -1,17 +1,23 @@
+import { acceptCancelDialog } from "./cancel-dialog.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { devices, expect } from "@playwright/test";
 import { launchBrowser } from "./browser.mjs";
 
-const output = new URL("../../.omo/evidence/mobile-ui/", import.meta.url)
-	.pathname;
+const output = new URL(
+	process.env.FRONTEND_TEST_OUTPUT ?? "../../.omo/evidence/mobile-ui/",
+	import.meta.url,
+).pathname;
 await mkdir(output, { recursive: true });
-const password = (
-	await readFile(
-		new URL("../../backend/.local-password", import.meta.url),
-		"utf8",
-	)
-).trim();
+const url = process.env.FRONTEND_TEST_URL ?? "http://127.0.0.1:8001";
+const password =
+	process.env.FRONTEND_TEST_PASSWORD ??
+	(
+		await readFile(
+			new URL("../../backend/.local-password", import.meta.url),
+			"utf8",
+		)
+	).trim();
 const browser = await launchBrowser();
 const context = await browser.newContext({
 	...devices["iPhone 13"],
@@ -31,7 +37,7 @@ const shot = async (name) => {
 	observations.push({ name, text: await page.locator("body").innerText() });
 };
 const login = async (target) => {
-	await target.goto("http://127.0.0.1:8001");
+	await target.goto(url);
 	await target.getByLabel("访问密码").fill(password);
 	await target.getByRole("button", { name: "进入我的空间" }).click();
 	await expect(target.getByRole("heading", { name: "资产概览" })).toBeVisible();
@@ -41,9 +47,7 @@ try {
 	expect(
 		await page.locator('meta[name="viewport"]').getAttribute("content"),
 	).toContain("viewport-fit=cover");
-	const icon = await context.request.get(
-		"http://127.0.0.1:8001/apple-touch-icon.png",
-	);
+	const icon = await context.request.get(url + "/apple-touch-icon.png");
 	expect(icon.status()).toBe(200);
 	expect((await icon.body()).readUInt32BE(16)).toBe(180);
 	await shot("assets-phone");
@@ -136,7 +140,7 @@ try {
 	expect(submissions).toHaveLength(2);
 	expect(submissions[0]).toEqual(submissions[1]);
 	const ledgerOrders = await (
-		await context.request.get("http://127.0.0.1:8001/api/orders")
+		await context.request.get(url + "/api/orders")
 	).json();
 	expect(ledgerOrders).toHaveLength(1);
 	await shot("single-order-after-retry");
@@ -151,6 +155,7 @@ try {
 		path: output + "same-account-desktop.png",
 		animations: "disabled",
 	});
+	acceptCancelDialog(page);
 	await page.getByRole("button", { name: "申请撤单" }).tap();
 	await expect(page.locator(".order-row")).toContainText("已撤单");
 	await second.getByRole("button", { name: "刷新数据", exact: true }).click();
@@ -187,13 +192,10 @@ try {
 	await expect(
 		page.getByRole("button", { name: "确认提交委托" }),
 	).toBeVisible();
-	const concurrent = await context.request.post(
-		"http://127.0.0.1:8001/api/orders",
-		{
-			headers: { Origin: "http://127.0.0.1:8001" },
-			data: { ...submissions[0], request_id: crypto.randomUUID() },
-		},
-	);
+	const concurrent = await context.request.post(url + "/api/orders", {
+		headers: { Origin: new URL(url).origin },
+		data: { ...submissions[0], request_id: crypto.randomUUID() },
+	});
 	expect(concurrent.status()).toBe(200);
 	const rejected = page.waitForResponse(
 		(r) => r.url().endsWith("/api/orders") && r.request().method() === "POST",
