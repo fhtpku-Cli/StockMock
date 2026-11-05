@@ -153,14 +153,22 @@ export function Positions({
 													<small>{time(row.price_time)}</small>
 													{row.change_status !== "market_disabled" && (
 														<span className="change-inline">
-															<ChangeLine value={change} compact />
+															<ChangeLine
+																value={change}
+																currency={row.currency}
+																compact
+															/>
 														</span>
 													)}
 												</td>
 												{showChangeColumn && (
 													<td className="change-column">
 														{row.change_status !== "market_disabled" && (
-															<ChangeLine value={change} compact />
+															<ChangeLine
+																value={change}
+																currency={row.currency}
+																compact
+															/>
 														)}
 													</td>
 												)}

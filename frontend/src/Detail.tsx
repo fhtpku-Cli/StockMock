@@ -83,7 +83,9 @@ export function Detail({
 							tickSize ?? undefined,
 						)}
 					</div>
-					{change && <ChangeLine value={change} />}
+					{change && (
+						<ChangeLine value={change} currency={quote.data.currency} />
+					)}
 					<p className="footnote">
 						报价时间 {time(quote.data.market_time)}（北京时间） ·{" "}
 						{quote.data.source}

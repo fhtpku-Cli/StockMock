@@ -98,7 +98,7 @@ export function PriceHistory({
 						<span>
 							{last?.time.slice(0, 10)}
 							{intraday &&
-								`（盘中，取得于北京时间 ${last?.retrieved_at ? time(last.retrieved_at).slice(-5) : "未知时刻"}）`}
+								`（${last?.retrieved_at ? `取得于北京时间 ${time(last.retrieved_at).slice(-5)}` : "取得时刻未知"}，是否已收盘未确认）`}
 						</span>
 					</figcaption>
 				</figure>
@@ -106,7 +106,7 @@ export function PriceHistory({
 			<p className="footnote">
 				未复权价格：分红、送转的除权日可能出现跳空，不代表当天真实涨跌。
 				{intraday &&
-					"最后一根为取得时的盘中价格（日线缓存最长 1 小时，可能比页头价格旧）。"}
+					"最后一根为取得时的价格，是否已收盘未确认（日线缓存最长 1 小时，可能比页头价格旧）。"}
 				{last?.complete == null && "最后一根是否已收盘：未知。"}
 			</p>
 			<ReferenceLine
@@ -132,7 +132,7 @@ export function PriceHistory({
 						))}
 					</ul>
 					<p className="footnote">
-						标记为实际成交价；日线为收盘价（最后一根盘中线为取得时的价格），两者不必重合。
+						标记为实际成交价；日线为收盘价（最后一根为取得时的价格），两者不必重合。
 					</p>
 				</section>
 			)}

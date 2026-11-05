@@ -158,10 +158,10 @@
 	}
 }
 .change-line.up {
-	color: var(--accent);
+	color: var(--error);
 }
 .change-line.down {
-	color: var(--error);
+	color: var(--accent);
 }
 .change-inline {
 	display: none;

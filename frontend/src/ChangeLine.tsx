@@ -1,10 +1,13 @@
+import { price } from "./api";
 import type { ChangeDisplay } from "./marketView";
 
 export function ChangeLine({
 	value,
+	currency,
 	compact = false,
 }: {
 	readonly value: ChangeDisplay;
+	readonly currency: string;
 	readonly compact?: boolean;
 }) {
 	if (value.kind === "message")
@@ -16,7 +19,7 @@ export function ChangeLine({
 	return (
 		<small className={`change-line ${value.direction}`} data-change="value">
 			{value.label} {value.direction === "up" ? "+" : ""}
-			{value.change} / {value.percent}
+			{price(value.change, currency)} / {value.percent}
 			{!compact && <span className="muted"> · {value.base}</span>}
 		</small>
 	);

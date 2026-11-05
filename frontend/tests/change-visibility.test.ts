@@ -129,3 +129,84 @@ test.each([
 		client.clear();
 	}
 });
+
+const changeCases = [
+	["CN", "CNY", "600519.SS", "0.570", "+¥0.570", "+0.57%", "up"],
+	["CN", "CNY", "600519.SS", "-0.570", "-¥0.570", "-0.57%", "down"],
+	["CN", "CNY", "600519.SS", "0.000", "¥0.000", "0.00%", "flat"],
+	["HK", "HKD", "0700.HK", "0.570", "+HK$0.570", "+0.57%", "up"],
+	["HK", "HKD", "0700.HK", "-0.570", "-HK$0.570", "-0.57%", "down"],
+	["HK", "HKD", "0700.HK", "0.000", "HK$0.000", "0.00%", "flat"],
+	["US", "USD", "AAPL", "0.570", "+US$0.570", "+0.57%", "up"],
+	["US", "USD", "AAPL", "-0.570", "-US$0.570", "-0.57%", "down"],
+	["US", "USD", "AAPL", "0.000", "US$0.000", "0.00%", "flat"],
+] as const;
+
+test.each(changeCases)(
+	"持仓 %s %s %s 涨跌 %s 使用币种格式且保留方向符号",
+	(market, currency, symbol, change, amount, percent, direction) => {
+		const value = {
+			...position(symbol, "available"),
+			market,
+			currency,
+			change,
+			change_percent: change,
+		};
+		const html = renderPositions([value]);
+		const lines = [
+			...html.matchAll(
+				/<small class="change-line ([^"]+)" data-change="value">(.*?)<\/small>/g,
+			),
+		];
+		expect(lines).toHaveLength(2);
+		for (const line of lines) {
+			expect(line[1]).toBe(direction);
+			expect(line[2]).toEndWith(` ${amount} / ${percent}`);
+		}
+	},
+);
+
+test.each(changeCases)(
+	"详情 %s %s %s 涨跌 %s 使用币种格式且保留方向符号",
+	(market, currency, symbol, change, amount, percent, direction) => {
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		client.setQueryData(["quote", symbol], {
+			symbol,
+			price: "100.570",
+			currency,
+			market_time: "2026-10-30T20:00:00Z",
+			retrieved_at: "2026-10-30T20:00:00Z",
+			source: "受控数据",
+			status: "reference",
+			message: "",
+			change_status: "available",
+			change,
+			change_percent: change,
+			change_day: "2026-10-30",
+			change_base_day: "2026-10-29",
+		} satisfies Quote);
+		try {
+			const html = renderToStaticMarkup(
+				createElement(
+					QueryClientProvider,
+					{ client },
+					createElement(Detail, {
+						instrument: { ...instrument, symbol, market, currency },
+						onClose: () => {},
+						onTrade: () => {},
+						onEnabled: () => {},
+					}),
+				),
+			);
+			const line = html.match(
+				/<small class="change-line ([^"]+)" data-change="value">(.*?)<span/,
+			);
+			expect(line?.[1]).toBe(direction);
+			expect(line?.[2]).toEndWith(` ${amount} / ${percent}`);
+		} finally {
+			client.clear();
+		}
+	},
+);

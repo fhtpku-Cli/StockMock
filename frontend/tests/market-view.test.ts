@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PriceHistory } from "../src/PriceHistory";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChangeLine } from "../src/ChangeLine";
@@ -67,8 +69,10 @@ describe("涨跌显示", () => {
 			base: "相对供应商昨收（10月29日）",
 		});
 		expect(
-			renderToStaticMarkup(createElement(ChangeLine, { value: result })),
-		).toContain("今日涨跌 +1.5 / +1.50%");
+			renderToStaticMarkup(
+				createElement(ChangeLine, { value: result, currency: "CNY" }),
+			),
+		).toContain("今日涨跌 +¥1.50 / +1.50%");
 	});
 	test("美股北京时间次日凌晨仍是美东今天，美东新一天显示日期", () => {
 		const morning = new Date("2026-10-31T03:00:00+08:00");
@@ -307,4 +311,54 @@ describe("新旧搭配", () => {
 		expect(CANCEL_CONFIRM).toContain("不能撤回");
 		expect(CANCEL_CONFIRM).toContain("期间仍可能成交");
 	});
+});
+
+describe("日线收盘状态文案", () => {
+	test.each([
+		[
+			false,
+			"2026-10-30T12:00:00Z",
+			"（取得于北京时间 20:00，是否已收盘未确认）",
+		],
+		[false, null, "（取得时刻未知，是否已收盘未确认）"],
+		[null, null, "最后一根是否已收盘：未知。"],
+		[undefined, null, "最后一根是否已收盘：未知。"],
+	] as const)(
+		"complete=%p，取得时刻=%p 使用中性或未知文案",
+		(complete, retrieved_at, expected) => {
+			const client = new QueryClient();
+			client.setQueryData(
+				["orders"],
+				[order("caption-trade", "buy", "2026-10-29T19:00:00Z", "100")],
+			);
+			const rows = [
+				row("2026-10-29", "100"),
+				{ ...row("2026-10-30", "101"), complete, retrieved_at },
+			];
+			try {
+				const html = renderToStaticMarkup(
+					createElement(
+						QueryClientProvider,
+						{ client },
+						createElement(PriceHistory, {
+							symbol: "AAPL",
+							name: "受控日线",
+							market: "US",
+							currency: "USD",
+							rows,
+						}),
+					),
+				);
+				expect(html).toContain(expected);
+				expect(html).not.toContain("盘中");
+				if (complete === false)
+					expect(html).toContain(
+						"最后一根为取得时的价格，是否已收盘未确认（日线缓存最长 1 小时，可能比页头价格旧）。",
+					);
+				expect(html).toContain("最后一根为取得时的价格");
+			} finally {
+				client.clear();
+			}
+		},
+	);
 });
