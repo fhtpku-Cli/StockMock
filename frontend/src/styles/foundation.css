@@ -123,6 +123,12 @@ svg {
 .negative {
 	color: var(--error);
 }
+.gain {
+	color: var(--error);
+}
+.loss {
+	color: var(--accent);
+}
 .stack {
 	display: flex;
 	flex-direction: column;

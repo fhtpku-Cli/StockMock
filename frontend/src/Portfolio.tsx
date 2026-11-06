@@ -56,7 +56,11 @@ export function PortfolioView({
 						本轮收益{" "}
 						<strong
 							className={
-								p.pnl_cny && Number(p.pnl_cny) < 0 ? "negative" : "positive"
+								Number(p.pnl_cny) > 0
+									? "gain"
+									: Number(p.pnl_cny) < 0
+										? "loss"
+										: undefined
 							}
 						>
 							{p.pnl_cny && Number(p.pnl_cny) > 0 ? "+" : ""}
