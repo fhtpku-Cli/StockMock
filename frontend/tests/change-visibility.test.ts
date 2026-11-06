@@ -131,15 +131,15 @@ test.each([
 });
 
 const changeCases = [
-	["CN", "CNY", "600519.SS", "0.570", "+¥0.570", "+0.57%", "up"],
-	["CN", "CNY", "600519.SS", "-0.570", "-¥0.570", "-0.57%", "down"],
-	["CN", "CNY", "600519.SS", "0.000", "¥0.000", "0.00%", "flat"],
-	["HK", "HKD", "0700.HK", "0.570", "+HK$0.570", "+0.57%", "up"],
-	["HK", "HKD", "0700.HK", "-0.570", "-HK$0.570", "-0.57%", "down"],
-	["HK", "HKD", "0700.HK", "0.000", "HK$0.000", "0.00%", "flat"],
-	["US", "USD", "AAPL", "0.570", "+US$0.570", "+0.57%", "up"],
-	["US", "USD", "AAPL", "-0.570", "-US$0.570", "-0.57%", "down"],
-	["US", "USD", "AAPL", "0.000", "US$0.000", "0.00%", "flat"],
+	["CN", "CNY", "600519.SS", "0.570", "+¥0.570", "+0.57%", "up", "+¥0.57"],
+	["CN", "CNY", "600519.SS", "-0.570", "-¥0.570", "-0.57%", "down", "-¥0.57"],
+	["CN", "CNY", "600519.SS", "0.000", "¥0.000", "0.00%", "flat", "¥0.00"],
+	["HK", "HKD", "0700.HK", "0.570", "+HK$0.570", "+0.57%", "up", "+HK$0.57"],
+	["HK", "HKD", "0700.HK", "-0.570", "-HK$0.570", "-0.57%", "down", "-HK$0.57"],
+	["HK", "HKD", "0700.HK", "0.000", "HK$0.000", "0.00%", "flat", "HK$0.00"],
+	["US", "USD", "AAPL", "0.570", "+US$0.570", "+0.57%", "up", "+US$0.57"],
+	["US", "USD", "AAPL", "-0.570", "-US$0.570", "-0.57%", "down", "-US$0.57"],
+	["US", "USD", "AAPL", "0.000", "US$0.000", "0.00%", "flat", "US$0.00"],
 ] as const;
 
 test.each(changeCases)(
@@ -168,7 +168,7 @@ test.each(changeCases)(
 
 test.each(changeCases)(
 	"详情 %s %s %s 涨跌 %s 使用币种格式且保留方向符号",
-	(market, currency, symbol, change, amount, percent, direction) => {
+	(market, currency, symbol, change, _holdingAmount, percent, direction, amount) => {
 		const client = new QueryClient({
 			defaultOptions: { queries: { retry: false } },
 		});
@@ -203,8 +203,65 @@ test.each(changeCases)(
 			const line = html.match(
 				/<small class="change-line ([^"]+)" data-change="value">(.*?)<span/,
 			);
+			expect(html).toContain(
+				`<div class="quote-price">${currency === "CNY" ? "¥" : currency === "HKD" ? "HK$" : "US$"}100.57</div>`,
+			);
 			expect(line?.[1]).toBe(direction);
 			expect(line?.[2]).toEndWith(` ${amount} / ${percent}`);
+		} finally {
+			client.clear();
+		}
+	},
+);
+
+test.each([
+	["CN", "CNY", "600519.SS", "0.001", "0.01", "¥100.570", "+¥0.570"],
+	["HK", "HKD", "0700.HK", "0.01", "0.001", "HK$100.57", "+HK$0.57"],
+	["US", "USD", "AAPL", "0.01", "0.001", "US$100.57", "+US$0.57"],
+] as const)(
+	"详情 %s 报价 tick 优先于目录 tick，页头和涨跌额精度一致",
+	(market, currency, symbol, quoteTick, instrumentTick, heading, amount) => {
+		const client = new QueryClient();
+		client.setQueryData(["quote", symbol], {
+			symbol,
+			currency,
+			price: "100.570",
+			tick_size: quoteTick,
+			market_time: "2026-10-30T20:00:00Z",
+			retrieved_at: "2026-10-30T20:00:00Z",
+			source: "受控数据",
+			status: "reference",
+			message: "",
+			change_status: "available",
+			change: "0.570",
+			change_percent: "0.57",
+			change_day: "2026-10-30",
+			change_base_day: "2026-10-29",
+		} satisfies Quote);
+		try {
+			const html = renderToStaticMarkup(
+				createElement(
+					QueryClientProvider,
+					{ client },
+					createElement(Detail, {
+						instrument: {
+							...instrument,
+							symbol,
+							market,
+							currency,
+							tick_size: instrumentTick,
+						},
+						onClose: () => {},
+						onTrade: () => {},
+						onEnabled: () => {},
+					}),
+				),
+			);
+			expect(html).toContain(`<div class="quote-price">${heading}</div>`);
+			const line = html.match(
+				/<small class="change-line up" data-change="value">(.*?)<span/,
+			);
+			expect(line?.[1]).toEndWith(` ${amount} / +0.57%`);
 		} finally {
 			client.clear();
 		}
