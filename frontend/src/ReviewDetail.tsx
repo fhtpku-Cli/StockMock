@@ -3,11 +3,10 @@ import { useState } from "react";
 import type { z } from "zod";
 import { api, errorMessage, money, time } from "./api";
 import { ConclusionForm } from "./ConclusionForm";
-import { OrderRecord } from "./OrderRecord";
-import { PlanComparison } from "./PlanComparison";
-import { PlanSummary } from "./PlanSummary";
-import { type alertSchema, planSchema } from "./planSchema";
+import type { alertSchema } from "./planSchema";
+import { ReviewCurrentPlan } from "./ReviewCurrentPlan";
 import { ReviewFacts } from "./ReviewFacts";
+import { ReviewOrders } from "./ReviewOrders";
 import {
 	type ReviewDetailData,
 	type ReviewTarget,
@@ -90,7 +89,15 @@ export function ReviewDetail({
 					retry={() => void query.refetch()}
 				/>
 			) : (
-				<DetailContent detail={query.data} target={target} />
+				<DetailContent
+					key={JSON.stringify([
+						target.roundId,
+						target.subjectType,
+						target.subjectId,
+					])}
+					detail={query.data}
+					target={target}
+				/>
 			)}
 		</div>
 	);
@@ -108,9 +115,6 @@ function DetailContent({
 	const client = useQueryClient();
 	const [note, setNote] = useState("");
 	const [showConclusionForm] = useState(!detail.read_only);
-	const [ending, setEnding] = useState(false);
-	const [orderId, setOrderId] = useState(detail.orders[0]?.id ?? "");
-	const order = detail.orders.find((item) => item.id === orderId);
 	const saveNote = useMutation({
 		mutationFn: () =>
 			api("journal", acknowledgmentSchema, {
@@ -128,35 +132,7 @@ function DetailContent({
 			);
 		},
 	});
-	const end = useMutation({
-		mutationFn: () =>
-			api(
-				`plans/${encodeURIComponent(plan?.id ?? "")}`,
-				planSchema,
-				plan
-					? {
-							symbol: plan.symbol,
-							direction: plan.direction,
-							status: "ended",
-							reason: plan.reason,
-							target_price: plan.target_price,
-							stop_price: plan.stop_price,
-							review_date: plan.review_date,
-							invalidation: plan.invalidation,
-							version: plan.version,
-						}
-					: {},
-				{ method: "put" },
-			),
-		onSuccess: async () => {
-			setEnding(false);
-			await Promise.all(
-				["reviews", "review-detail", "review-facts", "plans", "alerts"].map(
-					(key) => client.invalidateQueries({ queryKey: [key] }),
-				),
-			);
-		},
-	});
+
 	return (
 		<>
 			<section>
@@ -173,51 +149,7 @@ function DetailContent({
 					<p className="footnote">旧笔记已保留，尚未保存正式结论。</p>
 				)}
 			</section>
-			{plan && (
-				<section>
-					<h3>当前计划</h3>
-					<PlanSummary plan={plan} />
-					{!detail.read_only && plan.status !== "ended" && (
-						<>
-							{ending ? (
-								<div className="notice">
-									<p>
-										结束后计划内容只读，未完成的委托不会自动撤销，持仓不会自动卖出；仍可补充正式结论。
-									</p>
-									<div className="button-row">
-										<button
-											type="button"
-											className="button"
-											disabled={end.isPending}
-											onClick={() => setEnding(false)}
-										>
-											继续保留
-										</button>
-										<button
-											type="button"
-											className="button primary"
-											disabled={!online || end.isPending}
-											onClick={() => end.mutate()}
-										>
-											确认结束计划
-										</button>
-									</div>
-								</div>
-							) : (
-								<button
-									type="button"
-									className="button small"
-									disabled={!online}
-									onClick={() => setEnding(true)}
-								>
-									结束本计划
-								</button>
-							)}
-							{end.isError && <ErrorNotice message={errorMessage(end.error)} />}
-						</>
-					)}
-				</section>
-			)}
+			<ReviewCurrentPlan detail={detail} />
 			<section>
 				<h3>实际结果 · {review.currency}</h3>
 				<dl className="summary-list">
@@ -249,6 +181,7 @@ function DetailContent({
 					。关联买卖净份额不是计划专属仓位；这里只汇总已保存的卖单原币净收益，不跨币种相加。部分卖出不代表计划最终结果，旧收益缺失不补为零。
 				</p>
 			</section>
+			<ReviewOrders orders={detail.orders} current={plan} />
 			<section className="conclusion-list">
 				<h3>历次正式结论（{detail.conclusions.length}）</h3>
 				{detail.conclusions.length === 0 && (
@@ -274,37 +207,7 @@ function DetailContent({
 				))}
 			</section>
 			{showConclusionForm && <ConclusionForm detail={detail} target={target} />}
-			<section>
-				<h3>委托当时的计划与成交</h3>
-				{detail.orders.length ? (
-					<>
-						<label className="field">
-							选择委托对照
-							<select
-								aria-label="选择委托对照"
-								value={orderId}
-								onChange={(event) => setOrderId(event.target.value)}
-							>
-								{detail.orders.map((item) => (
-									<option key={item.id} value={item.id}>
-										{time(item.created_at)} · {item.symbol} ·{" "}
-										{item.side === "buy" ? "买入" : "卖出"} {item.quantity} ·{" "}
-										{item.id.slice(0, 8)}
-									</option>
-								))}
-							</select>
-						</label>
-						{order && (
-							<>
-								<OrderRecord order={order} expanded />
-								<PlanComparison order={order} current={plan} />
-							</>
-						)}
-					</>
-				) : (
-					<p className="footnote">尚无关联委托，也可以主动记录观察结论。</p>
-				)}
-			</section>
+
 			<ReviewFacts target={target} />
 			<section>
 				<h3>普通笔记</h3>

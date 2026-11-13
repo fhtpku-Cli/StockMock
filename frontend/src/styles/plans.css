@@ -165,3 +165,64 @@
 .alert-list article > p {
 	margin-block: 8px;
 }
+
+.review-order-list {
+	list-style: none;
+	padding: 0;
+	margin-block: 16px;
+}
+.review-order-list > li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 16px;
+	padding: 16px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	margin-bottom: 12px;
+}
+.review-order-heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+.review-order-summary,
+.review-order-evidence {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.review-order-summary dl {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	margin-top: 12px;
+}
+.review-order-summary dt {
+	font-size: 0.875rem;
+	color: var(--muted);
+}
+.review-order-summary dd {
+	margin: 4px 0 0;
+}
+.review-order-list button[aria-pressed="true"] {
+	border-color: var(--ink);
+	font-weight: 700;
+}
+.review-order-evidence {
+	margin-top: 24px;
+}
+.review-order-evidence > h4 {
+	margin-bottom: 12px;
+}
+@media (max-width: 540px) {
+	.review-order-list > li,
+	.review-order-summary dl {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.review-order-list button {
+		justify-self: start;
+		max-width: 100%;
+		white-space: normal;
+	}
+}
