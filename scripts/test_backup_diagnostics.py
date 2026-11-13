@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Literal
 import pytest
 from test_backup_fixture import Fixture, git, setup, snapshot
+
+# 与备份入口一致，从当前测试文件定位仓库根，使 backend 工作目录也能导入脚本包。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from scripts import backup, backup_files, backup_source
 from scripts.backup_diagnostics import FailureContext, UNKNOWN_CONTEXT
 
