@@ -65,3 +65,11 @@ A股与美股在线搜索结果可在详情申请启用模拟交易；成功核�
 ## 0.5.0 验证与使用限制
 
 本版提供长日线范围、今日涨跌、同期参照、成交标记及撤单确认。日线未确认定稿时不计入同期参照；缺成交日日线时保留列表，来源补齐后刷新。完整流程脚本已按现行目录和分页恢复，26 场景实际通过；最新工程测试以发布记录为准。`completion_server.py` 必须显式指定独立 `FRONTEND_TEST_PASSWORD`、`FRONTEND_TEST_PORT`、`FRONTEND_TEST_DIST`，浏览器指定相同 `FRONTEND_TEST_URL` 与独立 `FRONTEND_TEST_OUTPUT`，禁止连接正式账户或默认 8000。历史其它脚本的环境假设仍需逐项确认，不能一键对正式账户运行。
+
+## E1复盘候选的隔离验证
+
+E1仅增加关联委托概览，并将原有逐笔详情/计划版本对照放到正式结论之前；没有新增收益统计或修改成交与账本规则。当前候选状态见[E1实施记录](../outputs/E1复盘走查与实施计划.md)，不表示已经合并或上线。
+
+`tests/review_orders_server.py`使用临时SQLite和受控历史样本，停止后删除临时数据库。必须显式设置 `FRONTEND_TEST_PORT`（本机非8000端口）、`FRONTEND_TEST_DIST`（独立构建目录）、`FRONTEND_TEST_OUTPUT`（本轮证据目录）和 `FRONTEND_TEST_PASSWORD`（临时测试口令）。不读取个人数据库或`.local-password`，后台关闭，不依赖本机历史验收文件。
+
+从候选根目录执行 `backend/.venv/bin/python frontend/tests/review_orders_server.py`；另一个终端带相同测试配置执行 `bun frontend/tests/review-orders-ui.mjs`。浏览器脚本按显式端口连接本机隔离服务，会在测试账户保存受控结论，不能指向正式实例。完整构建、场景及操作步骤见实施记录第5节。测试覆盖当前/归档、版本变化、部分卖出、未成交/旧字段缺失、21/508笔分页、草稿/刷新、1440/375px和键盘操作；模拟409及异常GET响应与真实HTTP验证分别记录，不等同本人设备验收。
