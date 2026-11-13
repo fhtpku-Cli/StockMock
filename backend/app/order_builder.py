@@ -7,7 +7,7 @@ from typing import assert_never
 from uuid import uuid4
 
 from app.accounting import FEE, available, execution_amount, money, sellable
-from app.calendar import is_open, window
+from app.calendar import is_open, sellable_time, window
 from app.marketdata import FxRate, Quote
 from app.models import DomainError, Instrument, Order, OrderInput, State
 from app.order_requests import check_expected_round
@@ -72,6 +72,8 @@ def build_order(item: Instrument, state: State, request: OrderInput, context: Or
     cny = foreign = Decimal(0)
     match request.side:
         case "buy":
+            if item.settlement_days > 0:
+                _ = sellable_time(item, max(now, opening))
             gross, fee = execution_amount(bound, request.quantity)
             total = max(money(bound * request.quantity * (1 + FEE), reserve=True), gross + fee)
             foreign = min(total, available(state, item.currency)) if item.currency != "CNY" else Decimal(0)
