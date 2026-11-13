@@ -1,7 +1,8 @@
 """核对源码、静态包配套关系与安全归档。"""
 
 from __future__ import annotations
-from typing import ClassVar
+from typing import ClassVar, Literal
+from .backup_diagnostics import FailureContext
 import re
 import subprocess
 import tarfile
@@ -36,7 +37,7 @@ def commit(root: Path, revision: str) -> str:
     return value
 
 
-def clean_source(root: Path) -> str:
+def clean_source(root: Path, *, stage: Literal["源码检查", "源码复查"] = "源码检查") -> str:
     require(not git(root, ["status", "--porcelain", "--untracked-files=no"]), "dirty_source")
     untracked = (
         git(root, ["ls-files", "--others", "-z", "--", "backend/app", "scripts", "frontend/src"]).decode().split("\0")
@@ -45,7 +46,11 @@ def clean_source(root: Path) -> str:
     require(not any(Path(name).suffix in source_extensions for name in untracked if name), "untracked_source")
     head = commit(root, "HEAD")
     for name in REQUIRED:
-        require(read(root / name) == git(root, ["show", f"{head}:{name}"]), "source_changed")
+        require(
+            read(root / name, context=FailureContext(stage, "源码")) == git(root, ["show", f"{head}:{name}"]),
+            "source_changed",
+            FailureContext(stage, "源码", "与Git内容不一致"),
+        )
     return head
 
 

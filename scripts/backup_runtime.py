@@ -5,7 +5,8 @@ import sqlite3
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
+from .backup_diagnostics import FailureContext
 from pydantic import TypeAdapter
 from .backup_files import absolute, read, regular, require
 
@@ -20,18 +21,26 @@ ALLOWED: Final = {
 }
 
 
-def runtime(root: Path) -> dict[str, bytes]:
-    config_bytes = read(root / "backend/.runtime.json", private=True)
+def runtime(root: Path, *, stage: Literal["运行材料读取", "运行材料复查"] = "运行材料读取") -> dict[str, bytes]:
+    config_bytes = read(
+        root / "backend/.runtime.json",
+        private=True,
+        context=FailureContext(stage, "运行配置"),
+    )
     config = TypeAdapter(dict[str, str]).validate_json(config_bytes, strict=True)
     require(config.keys() <= ALLOWED, "config_fields")
-    password = read(root / "backend/.local-password", private=True)
+    password = read(
+        root / "backend/.local-password",
+        private=True,
+        context=FailureContext(stage, "登录密码"),
+    )
     require(len(password.decode().strip()) >= 12, "password_length")
     files = {"config.json": config_bytes, "password": password}
     if "STOCKMOCK_INSTRUMENTS_FILE" in config:
         external = Path(config["STOCKMOCK_INSTRUMENTS_FILE"])
         require(bool(config["STOCKMOCK_INSTRUMENTS_FILE"]), "rules_path")
         external = absolute(external if external.is_absolute() else root / external)
-        files["instruments.json"] = read(external)
+        files["instruments.json"] = read(external, context=FailureContext(stage, "外部规则"))
     return files
 
 
@@ -81,4 +90,7 @@ def online(source: Path, destination: Path) -> None:
         _ = target.execute("PRAGMA journal_mode=DELETE")
 
     final = regular(source)
-    require((initial.st_dev, initial.st_ino) == (final.st_dev, final.st_ino), "database_source_changed")
+    require(
+        (initial.st_dev, initial.st_ino) == (final.st_dev, final.st_ino),
+        "database_source_changed",
+    )

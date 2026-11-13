@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 import argparse
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import json
 import os
@@ -28,6 +29,7 @@ from .backup_files import (
     tree,
     write,
 )
+from .backup_diagnostics import FailureContext, failure_message, safe_code, diagnosis
 from .backup_package import Manifest, inspect, restore_paths
 from .backup_runtime import database, online, runtime
 from .backup_source import archive, archive_version, clean_source, git, paired_frontend
@@ -58,19 +60,23 @@ def create(args: Arguments) -> tuple[Path, Manifest]:
         require(destination.is_relative_to(root / "work"), "destination_project_location")
         _ = git(root, ["check-ignore", "--quiet", str(destination)])
     destination.mkdir(mode=0o700)
+    context = FailureContext("源码检查", "源码")
     try:
         head = clean_source(root)
         paired_frontend(root, args.static_source_commit)
         source_dist = root / "frontend/dist"
         require(source_dist != reference, "reference_same_directory")
-        static = tree(source_dist)
+        context = FailureContext("静态材料读取", "前端静态材料")
+        static = tree(source_dist, context=context)
         require(
-            bool(static.get("index.html")) and static == tree(reference),
+            bool(static.get("index.html")) and static == tree(reference, context=context),
             "static_reference_mismatch",
         )
+        context = FailureContext("运行材料读取", "运行材料")
         materials = runtime(root)
+        context = FailureContext("依赖材料读取", "依赖清单与锁文件")
         source_files = {
-            name: read(root / name)
+            name: read(root / name, context=context)
             for name in (
                 "backend/pyproject.toml",
                 "backend/uv.lock",
@@ -78,20 +84,42 @@ def create(args: Arguments) -> tuple[Path, Manifest]:
                 "frontend/bun.lock",
             )
         }
+        context = FailureContext("材料复制", "运行材料")
         copy_tree(materials, destination / "runtime")
+        context = FailureContext("源码归档", "源码")
         archive(root, destination / "source.tar", head)
         version = archive_version(destination / "source.tar", head)
+        context = FailureContext("材料复制", "前端静态材料")
         copy_tree(static, destination / "frontend-dist")
+        context = FailureContext("数据库备份", "数据库")
         online(root / "backend/data/paper.sqlite3", destination / "paper.sqlite3")
         tables = database(destination / "paper.sqlite3")
-        require(head == clean_source(root), "source_changed")
-        require(materials == runtime(root), "runtime_changed")
-        require(static == tree(source_dist) == tree(reference), "static_changed")
+        context = FailureContext("源码复查", "源码")
         require(
-            all(data == read(root / name) for name, data in source_files.items()),
+            head == clean_source(root, stage="源码复查"),
             "source_changed",
+            FailureContext("源码复查", "源码", "提交前后不一致"),
         )
-        files = tree(destination, private=True)
+        context = FailureContext("运行材料复查", "运行材料")
+        require(
+            materials == runtime(root, stage="运行材料复查"),
+            "runtime_changed",
+            FailureContext("运行材料复查", "运行材料", "前后内容不一致"),
+        )
+        context = FailureContext("静态材料复查", "前端静态材料")
+        require(
+            static == tree(source_dist, context=context) == tree(reference, context=context),
+            "static_changed",
+            replace(context, check="前后内容不一致"),
+        )
+        context = FailureContext("依赖材料复查", "依赖清单与锁文件")
+        require(
+            all(data == read(root / name, context=context) for name, data in source_files.items()),
+            "source_changed",
+            replace(context, check="前后内容不一致"),
+        )
+        context = FailureContext("备份包检查", "备份包")
+        files = tree(destination, private=True, context=context)
         manifest = Manifest(
             status="complete",
             static_verification="independent_reference_bytes_and_frontend_build_inputs",
@@ -113,51 +141,29 @@ def create(args: Arguments) -> tuple[Path, Manifest]:
         tarfile.TarError,
         KeyError,
     ) as error:
-        code = safe_code(error)
+        if isinstance(error, BackupError) and error.context.stage != "未知":
+            context = error.context
+        failure = BackupError(safe_code(error), context)
         try:
             write(
                 destination / "failure.json",
-                json.dumps({"status": "failed", "code": code}).encode(),
+                json.dumps(
+                    {
+                        "status": "failed",
+                        "code": safe_code(failure),
+                        "context": asdict(context),
+                        "message": failure_message(failure),
+                    },
+                    ensure_ascii=False,
+                ).encode(),
             )
         except OSError:
-            print("[failure_record] 无法写入失败记录；部分包仍不可用。", file=sys.stderr)
-        raise
+            print(
+                "[failure_record] 无法写入失败记录；失败包不能用于恢复；请保留终端说明。",
+                file=sys.stderr,
+            )
+        raise failure from error
     return destination, manifest
-
-
-def safe_code(error: BaseException) -> str:
-    """在唯一命令行边界分类，绝不回显第三方错误正文。"""
-    match error:
-        case BackupError():
-            return str(error)
-        case FileNotFoundError():
-            return "material_missing"
-        case PermissionError():
-            return "material_permissions"
-        case subprocess.TimeoutExpired():
-            return "source_command_timeout"
-        case subprocess.SubprocessError():
-            return "source_command_failed"
-        case sqlite3.Error():
-            return "database_operation_failed"
-        case ValueError() | KeyError() | tarfile.TarError():
-            return "material_format_invalid"
-        case _:
-            return "material_io_failed"
-
-
-def diagnosis(code: str) -> str:
-    if code.startswith(("database",)):
-        return "数据库读取、完整性或锁等待检查失败；请检查源库及占用。"
-    if code.startswith(("static", "reference")):
-        return "前端参考包或构建来源不匹配；请重新核对独立参考与来源提交。"
-    if code.startswith(("source", "dirty", "untracked", "archive", "version")):
-        return "源码或归档配套检查失败；请核对完整提交、干净工作树及版本。"
-    if code.startswith(("destination", "directory", "symbolic", "file_", "path_", "material_permissions")):
-        return "路径或权限不安全；请使用本人0700私有父目录下的全新目标，项目内只用work目录。"
-    if code.startswith(("config", "password", "rules", "runtime", "material_missing")):
-        return "必要运行材料缺失、变化或不合法；请检查配置、密码、外部规则及源库。"
-    return "材料不完整或读写失败；请检查所选包、文件格式与磁盘可用空间。"
 
 
 def main() -> int:
@@ -203,9 +209,12 @@ def main() -> int:
         ValidationError,
     ) as error:
         code = safe_code(error)
-        print(f"[{code}] {diagnosis(code)} 未确认成套可用。", file=sys.stderr)
         if args.action == "create":
+            failure = error if isinstance(error, BackupError) else BackupError(code)
+            print(failure_message(failure), file=sys.stderr)
             print(f"目标（如已创建则保留部分包）：{args.destination}", file=sys.stderr)
+        else:
+            print(f"[{code}] {diagnosis(code)} 未确认成套可用。", file=sys.stderr)
         return 1
 
 

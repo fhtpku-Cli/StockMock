@@ -5,15 +5,13 @@ import os
 import stat
 from pathlib import Path
 from typing import Final
+from dataclasses import replace
+from .backup_diagnostics import BackupError as BackupError, FailureContext, UNKNOWN_CONTEXT
 
 
-class BackupError(RuntimeError):
-    """仅包含固定安全错误码。"""
-
-
-def require(condition: bool, code: str) -> None:
+def require(condition: bool, code: str, context: FailureContext = UNKNOWN_CONTEXT) -> None:
     if not condition:
-        raise BackupError(code)
+        raise BackupError(code, context)
 
 
 def absolute(path: Path) -> Path:
@@ -50,10 +48,14 @@ def stamp(info: os.stat_result) -> tuple[int, int, int, int, int]:
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
 
-def read(path: Path, *, private: bool = False) -> bytes:
+def read(path: Path, *, private: bool = False, context: FailureContext = UNKNOWN_CONTEXT) -> bytes:
     before = regular(path, private=private)
     result = path.read_bytes()
-    require(stamp(before) == stamp(regular(path, private=private)), "source_changed")
+    require(
+        stamp(before) == stamp(regular(path, private=private)),
+        "source_changed",
+        replace(context, check="读取前后状态变化"),
+    )
     return result
 
 
@@ -63,7 +65,7 @@ def write(path: Path, data: bytes) -> None:
         _ = stream.write(data)
 
 
-def tree(path: Path, *, private: bool = False) -> dict[str, bytes]:
+def tree(path: Path, *, private: bool = False, context: FailureContext = UNKNOWN_CONTEXT) -> dict[str, bytes]:
     """读取完整树；不追随目录或文件链接。"""
     directory(path, private=private)
     result: dict[str, bytes] = {}
@@ -72,7 +74,7 @@ def tree(path: Path, *, private: bool = False) -> dict[str, bytes]:
         if item.is_dir():
             directory(item, private=private)
         else:
-            result[item.relative_to(path).as_posix()] = read(item, private=private)
+            result[item.relative_to(path).as_posix()] = read(item, private=private, context=context)
     return result
 
 
