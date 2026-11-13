@@ -11,7 +11,11 @@ from app.models import DomainError, Instrument
 @lru_cache(maxsize=3)
 def calendar(market: str) -> xcals.ExchangeCalendar:
     """取得交易所假日与夏令时日历。"""
-    return xcals.get_calendar({"CN": "XSHG", "HK": "XHKG", "US": "XNYS"}[market])
+    name = {"CN": "XSHG", "HK": "XHKG", "US": "XNYS"}[market]
+    cal = xcals.get_calendar(name)
+    if market in {"HK", "US"} and cal.default_end().to_pydatetime().date() < date(2028, 1, 3):
+        cal = xcals.get_calendar(name, end="2028-01-03")
+    return cal
 
 
 def window(item: Instrument, now: datetime) -> tuple[datetime, datetime]:
