@@ -28,6 +28,10 @@ jobs:
         run: uv run --frozen python -m pytest
       - name: 验证后台工具隔离行为
         run: uv run --frozen python ../scripts/test_service.py
+      - name: 验证成套备份工具
+        run: uv run --frozen python -m pytest ../scripts/test_backup*.py
+      - name: 检查成套备份工具类型
+        run: uv run --frozen basedpyright ../scripts/backup*.py
       - name: 检查后台启动器类型
         run: uv run --frozen basedpyright ../scripts/service.py ../scripts/run-service.py
       - name: 检查后台工具格式与规范
