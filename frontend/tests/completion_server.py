@@ -1,6 +1,6 @@
 """完整交易浏览器验收服务：临时 SQLite、受控时钟和测试文件驱动行情。
 
-默认绑定 127.0.0.1:8004，可通过 FRONTEND_TEST_PORT 指定隔离端口。
+必须通过 FRONTEND_TEST_PORT 指定隔离端口，FRONTEND_TEST_DIST 指定本次独立构建。
 FRONTEND_TEST_OUTPUT 指定证据目录，FRONTEND_TEST_PASSWORD 指定独立测试密码。控制文件由同机测试脚本写入，生产没有此入口。
 运行：backend/.venv/bin/python frontend/tests/completion_server.py
 """
@@ -16,17 +16,29 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
-from controlled_server import ROOT
+# controlled_server 先设置既有后端与测试模块搜索路径。
+from controlled_server import ROOT  # isort: skip
+
+import test_engine
+import uvicorn
 from app.catalog import CATALOG
 from app.engine import Engine
-from app.models import DomainError
 from app.main import create_app
+from app.models import DomainError
 from app.storage import Store
-import test_engine
+from fastapi.staticfiles import StaticFiles
+from starlette.routing import Mount
 from test_engine import ControlledProvider
-import uvicorn
 
-OUTPUT = Path(os.environ.get("FRONTEND_TEST_OUTPUT", str(ROOT / ".omo/evidence/completion-20261023/ui"))).resolve()
+OUTPUT = Path(os.environ["FRONTEND_TEST_OUTPUT"]).resolve()
+DIST = Path(os.environ["FRONTEND_TEST_DIST"]).resolve()
+PASSWORD = os.environ["FRONTEND_TEST_PASSWORD"]
+PORT = int(os.environ["FRONTEND_TEST_PORT"])
+PRODUCTION_PORT = 8000
+if not PASSWORD or PORT == PRODUCTION_PORT or not (DIST / "index.html").is_file():
+    raise SystemExit("必须提供独立口令、非正式端口及有效的独立构建目录")
+if (ROOT / "frontend/dist").resolve() == DIST:
+    raise SystemExit("完整流程测试不能使用默认构建目录")
 NOW = datetime(2026, 10, 22, 15, 0, tzinfo=UTC)
 
 
@@ -56,7 +68,9 @@ def process_commands(engine: Engine, stop: threading.Event) -> None:
             continue
         sequence = command["sequence"]
         try:
-            start = Clock.value + timedelta(seconds=1)
+            start = Clock.value.replace(minute=(Clock.value.minute // 5) * 5, second=0, microsecond=0)
+            if start < Clock.value:
+                start += timedelta(minutes=5)
             market_time = start + timedelta(minutes=5)
             Clock.value = market_time + timedelta(seconds=1)
             test_engine.NOW = Clock.value
@@ -99,12 +113,15 @@ if __name__ == "__main__":
         patches.enter_context(patch("test_engine.NOW", NOW))
         thread.start()
         try:
+            app = create_app(engine=engine, password=PASSWORD, run_worker=False)
+            app.router.routes[:] = [
+                route for route in app.router.routes if not (isinstance(route, Mount) and route.name == "frontend")
+            ]
+            app.mount("/", StaticFiles(directory=DIST, html=True), name="frontend")
             uvicorn.run(
-                create_app(
-                    engine=engine, password=os.environ.get("FRONTEND_TEST_PASSWORD") or (ROOT / "backend/.local-password").read_text().strip(), run_worker=False
-                ),
+                app,
                 host="127.0.0.1",
-                port=int(os.environ.get("FRONTEND_TEST_PORT", "8004")),
+                port=PORT,
                 log_level="warning",
             )
         finally:

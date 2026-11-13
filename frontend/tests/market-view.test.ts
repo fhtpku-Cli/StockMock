@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PriceHistory } from "../src/PriceHistory";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChangeLine } from "../src/ChangeLine";
@@ -13,6 +12,7 @@ import {
 	tradeMarks,
 } from "../src/marketView";
 import { CANCEL_CONFIRM } from "../src/Orders";
+import { PriceHistory } from "../src/PriceHistory";
 import {
 	historySchema,
 	orderSchema,
@@ -225,6 +225,40 @@ describe("成交标记", () => {
 		expect([geometry.low, geometry.high]).toEqual([100, 120]);
 		expect(geometry.y(120)).toBe(30);
 		expect(geometry.x(1)).toBe(350);
+	});
+	test.each([
+		["缺末日", ["2026-11-09"], false],
+		["内部缺口", ["2026-11-09", "2026-11-11"], false],
+		["对应日线补齐", ["2026-11-09", "2026-11-10", "2026-11-11"], true],
+	] as const)(
+		"%s 时保留成交，只在对应日期存在时画标记",
+		(_scenario, dates, onChart) => {
+			const orders = [order("gap", "sell", "2026-11-11T00:00:00Z", "90")];
+			const rows = dates.map((day) => row(day, "100"));
+			const marks = tradeMarks(orders, "AAPL", "US", rows);
+			expect(marks).toEqual([
+				{
+					id: "gap",
+					side: "sell",
+					day: "2026-11-10",
+					price: "90",
+					quantity: 100,
+					onChart,
+				},
+			]);
+			const geometry = chartGeometry(rows, marks);
+			expect([geometry.low, geometry.high]).toEqual(
+				onChart ? [90, 100] : [100, 100],
+			);
+		},
+	);
+	test.each(["CN", "HK"] as const)("%s 按当地日期选择对应日线", (market) => {
+		const orders = [order("local-day", "buy", "2026-11-09T16:30:00Z", "120")];
+		const rows = [row("2026-11-09", "100"), row("2026-11-10", "100")];
+		const marks = tradeMarks(orders, "AAPL", market, rows);
+		expect(marks.map((mark) => [mark.day, mark.onChart])).toEqual([
+			["2026-11-10", true],
+		]);
 	});
 	test("其他证券与未成交委托不标注", () => {
 		const other = {

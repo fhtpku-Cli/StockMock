@@ -13,9 +13,9 @@ export async function verifyPreview({ page, preview, side }) {
 		expect(preview.fx_rate).toBe("7");
 		expect(preview.fx_source).toBe("controlled-test");
 		expect(preview.fx_time).toMatch(/^2026-10-22T/);
-		await expect(reference).toContainText("1 USD = 7 CNY");
+		await expect(reference).toContainText("1 USD = 7.000000 CNY");
 		await expect(reference).toContainText("controlled-test");
-		await expect(reference).toContainText("10/22 23:00");
+		await expect(reference).toContainText("2026-10-22 日频参考");
 		await expect(box).toContainText("自动换汇");
 	} else {
 		expect(preview.fx_rate).toBeNull();
@@ -56,7 +56,7 @@ export async function verifyArchive({ page, archive, shot }) {
 		.filter({ has: page.getByRole("heading", { name: /历史委托/ }) });
 	const buy = orders.locator(".order-row").filter({ hasText: "买入 10 股" });
 	await buy.locator("summary").click();
-	await expect(buy).toContainText("1 USD = 7 CNY");
+	await expect(buy).toContainText("1 USD = 7.000000 CNY");
 	await expect(buy).toContainText("controlled-test");
 	await expect(buy).toContainText("US$120.00 / US$80.00");
 	await expect(buy).toContainText("费用 US$0.50");
@@ -73,19 +73,23 @@ export async function verifyArchive({ page, archive, shot }) {
 	await sell.scrollIntoViewIfNeeded();
 	await shot("archive-sell-net-result");
 	const note = archive.locator(".journal-list > article");
-	await note.getByText("原计划与实际交易 · AAPL", { exact: true }).click();
-	await expect(note).toContainText("US$396.20");
-	await expect(note).toContainText("US$7.60");
-	await expect(note).toContainText("US$120.00 / US$80.00");
-	await expect(note).toContainText("controlled-test");
-	await note.scrollIntoViewIfNeeded();
+	await note.getByRole("button", { name: "查看相关复盘" }).click();
+	const review = page.getByRole("dialog", { name: "相关计划与复盘" });
+	await expect(review).toContainText("US$396.20");
+	await expect(review).toContainText("US$7.60");
+	await expect(review).toContainText("US$120.00 / US$80.00");
+	await expect(review).toContainText("controlled-test");
+	await expect(
+		review.getByRole("button", { name: /保存|结束计划/ }),
+	).toHaveCount(0);
 	await shot("archive-linked-plan");
+	await review.getByRole("button", { name: "返回来处" }).click();
 	await expect(
 		archive.getByRole("button", {
 			name: /写复盘|申请撤单|模拟买入|模拟卖出|保存/,
 		}),
 	).toHaveCount(0);
-	await expect(archive.locator("input, textarea, select")).toHaveCount(0);
+	await expect(archive.locator("textarea")).toHaveCount(0);
 	await page.setViewportSize({ width: 390, height: 844 });
 	expect(await archive.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
 		true,
@@ -101,19 +105,20 @@ export async function verifyArchive({ page, archive, shot }) {
 	page.off("request", track);
 
 	// 显式受控旧接口响应：旧数据没有这些元信息，不能显示为零收益或猜测汇率。
-	await page.route("**/api/rounds/*", async (route) => {
+	await page.route("**/api/rounds/*/orders?*", async (route) => {
 		const response = await route.fetch();
 		const data = await response.json();
-		if (!Array.isArray(data.orders)) return route.fulfill({ response });
+		if (!Array.isArray(data.items)) return route.fulfill({ response });
 		await route.fulfill({
 			response,
 			json: {
 				...data,
-				orders: data.orders.map((order) => ({
+				items: data.items.map((order) => ({
 					...order,
 					cost_basis: null,
 					realized_pnl: null,
 					source: "",
+					fill_observation: null,
 					fx_rate: "1",
 					fx_source: "",
 					fx_time: null,
@@ -138,11 +143,11 @@ export async function verifyArchive({ page, archive, shot }) {
 		.filter({ hasText: "卖出 4 股" });
 	await oldSell.locator("summary").click();
 	await expect(oldSell).toContainText("历史值未记录");
-	await expect(oldSell).toContainText("历史记录未注明");
+	await expect(oldSell).toContainText("历史记录未保存完整行情依据");
 	await expect(oldSell).toContainText("未记录 / 未记录");
 	await expect(oldSell).not.toContainText("1 USD = 1 CNY");
 	await expect(oldSell).not.toContainText("US$0.00");
 	await oldSell.scrollIntoViewIfNeeded();
 	await shot("archive-legacy-unknown");
-	await page.unroute("**/api/rounds/*");
+	await page.unroute("**/api/rounds/*/orders?*");
 }

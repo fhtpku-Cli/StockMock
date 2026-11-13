@@ -162,7 +162,7 @@ export type TradeMark = {
 	readonly onChart: boolean;
 };
 
-/** 成交日用 filled_at 换算市场当地日期；当日尚无日线的成交只进入列表。 */
+/** 成交日用 filled_at 换算市场当地日期；成交日尚无日线的成交只进入列表。 */
 export function tradeMarks(
 	orders: readonly Order[],
 	symbol: string,
@@ -171,8 +171,7 @@ export function tradeMarks(
 ): TradeMark[] {
 	const zone = marketTimezones[market as keyof typeof marketTimezones];
 	const first = visible[0]?.time;
-	const last = visible.at(-1)?.time;
-	if (!zone || !first || !last) return [];
+	if (!zone || !first) return [];
 	const format = new Intl.DateTimeFormat("sv-SE", { timeZone: zone });
 	const days = new Set(visible.map((row) => row.time));
 	return orders
@@ -193,7 +192,6 @@ export function tradeMarks(
 		}))
 		.filter((mark) => mark.day >= first)
 		.map((mark) => ({ ...mark, onChart: days.has(mark.day) }))
-		.filter((mark) => mark.onChart || mark.day > last)
 		.sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
 }
 

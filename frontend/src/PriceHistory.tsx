@@ -126,7 +126,9 @@ export function PriceHistory({
 								{shortDay(mark.day)} {mark.side === "buy" ? "买入" : "卖出"}{" "}
 								{number(mark.quantity)} 股 @{price(mark.price, currency)}
 								{!mark.onChart && (
-									<small>当日日线尚未生成，收盘后显示在图上</small>
+									<small>
+										成交日的日线暂缺；日线补齐后，刷新可在图上查看标记
+									</small>
 								)}
 							</li>
 						))}

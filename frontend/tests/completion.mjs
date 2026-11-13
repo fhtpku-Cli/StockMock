@@ -1,7 +1,7 @@
-import { acceptCancelDialog } from "./cancel-dialog.mjs";
 import { readFile, writeFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect } from "@playwright/test";
+import { acceptCancelDialog } from "./cancel-dialog.mjs";
 import { verifyArchive } from "./completion-checks.mjs";
 import { createCompletionFixture } from "./completion-helpers.mjs";
 
@@ -22,42 +22,54 @@ const {
 try {
 	await page.goto(url);
 	await expect(page).toHaveTitle(/持仓练习/);
-	await page
-		.getByLabel("访问密码")
-		.fill(
-			process.env.FRONTEND_TEST_PASSWORD ??
-				(
-					await readFile(
-						new URL("../../backend/.local-password", import.meta.url),
-						"utf8",
-					)
-				).trim(),
-		);
+	await page.getByLabel("访问密码").fill(process.env.FRONTEND_TEST_PASSWORD);
 	await page.getByRole("button", { name: "进入我的空间" }).click();
 	await expect(page.getByRole("heading", { name: "资产概览" })).toBeVisible();
 	const originalRound = (await read("/api/portfolio")).round_id;
 	const catalog = await read("/api/instruments");
 	await page.getByRole("button", { name: "自选", exact: true }).click();
-	for (const market of ["CN", "US", "HK"]) {
+	const enabled = page.locator("section.panel").filter({
+		has: page.getByRole("heading", { name: "已可交易", exact: true }),
+	});
+	const tradableCount = catalog.filter((item) => item.tradable).length;
+	await expect(enabled.locator(".security-main")).toHaveCount(24);
+	await enabled
+		.getByRole("button", { name: "再显示 24 只", exact: true })
+		.click();
+	await expect(enabled.locator(".security-main")).toHaveCount(48);
+	await enabled.getByRole("button", { name: /^再显示/ }).click();
+	await expect(enabled.locator(".security-main")).toHaveCount(tradableCount);
+	await expect(enabled.getByRole("button", { name: /^再显示/ })).toHaveCount(0);
+	await shot("catalog-all-pages");
+	for (const market of ["CN", "US"]) {
 		await page.getByLabel("筛选市场").selectOption(market);
-		await page.getByLabel("筛选证券类型").selectOption("ETF");
-		await expect(page.locator(".security-main")).toHaveCount(
-			catalog.filter((i) => i.market === market && i.kind === "ETF").length,
-		);
+		for (const kind of ["stock", "ETF"]) {
+			await page.getByLabel("筛选证券类型").selectOption(kind);
+			const expected = catalog.filter(
+				(i) => i.market === market && i.kind === kind && i.tradable,
+			);
+			await expect(enabled.locator(".security-main")).toHaveCount(
+				Math.min(24, expected.length),
+			);
+			while (await enabled.getByRole("button", { name: /^再显示/ }).count()) {
+				await enabled.getByRole("button", { name: /^再显示/ }).click();
+			}
+			await expect(enabled.locator(".security-main")).toHaveCount(
+				expected.length,
+			);
+		}
 	}
+	await expect(enabled).toContainText("港股继续仅观察");
+	await expect(
+		page.getByLabel("筛选市场").locator('option[value="HK"]'),
+	).toHaveCount(0);
+	await shot("catalog-pagination-observation");
 	await page.getByLabel("筛选证券类型").selectOption("all");
-	await page.getByLabel("筛选交易状态").selectOption("observe");
-	await expect(page.locator(".security-main")).toHaveCount(
-		catalog.filter((i) => i.market === "HK" && !i.tradable).length,
-	);
-	await shot("catalog-observation");
-	await page.getByLabel("筛选市场").selectOption("US");
-	await page.getByLabel("筛选交易状态").selectOption("tradable");
 	for (const symbol of ["COST", "VOO"]) {
 		const item = catalog.find((i) => i.symbol === symbol);
 		expect(item).toBeTruthy();
 		for (const term of [item.symbol, item.name]) {
-			await page.getByLabel("搜索代码或名称").fill(term);
+			await page.getByLabel("筛选已可交易证券").fill(term);
 			const result = page.locator(`[data-symbol="${symbol}"] .security-main`);
 			await expect(result).toHaveCount(1);
 			await expect(result).toContainText(symbol);
@@ -67,11 +79,14 @@ try {
 	await page
 		.getByRole("button", { name: `添加自选 ${voo.name}`, exact: true })
 		.click();
-	await expect(page.locator(".watch-card")).toContainText("VOO");
-	await page
+	const watch = page.locator("section.panel").filter({
+		has: page.getByRole("heading", { name: "我的自选", exact: true }),
+	});
+	await expect(watch.locator(".security-row")).toContainText("VOO");
+	await watch
 		.getByRole("button", { name: `移除自选 ${voo.name}`, exact: true })
 		.click();
-	await expect(page.locator(".watch-card")).toHaveCount(0);
+	await expect(watch.locator(".security-row")).toHaveCount(0);
 	await shot("expanded-search-watchlist");
 
 	await order("buy", 10, 100);
@@ -140,15 +155,25 @@ try {
 		.getByLabel("复盘内容")
 		.fill("受控验收复盘：部分卖出已实现7.60美元，剩余6股继续观察。");
 	await page.getByRole("button", { name: "保存记录" }).click();
-	await expect(page.getByRole("status")).toContainText("已保存");
-	await page.getByLabel("关联市场").selectOption("US");
+	await expect(
+		page.getByRole("status").filter({ hasText: "普通笔记已保存。" }),
+	).toBeVisible();
+	await page.getByLabel("笔记市场").selectOption("US");
+	await page.getByRole("button", { name: "应用笔记筛选" }).click();
 	await expect(page.locator(".journal-list")).toContainText("部分卖出");
-	await page.getByLabel("关联市场").selectOption("CN");
+	await page.getByLabel("笔记市场").selectOption("CN");
+	await page.getByRole("button", { name: "应用笔记筛选" }).click();
 	await expect(page.locator(".journal-list article")).toHaveCount(0);
-	await page.getByRole("button", { name: "清除筛选" }).click();
+	await page.getByLabel("笔记市场").selectOption("");
+	await page.getByRole("button", { name: "应用笔记筛选" }).click();
+	await expect(page.locator(".journal-list")).toContainText("部分卖出");
 	await shot("linked-journal");
 	await order("sell", 6, 101);
 	await tick("AAPL", "102");
+	const fullSale = (await read("/api/orders"))[0];
+	expect(fullSale.status).toBe("filled");
+	expect(fullSale.cost_basis).toBe("594.30");
+	expect(fullSale.realized_pnl).toBe("17.39");
 	const sold = await read("/api/portfolio");
 	expect(sold.positions).toHaveLength(0);
 	expect(sold.cash.find((c) => c.currency === "USD").balance).toBe("1015.49");
@@ -165,6 +190,12 @@ try {
 		"使用已有外币现金",
 	);
 	await shot("funded-buy-no-fx-reference");
+	expect(
+		Number(
+			(await read("/api/portfolio")).cash.find((c) => c.currency === "USD")
+				.reserved,
+		),
+	).toBeGreaterThan(0);
 	acceptCancelDialog(page);
 	await page
 		.locator(".order-row")
@@ -173,16 +204,26 @@ try {
 		.click();
 	await tick("AAPL", "102");
 	await expect(page.locator(".order-row").first()).toContainText("已撤单");
+	const released = (await read("/api/portfolio")).cash.find(
+		(c) => c.currency === "USD",
+	);
+	expect(Number(released.reserved)).toBe(0);
+	expect(released.available).toBe("1015.49");
 	await page.getByRole("button", { name: "资产", exact: true }).click();
-	await page.getByRole("button", { name: "管理", exact: true }).click();
+	await page.getByRole("button", { name: "明细与换汇", exact: true }).click();
 	await page.getByLabel("换回金额").fill("1015.49");
 	await context.setOffline(true);
 	await expect(
 		page.getByRole("button", { name: "确认换回人民币" }),
 	).toBeDisabled();
+	await shot("offline-conversion-blocked");
 	await context.setOffline(false);
 	await page.getByRole("button", { name: "确认换回人民币" }).click();
-	await expect(page.getByRole("status")).toContainText("换汇已完成");
+	await expect(
+		page
+			.getByRole("status")
+			.filter({ hasText: "换汇已完成，资金流水已记录。" }),
+	).toBeVisible();
 	const converted = await read("/api/portfolio");
 	expect(converted.cash.find((c) => c.currency === "USD").balance).toBe("0.00");
 	expect(converted.cash.find((c) => c.currency === "CNY").balance).toBe(
@@ -192,7 +233,9 @@ try {
 	await page.getByRole("button", { name: "关闭", exact: true }).click();
 	await page.getByRole("button", { name: "复盘", exact: true }).click();
 	const downloadWait = page.waitForEvent("download");
-	await page.getByRole("link", { name: "导出资金流水" }).click();
+	await page
+		.getByRole("button", { name: "导出本轮完整流水", exact: true })
+		.click();
 	const download = await downloadWait;
 	await download.saveAs(out + "ledger.csv");
 	const csv = await readFile(out + "ledger.csv", "utf8");
@@ -237,6 +280,11 @@ try {
 					cost_basis: partial.cost_basis,
 					realized_pnl: partial.realized_pnl,
 				},
+				fullSale: {
+					cost_basis: fullSale.cost_basis,
+					realized_pnl: fullSale.realized_pnl,
+				},
+				cancelledCash: released,
 				finalCny: converted.cash.find((c) => c.currency === "CNY").balance,
 			},
 			null,

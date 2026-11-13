@@ -9,7 +9,15 @@ export async function createCompletionFixture() {
 		import.meta.url,
 	).pathname;
 	await mkdir(out, { recursive: true });
-	const url = process.env.FRONTEND_TEST_URL ?? "http://127.0.0.1:8004";
+	const url = process.env.FRONTEND_TEST_URL;
+	expect(url, "必须显式指定隔离测试 URL").toBeTruthy();
+	const target = new URL(url);
+	expect(target.hostname).toBe("127.0.0.1");
+	expect(target.port).not.toBe("8000");
+	expect(
+		process.env.FRONTEND_TEST_PASSWORD,
+		"必须显式指定独立测试口令",
+	).toBeTruthy();
 	const browser = await launchBrowser();
 	const context = await browser.newContext({
 		viewport: { width: 1440, height: 1000 },
@@ -49,8 +57,7 @@ export async function createCompletionFixture() {
 		await page.getByRole("button", { name: "自选", exact: true }).click();
 		await page.getByLabel("筛选市场").selectOption("all");
 		await page.getByLabel("筛选证券类型").selectOption("all");
-		await page.getByLabel("筛选交易状态").selectOption("all");
-		await page.getByLabel("搜索代码或名称").fill(symbol);
+		await page.getByLabel("筛选已可交易证券").fill(symbol);
 		await page.locator(`[data-symbol="${symbol}"] .security-main`).click();
 	};
 	let previewCount = 0;
@@ -89,7 +96,9 @@ export async function createCompletionFixture() {
 		scenes.push({ name: `preview-api-${previewCount}`, preview });
 		await page.setViewportSize({ width: 1440, height: 1000 });
 		await page.getByRole("button", { name: "确认提交委托" }).click();
-		await expect(page.getByRole("heading", { name: "委托记录" })).toBeVisible();
+		await expect(
+			page.getByRole("heading", { name: "委托记录", exact: true }),
+		).toBeVisible();
 	};
 	return {
 		out,
