@@ -122,3 +122,5 @@ def assert_failure(result: subprocess.CompletedProcess[str]) -> None:
     assert result.returncode != 0
     assert "secret-test-password-never-log" not in result.stdout + result.stderr
     assert "Traceback" not in result.stderr
+    for internal in ("源码", "Git", "静态材料", "父目录", "0700", "阶段：", "材料：", "检查："):
+        assert internal not in result.stderr

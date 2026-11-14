@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
+from typing import NoReturn, override
 
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -29,10 +30,20 @@ from .backup_files import (
     tree,
     write,
 )
-from .backup_diagnostics import FailureContext, failure_message, safe_code, diagnosis
+from .backup_diagnostics import FailureContext, failure_message, inspect_failure_message, safe_code
 from .backup_package import Manifest, inspect, restore_paths
 from .backup_runtime import database, online, runtime
 from .backup_source import archive, archive_version, clean_source, git, paired_frontend
+
+
+class BackupArgumentParser(argparse.ArgumentParser):
+    @override
+    def error(self, message: str) -> NoReturn:
+        self.exit(
+            2,
+            "命令填写不完整，或有不认识的选项。没有开始备份或恢复操作。"
+            + "请按操作说明重新填写；也可以使用 --help 查看填写方式。\n",
+        )
 
 
 class Arguments(argparse.Namespace):
@@ -159,7 +170,7 @@ def create(args: Arguments) -> tuple[Path, Manifest]:
             )
         except OSError:
             print(
-                "[failure_record] 无法写入失败记录；失败包不能用于恢复；请保留终端说明。",
+                "失败原因也没能保存到文件中。请保留当前终端文字，交给维护者查看；本次备份不能用于恢复。",
                 file=sys.stderr,
             )
         raise failure from error
@@ -167,7 +178,7 @@ def create(args: Arguments) -> tuple[Path, Manifest]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = BackupArgumentParser(description=__doc__)
     actions = parser.add_subparsers(dest="action", required=True)
     create_parser = actions.add_parser("create", help="生成新的私有成套包")
     for flag in ("root", "destination", "static-reference"):
@@ -212,9 +223,8 @@ def main() -> int:
         if args.action == "create":
             failure = error if isinstance(error, BackupError) else BackupError(code)
             print(failure_message(failure), file=sys.stderr)
-            print(f"目标（如已创建则保留部分包）：{args.destination}", file=sys.stderr)
         else:
-            print(f"[{code}] {diagnosis(code)} 未确认成套可用。", file=sys.stderr)
+            print(inspect_failure_message(code), file=sys.stderr)
         return 1
 
 

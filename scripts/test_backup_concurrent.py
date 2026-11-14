@@ -35,7 +35,10 @@ def test_ignored_untracked_source_rejected(tmp_path: Path) -> None:
     _ = (sample.root / "backend/app/hidden.py").write_text("pass")
     result = sample.create()
     assert_failure(result)
-    assert "untracked_source" in result.stderr
+    record = json.loads((sample.destination / "failure.json").read_text())
+    assert record["code"] == "untracked_source"
+    assert record["message"] in result.stderr
+    assert "尚未确认版本" in result.stderr
 
 
 def test_concurrent_runtime_change_rejected(tmp_path: Path) -> None:
@@ -68,7 +71,10 @@ def test_concurrent_runtime_change_rejected(tmp_path: Path) -> None:
             connection.rollback()
             stdout, stderr = process.communicate(timeout=10)
             assert process.returncode != 0
-            assert "runtime_changed" in stderr
+            record = json.loads((sample.destination / "failure.json").read_text())
+            assert record["code"] == "runtime_changed"
+            assert record["message"] in stderr
+            assert "文件发生了变化" in stderr
             assert "changed.invalid" not in stdout + stderr
     assert not (sample.destination / "result.json").exists()
 

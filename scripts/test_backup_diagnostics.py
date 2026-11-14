@@ -80,7 +80,7 @@ def test_runtime_change_during_read(
         "check": "读取前后状态变化",
     }
     assert record["message"] in output
-    assert "尚不存在" in output and "父目录" in output and "不能用于恢复" in output
+    assert "尚未使用" in output and "仅本人可访问" in output and "不能用于恢复" in output
     assert str(sample.root) not in output + json.dumps(record, ensure_ascii=False)
     assert "secret-test-password-never-log" not in output + json.dumps(record)
     assert str(external) not in output + json.dumps(record)
@@ -192,18 +192,22 @@ def test_failure_record_unwritable(
     _ = (sample.root / "backend/.local-password").write_text("short")
     assert invoke(sample, monkeypatch) == 1
     output = capsys.readouterr().err
-    assert "[failure_record]" in output and "无法写入失败记录" in output
-    assert "不能用于恢复" in output and "尚不存在" in output
+    assert "没能保存到文件中" in output and "保留当前终端文字" in output
+    assert "不能用于恢复" in output and "尚未使用" in output
     assert sample.inspect().returncode == 1
 
 
+@pytest.mark.parametrize("error_type", [PermissionError, OSError])
 def test_raw_exception_is_not_printed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error_type: type[OSError],
 ) -> None:
     sample = setup(tmp_path)
 
     def fail_runtime(_root: Path) -> dict[str, bytes]:
-        raise PermissionError("private-source-secret-test-password-never-log")
+        raise error_type("private-source-secret-test-password-never-log")
 
     monkeypatch.setattr(backup, "runtime", fail_runtime)
     assert invoke(sample, monkeypatch) == 1
@@ -212,3 +216,41 @@ def test_raw_exception_is_not_printed(
     assert record["message"] in output
     assert record["context"]["check"] == "未知"
     assert "secret-test-password-never-log" not in output + json.dumps(record)
+    assert record["code"] == ("material_permissions" if error_type is PermissionError else "material_io_failed")
+    assert ("没有权限" if error_type is PermissionError else "无法确认具体原因") in output
+
+
+def test_inspect_file_change_is_not_reported_as_version_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sample = setup(tmp_path)
+    assert sample.create().returncode == 0
+    source_before = snapshot(sample.root)
+    password = sample.destination / "runtime/password"
+    original = Path.read_bytes
+    changed: list[dict[str, tuple[bytes, int, int]]] = []
+
+    def change_after_read(path: Path) -> bytes:
+        data = original(path)
+        if path == password and not changed:
+            _ = path.write_bytes(data + b" ")
+            changed.append({})
+            changed[0] = snapshot(sample.destination)
+        return data
+
+    monkeypatch.setattr(Path, "read_bytes", change_after_read)
+    monkeypatch.setattr(sys, "argv", ["backup.py", "inspect", "--backup", str(sample.destination)])
+    previous = os.umask(0o077)
+    try:
+        result = backup.main()
+    finally:
+        os.umask(previous)
+    output = capsys.readouterr().err
+    assert result == 1
+    assert len(changed) == 1
+    assert snapshot(sample.destination) == changed[0]
+    assert snapshot(sample.root) == source_before
+    assert "发生了变化" in output
+    assert "暂时不要用它恢复" in output and "保留原件" in output
+    for wrong in ("版本不一致", "版本不符", "损坏", "source_changed", "secret-test-password-never-log"):
+        assert wrong not in output
