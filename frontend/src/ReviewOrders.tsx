@@ -150,7 +150,7 @@ export function ReviewOrders({
 								所选委托依据 · {sides[selected.side]} {selected.quantity} ·{" "}
 								{selected.id.slice(0, 8)}
 							</h4>
-							<OrderRecord order={selected} expanded />
+							<OrderRecord key={selected.id} order={selected} />
 							<PlanComparison order={selected} current={current} />
 						</section>
 					)}
