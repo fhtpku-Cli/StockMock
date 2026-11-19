@@ -8,12 +8,14 @@ export function DiscoveryResults({
 	onToggle,
 	contains,
 	pending,
+	sharedRules,
 }: {
 	readonly items: readonly Instrument[];
 	readonly onSelect: (instrument: Instrument) => void;
 	readonly onToggle: (instrument: Instrument) => void;
 	readonly contains: (symbol: string) => boolean;
 	readonly pending: boolean;
+	readonly sharedRules: ReadonlyMap<string, string>;
 }) {
 	return (
 		<div className="security-list">
@@ -37,9 +39,12 @@ export function DiscoveryResults({
 								{instrument.symbol} · {instrument.market} ·{" "}
 								{instrument.kind === "ETF" ? "ETF" : "股票"}
 							</small>
-							<small>
-								{instrument.restriction || "交易仍需通过行情与规则校验"}
-							</small>
+							{instrument.restriction &&
+								(!instrument.tradable ||
+									sharedRules.get(instrument.market) !==
+										instrument.restriction) && (
+									<small>{instrument.restriction}</small>
+								)}
 						</span>
 					</button>
 					<Badge tone={instrument.tradable ? "good" : "warn"}>

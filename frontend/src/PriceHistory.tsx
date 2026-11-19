@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { type PointerEvent, useState } from "react";
 import { z } from "zod";
 import { api, number, price, time } from "./api";
 import {
@@ -16,6 +16,7 @@ import {
 } from "./marketView";
 import type { HistoryRow } from "./schema";
 import { historySchema, orderSchema } from "./schema";
+import "./styles/price-readout.css";
 import { VolumeHistory } from "./VolumeHistory";
 
 export function PriceHistory({
@@ -23,16 +24,19 @@ export function PriceHistory({
 	name,
 	market,
 	currency,
+	tickSize,
 	rows,
 }: {
 	readonly symbol: string;
 	readonly name: string;
 	readonly market: string;
 	readonly currency: string;
+	readonly tickSize?: string | null;
 	readonly rows: readonly HistoryRow[];
 }) {
 	const [range, setRange] = useState<ChartRange>(defaultChartRange);
 	const visible = rangeRows(rows, range);
+	const [selectedDay, setSelectedDay] = useState("");
 	const orders = useQuery({
 		queryKey: ["orders"],
 		queryFn: ({ signal }) =>
@@ -42,7 +46,32 @@ export function PriceHistory({
 	const chart = chartGeometry(visible, marks);
 	const last = visible.at(-1);
 	const intraday = last?.complete === false;
+	const formatPrice = (value: string) => {
+		const fraction = value.split(".")[1]?.length ?? 0;
+		const tickFraction = tickSize?.split(".")[1]?.length ?? 0;
+		return price(
+			value,
+			currency,
+			tickFraction > fraction ? (tickSize ?? undefined) : undefined,
+		);
+	};
 	const indexOf = new Map(visible.map((row, index) => [row.time, index]));
+	const selectedIndex = indexOf.get(selectedDay) ?? visible.length - 1;
+	const selected = visible[selectedIndex];
+	const selectPoint = (event: PointerEvent<SVGSVGElement>) => {
+		const ctm = event.currentTarget.getScreenCTM();
+		if (!ctm || visible.length < 2) return;
+		const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(
+			ctm.inverse(),
+		);
+		const start = chart.x(0);
+		const end = chart.x(visible.length - 1);
+		const index = Math.round(
+			((point.x - start) / (end - start)) * (visible.length - 1),
+		);
+		const row = visible[Math.max(0, Math.min(index, visible.length - 1))];
+		if (row) setSelectedDay(row.time);
+	};
 	return (
 		<>
 			<fieldset className="segmented chart-range" aria-label="走势范围">
@@ -51,7 +80,10 @@ export function PriceHistory({
 						type="button"
 						key={item.id}
 						aria-pressed={range === item.id}
-						onClick={() => setRange(item.id)}
+						onClick={() => {
+							setRange(item.id);
+							setSelectedDay("");
+						}}
 					>
 						{item.label}
 					</button>
@@ -61,38 +93,61 @@ export function PriceHistory({
 				<p className="chart-empty">历史样本不足，暂不绘制走势。</p>
 			) : (
 				<figure className="price-chart">
-					<svg
-						viewBox="0 0 700 190"
-						role="img"
-						aria-label={`${name}近 ${visible.length} 个交易日收盘价，最低 ${chart.low}，最高 ${chart.high} ${currency}`}
-					>
-						<path d="M20 30H680 M20 95H680 M20 160H680" className="grid-line" />
-						<polyline
-							points={chart.points}
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2.5"
-							vectorEffect="non-scaling-stroke"
-						/>
-						{marks
-							.filter((mark) => mark.onChart)
-							.map((mark) => {
-								const x = chart.x(indexOf.get(mark.day) ?? 0);
-								const y = chart.y(Number(mark.price));
-								return (
-									<path
-										key={mark.id}
-										data-trade-mark={mark.side}
-										className={`trade-mark ${mark.side}`}
-										d={
-											mark.side === "buy"
-												? `M${x} ${y - 7}L${x + 6} ${y + 4}L${x - 6} ${y + 4}Z`
-												: `M${x} ${y + 7}L${x + 6} ${y - 4}L${x - 6} ${y - 4}Z`
-										}
-									/>
-								);
-							})}
-					</svg>
+					<div className="price-plot">
+						<div className="price-scale" aria-hidden="true">
+							{chart.high !== chart.low && (
+								<span>{formatPrice(String(chart.high))}</span>
+							)}
+							<span>{formatPrice(String(chart.low))}</span>
+						</div>
+						<svg
+							onPointerMove={(event) => {
+								if (event.pointerType === "mouse") selectPoint(event);
+							}}
+							onPointerUp={selectPoint}
+							viewBox="0 0 700 190"
+							role="img"
+							aria-label={`${name}近 ${visible.length} 个交易日收盘价，最低 ${chart.low}，最高 ${chart.high} ${currency}`}
+						>
+							<path
+								d="M20 30H680 M20 95H680 M20 160H680"
+								className="grid-line"
+							/>
+							<polyline
+								points={chart.points}
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2.5"
+								vectorEffect="non-scaling-stroke"
+							/>
+							{selected && (
+								<circle
+									cx={chart.x(selectedIndex)}
+									cy={chart.y(Number(selected.close))}
+									r="4"
+									className="chart-day-dot"
+								/>
+							)}
+							{marks
+								.filter((mark) => mark.onChart)
+								.map((mark) => {
+									const x = chart.x(indexOf.get(mark.day) ?? 0);
+									const y = chart.y(Number(mark.price));
+									return (
+										<path
+											key={mark.id}
+											data-trade-mark={mark.side}
+											className={`trade-mark ${mark.side}`}
+											d={
+												mark.side === "buy"
+													? `M${x} ${y - 7}L${x + 6} ${y + 4}L${x - 6} ${y + 4}Z`
+													: `M${x} ${y + 7}L${x + 6} ${y - 4}L${x - 6} ${y - 4}Z`
+											}
+										/>
+									);
+								})}
+						</svg>
+					</div>
 					<figcaption>
 						<span>{visible[0]?.time.slice(0, 10)}</span>
 						<span>
@@ -103,6 +158,13 @@ export function PriceHistory({
 					</figcaption>
 				</figure>
 			)}
+			<VolumeHistory
+				rows={visible}
+				market={market}
+				formatPrice={formatPrice}
+				selected={selected}
+				onSelect={setSelectedDay}
+			/>
 			<p className="footnote">
 				未复权价格：分红、送转的除权日可能出现跳空，不代表当天真实涨跌。
 				{intraday &&
@@ -138,11 +200,6 @@ export function PriceHistory({
 					</p>
 				</section>
 			)}
-			<VolumeHistory
-				key={`${symbol}-${range}`}
-				rows={visible}
-				market={market}
-			/>
 		</>
 	);
 }

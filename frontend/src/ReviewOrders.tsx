@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { fullTime, price } from "./api";
 import { OrderRecord } from "./OrderRecord";
 import { Pagination } from "./Pagination";
@@ -95,24 +95,53 @@ export function ReviewOrderSummary({ order }: { readonly order: Order }) {
 export function ReviewOrders({
 	orders,
 	current,
+	initialOrderId,
 }: {
 	readonly orders: readonly Order[];
+	readonly initialOrderId?: string | undefined;
 	readonly current: PlanSnapshot | null;
 }) {
 	const sorted = useMemo(() => sortReviewOrders(orders), [orders]);
 	const [count, setCount] = useState(20);
-	const [orderId, setOrderId] = useState(sorted[0]?.id ?? "");
+	const [orderId, setOrderId] = useState(initialOrderId ?? sorted[0]?.id ?? "");
 	const selected = sorted.find((order) => order.id === orderId) ?? sorted[0];
 	const detailsId = useId();
+	const evidenceHeading = useRef<HTMLHeadingElement>(null);
 	const visible = sorted.slice(0, count);
 	useEffect(() => {
 		setOrderId(selected?.id ?? "");
 	}, [selected?.id]);
+	const evidence = selected && (
+		<section
+			id={detailsId}
+			aria-label="所选委托依据"
+			className="review-order-evidence"
+		>
+			<h4 tabIndex={-1} ref={evidenceHeading}>
+				所选委托依据 · {sides[selected.side]} {selected.quantity} ·{" "}
+				{selected.id.slice(0, 8)}
+			</h4>
+			<OrderRecord key={selected.id} order={selected} />
+			<PlanComparison order={selected} current={current} />
+			{visible.some((order) => order.id === selected.id) && (
+				<button
+					type="button"
+					className="text-button"
+					onClick={() =>
+						document.getElementById(`${detailsId}-${selected.id}`)?.focus()
+					}
+				>
+					返回所选委托
+				</button>
+			)}
+		</section>
+	);
 	return (
 		<section aria-label="关联委托概览" className="review-orders">
 			<h3>关联委托概览（{sorted.length} 笔）</h3>
 			{sorted.length ? (
 				<>
+					{initialOrderId && evidence}
 					<p className="footnote">
 						按提交时间从早到晚排列；同一时间按完整委托编号排序。状态以本次读取的已保存记录为准。
 					</p>
@@ -126,7 +155,16 @@ export function ReviewOrders({
 									aria-pressed={selected?.id === order.id}
 									aria-controls={detailsId}
 									aria-label={`查看这笔依据 · ${sides[order.side]} ${order.quantity} · ${fullTime(order.created_at)} 北京时间 · ${order.id.slice(0, 8)}`}
-									onClick={() => setOrderId(order.id)}
+									id={`${detailsId}-${order.id}`}
+									onClick={() => {
+										setOrderId(order.id);
+										requestAnimationFrame(() => {
+											evidenceHeading.current?.focus({ preventScroll: true });
+											evidenceHeading.current?.scrollIntoView({
+												block: "center",
+											});
+										});
+									}}
 								>
 									查看这笔依据{selected?.id === order.id ? " · 已选中" : ""}
 								</button>
@@ -140,20 +178,7 @@ export function ReviewOrders({
 						more={visible.length < sorted.length}
 						onMore={() => setCount((value) => value + 20)}
 					/>
-					{selected && (
-						<section
-							id={detailsId}
-							aria-label="所选委托依据"
-							className="review-order-evidence"
-						>
-							<h4>
-								所选委托依据 · {sides[selected.side]} {selected.quantity} ·{" "}
-								{selected.id.slice(0, 8)}
-							</h4>
-							<OrderRecord key={selected.id} order={selected} />
-							<PlanComparison order={selected} current={current} />
-						</section>
-					)}
+					{!initialOrderId && evidence}
 				</>
 			) : (
 				<p className="footnote">尚无关联委托，也可以主动记录观察结论。</p>

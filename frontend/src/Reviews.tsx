@@ -3,20 +3,24 @@ import { useEffect, useState } from "react";
 import { ApiError, api, errorMessage, time } from "./api";
 import { CsvDownload } from "./CsvDownload";
 import { Pagination } from "./Pagination";
-import { ReviewDetail } from "./ReviewDetail";
+import { ReviewModal } from "./ReviewDetail";
 import {
 	filterParams,
 	initialReviewFilter,
 	ReviewFilters,
 } from "./ReviewFilters";
-import { reviewCursorSchema, reviewStateNames } from "./reviewSchema";
+import {
+	type ReviewTarget,
+	reviewCursorSchema,
+	reviewStateNames,
+} from "./reviewSchema";
 import { Badge, Empty, ErrorNotice, Loading, Panel } from "./ui";
 export function Reviews({ roundId }: { readonly roundId?: string }) {
 	const [draft, setDraft] = useState(initialReviewFilter);
 	const [filter, setFilter] = useState(initialReviewFilter);
 	const [state, setState] = useState(roundId ? "all" : "todo");
 	const [generation, setGeneration] = useState(0);
-	const [selected, setSelected] = useState<string | null>(null);
+	const [selected, setSelected] = useState<ReviewTarget | null>(null);
 	const [roundNotice, setRoundNotice] = useState(false);
 	const params = filterParams(filter, roundId);
 	params.set("review_state", state);
@@ -66,52 +70,47 @@ export function Reviews({ roundId }: { readonly roundId?: string }) {
 	};
 	return (
 		<Panel title={roundId ? "历史计划与交易复盘" : "计划与交易复盘"}>
-			<div className="review-counts">
-				{(["pending", "needs_update", "reviewed", "not_due"] as const).map(
-					(key) => (
-						<button
-							type="button"
-							className={
-								state === key ? "button small primary" : "button small"
-							}
-							aria-pressed={state === key}
-							key={key}
-							onClick={() => {
-								setState(key);
-								refresh();
-							}}
-						>
-							{reviewStateNames[key]} · {first?.counts[key] ?? "—"}
-						</button>
-					),
-				)}
-			</div>
-			<label className="field">
-				复盘状态
-				<select
-					aria-label="复盘状态"
-					value={state}
-					onChange={(event) => {
-						setState(event.target.value);
+			<fieldset className="segmented review-counts" aria-label="复盘状态">
+				{(
+					[
+						"todo",
+						"all",
+						"pending",
+						"needs_update",
+						"reviewed",
+						"not_due",
+					] as const
+				).map((key) => (
+					<button
+						type="button"
+						aria-pressed={state === key}
+						key={key}
+						onClick={() => {
+							setState(key);
+							refresh();
+						}}
+					>
+						{key === "todo"
+							? "全部待办"
+							: key === "all"
+								? "全部状态"
+								: `${reviewStateNames[key]} · ${first?.counts[key] ?? "—"}`}
+					</button>
+				))}
+			</fieldset>
+			<details className="review-filter-options">
+				<summary>
+					按证券、市场和日期筛选{filterParams(filter).size ? "（已应用）" : ""}
+				</summary>
+				<ReviewFilters
+					value={draft}
+					onChange={setDraft}
+					onApply={() => {
+						setFilter(draft);
 						refresh();
 					}}
-				>
-					<option value="todo">全部待办（首次与补充）</option>
-					<option value="pending">待首次复盘</option>
-					<option value="needs_update">有新进展待补充</option>
-					<option value="reviewed">已复盘</option>
-					<option value="not_due">暂未到复盘时点</option>
-					<option value="all">全部状态</option>
-				</select>
-			</label>
-			<ReviewFilters
-				value={draft}
-				onChange={setDraft}
-				onApply={() => {
-					setFilter(draft);
-					refresh();
-				}}
-			/>
+				/>
+			</details>
 			<div className="review-toolbar">
 				<button type="button" className="button" onClick={refresh}>
 					刷新复盘列表
@@ -136,7 +135,7 @@ export function Reviews({ roundId }: { readonly roundId?: string }) {
 				</CsvDownload>
 			</div>
 			<p className="footnote">
-				计数来自完整筛选结果。最近记录日期按北京时间筛选复盘主体，主体内含完整记录；不以提示已读或浏览时间更新。有新记录或状态变化时请刷新。
+				日期按最近一条记录的北京时间筛选。打开复盘可查看完整历史。
 			</p>
 			{roundNotice && (
 				<ErrorNotice message="练习轮次已变化，已重新读取列表，旧轮记录不会拼入新轮。" />
@@ -191,22 +190,17 @@ export function Reviews({ roundId }: { readonly roundId?: string }) {
 							<button
 								type="button"
 								className="button small"
-								aria-expanded={selected === review.id}
+								aria-haspopup="dialog"
 								onClick={() =>
-									setSelected(selected === review.id ? null : review.id)
-								}
-							>
-								{selected === review.id ? "收起复盘详情" : "查看计划与实际结果"}
-							</button>
-							{selected === review.id && (
-								<ReviewDetail
-									target={{
+									setSelected({
 										roundId: first.round_id,
 										subjectType: review.subject_type,
 										subjectId: review.id,
-									}}
-								/>
-							)}
+									})
+								}
+							>
+								查看计划与实际结果
+							</button>
 						</article>
 					))}
 			</div>
@@ -218,6 +212,9 @@ export function Reviews({ roundId }: { readonly roundId?: string }) {
 					more={query.hasNextPage}
 					onMore={() => void query.fetchNextPage()}
 				/>
+			)}
+			{selected && (
+				<ReviewModal target={selected} onClose={() => setSelected(null)} />
 			)}
 		</Panel>
 	);

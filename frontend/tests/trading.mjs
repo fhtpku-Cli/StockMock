@@ -48,6 +48,12 @@ try {
 		page.getByRole("button", { name: "模拟买入", exact: true }),
 	).toBeEnabled();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).click();
+	await expect(page.locator(".trade-reference")).toContainText("北京时间");
+	await expect(page.locator(".trade-reference")).toContainText("CNY 可用现金");
+	await page.getByRole("button", { name: "返回标的详情" }).click();
+	await expect(page.getByRole("dialog")).toHaveAccessibleName("贵州茅台");
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.getByRole("button", { name: "模拟买入", exact: true }).click();
 	await page.getByLabel("限价（CNY）").fill("100");
 	await page
 		.getByLabel("这次交易的理由")
@@ -55,6 +61,11 @@ try {
 	await page.getByRole("button", { name: "预览费用与资金占用" }).click();
 	await page.getByRole("heading", { name: "确认这笔委托" }).waitFor();
 	await expect(page.locator(".preview-box")).toContainText("10,005.00");
+	await expect(
+		page.getByRole("heading", { name: "确认这笔委托" }),
+	).toBeInViewport();
+	await capture("controlled-preview-phone");
+	await page.setViewportSize({ width: 1440, height: 1000 });
 	await capture("controlled-preview");
 	const axe = (await new AxeBuilder({ page }).analyze()).violations;
 	await page.getByLabel("数量（每手 100）").fill("200");
@@ -66,20 +77,32 @@ try {
 	await page.getByRole("button", { name: "确认提交委托" }).click();
 	await expect(page.locator(".order-row")).toHaveCount(1);
 	await expect(page.locator(".order-row")).toContainText("等待成交");
+	await expect(
+		page.getByRole("status").filter({ hasText: "已收到 600519.SS" }),
+	).toBeInViewport();
 	await capture("controlled-order-accepted");
 	await page.getByRole("button", { name: "资产", exact: true }).click();
-	await expect(page.locator(".metric").nth(1)).toContainText("10,005.00");
+	await expect(
+		page
+			.locator(".hero-cash > div")
+			.filter({ hasText: "人民币委托占用" })
+			.locator("dd"),
+	).toContainText("10,005.00");
 	await capture("controlled-reserved");
 	await page.getByRole("button", { name: "委托", exact: true }).click();
-	acceptCancelDialog(page);
 	await page.getByRole("button", { name: "申请撤单" }).click();
+	await acceptCancelDialog(page);
 	await expect(page.locator(".order-row")).toContainText(/已撤单|撤单确认中/);
 	await capture("controlled-cancel");
 	await page.getByRole("button", { name: "写复盘" }).click();
-	await expect(page.getByText(/^关联委托 /)).toBeVisible();
-	await page.getByLabel("复盘内容").fill("受控测试委托复盘，保留决策记录。");
-	await page.getByRole("button", { name: "保存记录", exact: true }).click();
-	await page.getByText("普通笔记已保存。", { exact: true }).waitFor();
+	const review = page.getByRole("dialog", { name: "相关计划与复盘" });
+	await review.getByRole("button", { name: "事实与笔记" }).click();
+	await review
+		.getByLabel("计划或委托普通笔记")
+		.fill("受控测试委托复盘，保留决策记录。");
+	await review.getByRole("button", { name: "保存普通笔记" }).click();
+	await expect(review.getByRole("status")).toContainText("普通笔记已保存");
+	await review.getByRole("button", { name: "关闭" }).click();
 	await capture("controlled-linked-journal");
 	await page.getByRole("button", { name: /个人账户/ }).click();
 	await page.getByLabel("输入“重新开始”以确认").fill("重新开始");

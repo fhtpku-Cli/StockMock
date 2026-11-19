@@ -31,20 +31,22 @@ for (const engine of mode === "before" ? ["chromium"] : ["chromium", "webkit"]) 
   const fixture = JSON.parse(await readFile(fixturePath, "utf8"));
   await page.getByRole("button", { name: "复盘", exact: true }).click();
   const workbench = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "计划与交易复盘", exact: true }) });
+  if (mode !== "before") await workbench.locator(".review-filter-options > summary").click();
   await page.getByLabel("复盘起始日期").fill("2026-10-28"); await page.getByLabel("复盘结束日期").fill("2026-10-28");
   await page.getByRole("button", { name: "应用复盘筛选" }).click();
   const state = page.getByLabel("复盘状态", { exact: true }); const cards = workbench.locator(".review-card");
-  await state.selectOption("all"); await expect(cards).toHaveCount(25);
+  const selectAll = () => mode === "before" ? state.selectOption("all") : workbench.getByRole("button", { name: "全部状态", exact: true }).click();
+  await selectAll(); await expect(cards).toHaveCount(25);
   await workbench.getByRole("button", { name: "加载更多", exact: true }).click(); await expect(cards).toHaveCount(36);
   for (const width of mode === "before" ? [1440] : [1440, 390, 320]) {
    await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
-   for (const entrance of ["select", "count-button"]) {
+   for (const entrance of mode === "before" ? ["select", "count-button"] : ["count-button"]) {
     const startedAt = Date.now(); const start = requests.length;
     if (entrance === "select") await state.selectOption("pending");
     else await workbench.getByRole("button", { name: "待首次复盘 · 18", exact: true }).click();
     await expect(cards).toHaveCount(18);
     const pendingRequests = requests.slice(start); const backStart = requests.length;
-    await state.selectOption("all"); await expect(cards).toHaveCount(mode === "before" ? 36 : 25);
+    await selectAll(); await expect(cards).toHaveCount(mode === "before" ? 36 : 25);
     const backRequests = requests.slice(backStart); const elapsedMs = Date.now() - startedAt;
     expect(elapsedMs).toBeLessThan(20000);
     if (mode === "before") expect(backRequests).toHaveLength(0);

@@ -7,10 +7,11 @@ import { changeDisplay } from "./marketView";
 import { Plans } from "./Plans";
 import { PriceHistory } from "./PriceHistory";
 import type { Instrument } from "./schema";
-import { historySchema, portfolioSchema, quoteSchema } from "./schema";
+import { historySchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
 import { useEnableInstrument } from "./useEnableInstrument";
 import { useOnline } from "./useOnline";
+import { useTradeReference } from "./useTradeReference";
 import { useWatchlist } from "./useWatchlist";
 export function Detail({
 	instrument,
@@ -28,21 +29,10 @@ export function Detail({
 	const canEnable =
 		!instrument.tradable && ["CN", "US"].includes(instrument.market);
 	const { toggle, contains, pending } = useWatchlist();
-	const portfolio = useQuery({
-		queryKey: ["portfolio"],
-		queryFn: () => api("portfolio", portfolioSchema),
-	});
+	const { quote, portfolio } = useTradeReference(instrument.symbol);
 	const position = portfolio.data?.positions.find(
 		(p) => p.symbol === instrument.symbol,
 	);
-	const quote = useQuery({
-		queryKey: ["quote", instrument.symbol],
-		queryFn: () =>
-			api(
-				`instruments/${encodeURIComponent(instrument.symbol)}/quote`,
-				quoteSchema,
-			),
-	});
 	const history = useQuery({
 		queryKey: ["history", instrument.symbol],
 		queryFn: () =>
@@ -66,7 +56,6 @@ export function Detail({
 					{instrument.tradable ? "可模拟交易" : "仅观察"}
 				</Badge>
 			</div>
-			<MarketSession market={instrument.market} symbol={instrument.symbol} />
 			{quote.isPending ? (
 				<Loading />
 			) : quote.isError ? (
@@ -99,8 +88,33 @@ export function Detail({
 					</p>
 				</>
 			)}
-			<Plans symbol={instrument.symbol} currency={instrument.currency} />
-			<Alerts symbol={instrument.symbol} />
+			<div className="button-row discovery-detail-actions">
+				<button
+					type="button"
+					className="button"
+					disabled={pending || !online}
+					onClick={() => toggle.mutate(instrument)}
+				>
+					{contains(instrument.symbol) ? "移除自选" : "加入自选"}
+				</button>
+				<button
+					type="button"
+					className="button primary"
+					disabled={!online || !instrument.tradable || !quote.isSuccess}
+					onClick={() => onTrade("buy")}
+				>
+					模拟买入
+				</button>
+				<button
+					type="button"
+					className="button"
+					disabled={!online || !instrument.tradable || !quote.isSuccess}
+					onClick={() => onTrade("sell")}
+				>
+					模拟卖出
+				</button>
+			</div>
+			<p className="footnote">常规交易时段 · 当日有效 · 延迟成交与撤单</p>
 			<div className="section-heading">
 				<h3>历史收盘价</h3>
 				<span className="muted">日线</span>
@@ -119,9 +133,13 @@ export function Detail({
 					name={instrument.name}
 					market={instrument.market}
 					currency={instrument.currency}
+					tickSize={tickSize ?? null}
 					rows={history.data}
 				/>
 			)}
+			<MarketSession market={instrument.market} symbol={instrument.symbol} />
+			<Plans symbol={instrument.symbol} currency={instrument.currency} />
+			<Alerts symbol={instrument.symbol} />
 			<dl className="summary-list">
 				{instrument.min_buy_quantity != null &&
 					instrument.quantity_step != null && (
@@ -205,33 +223,6 @@ export function Detail({
 					)}
 				</div>
 			)}
-			<div className="button-row discovery-detail-actions">
-				<button
-					type="button"
-					className="button"
-					disabled={pending || !online}
-					onClick={() => toggle.mutate(instrument)}
-				>
-					{contains(instrument.symbol) ? "移除自选" : "加入自选"}
-				</button>
-				<button
-					type="button"
-					className="button primary"
-					disabled={!online || !instrument.tradable || !quote.isSuccess}
-					onClick={() => onTrade("buy")}
-				>
-					模拟买入
-				</button>
-				<button
-					type="button"
-					className="button"
-					disabled={!online || !instrument.tradable || !quote.isSuccess}
-					onClick={() => onTrade("sell")}
-				>
-					模拟卖出
-				</button>
-			</div>
-			<p className="footnote">常规交易时段 · 当日有效 · 延迟成交与撤单</p>
 		</Modal>
 	);
 }

@@ -226,3 +226,55 @@
 		white-space: normal;
 	}
 }
+
+.review-counts.segmented,
+.review-sections.segmented {
+	display: flex;
+	width: fit-content;
+	max-width: 100%;
+	flex-wrap: wrap;
+}
+
+.review-counts.segmented button,
+.review-sections.segmented button {
+	min-height: 44px;
+}
+
+.review-filter-options,
+.journal-secondary > summary {
+	margin-bottom: 16px;
+}
+
+.review-filter-options > summary,
+.journal-secondary > summary,
+.plan-comparison summary {
+	padding-block: 12px;
+	cursor: pointer;
+}
+
+.journal-secondary:not([open]) > summary {
+	margin: 0;
+}
+
+.review-section > section {
+	margin-block: 20px;
+}
+
+.review-sections.segmented {
+	position: sticky;
+	top: 76px;
+	z-index: 1;
+	background: var(--canvas);
+}
+
+@media (max-width: 700px) {
+	.review-sections.segmented button {
+		padding-inline: 2px;
+	}
+	.review-sections.segmented {
+		top: 68px;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		width: 100%;
+	}
+}

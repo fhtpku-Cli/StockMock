@@ -1,0 +1,30 @@
+.price-plot {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: stretch;
+	column-gap: 4px;
+}
+.price-scale {
+	display: grid;
+	grid-template-rows: 30fr 130fr 30fr;
+	position: relative;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted);
+}
+.price-scale span {
+	grid-column: 1;
+	align-self: end;
+	transform: translateY(50%);
+}
+.price-scale span:first-child {
+	grid-row: 1;
+}
+.price-scale span:last-child {
+	grid-row: 2;
+}
+.chart-day-dot {
+	fill: var(--paper);
+	stroke: var(--accent);
+	stroke-width: 2px;
+}

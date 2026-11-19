@@ -1,10 +1,4 @@
-import {
-	ArrowRight,
-	ArrowUpRight,
-	Clock,
-	LockSimple,
-	Wallet,
-} from "@phosphor-icons/react";
+import { ArrowRight, Clock } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { ActiveOrdersSummary } from "./ActiveOrdersSummary";
 import { Alerts } from "./Alerts";
@@ -12,6 +6,7 @@ import { AssetHistory } from "./AssetHistory";
 import { api, errorMessage, money, time } from "./api";
 import { Composition } from "./Composition";
 import { Positions } from "./Positions";
+import { SignedValue } from "./SignedValue";
 import { portfolioSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Panel } from "./ui";
 export function PortfolioView({
@@ -53,22 +48,20 @@ export function PortfolioView({
 				<div className="asset-value">{money(p.total_assets_cny)}</div>
 				<div className="hero-bottom">
 					<span>
-						本轮收益{" "}
-						<strong
-							className={
-								Number(p.pnl_cny) > 0
-									? "gain"
-									: Number(p.pnl_cny) < 0
-										? "loss"
-										: undefined
-							}
-						>
-							{p.pnl_cny && Number(p.pnl_cny) > 0 ? "+" : ""}
-							{money(p.pnl_cny)}
-						</strong>
+						本轮收益 <SignedValue value={p.pnl_cny} text={money(p.pnl_cny)} />
 					</span>
 					<span className="muted">初始本金 {money(p.initial_capital)}</span>
 				</div>
+				<dl className="hero-cash">
+					<div>
+						<dt>人民币可用资金</dt>
+						<dd>{money(cny?.available ?? null)}</dd>
+					</div>
+					<div>
+						<dt>人民币委托占用</dt>
+						<dd>{money(cny?.reserved ?? null)}</dd>
+					</div>
+				</dl>
 			</section>
 			<p className="footnote">
 				估值状态：
@@ -86,47 +79,16 @@ export function PortfolioView({
 				</div>
 			))}
 			<ActiveOrdersSummary value={p.active_orders} onOrders={onOrders} />
-			{p.composition && <Composition value={p.composition} />}
-			<Alerts onSymbol={onSymbol} compact />
-			<div className="metric-grid">
-				<div className="metric">
-					<span>
-						<Wallet />
-						人民币可用资金
-					</span>
-					<strong>{money(cny?.available ?? null)}</strong>
-					<small>可用于买入与自动换汇</small>
-				</div>
-				<div className="metric">
-					<span>
-						<LockSimple />
-						人民币委托占用
-					</span>
-					<strong>{money(cny?.reserved ?? null)}</strong>
-					<small>撤单确认后才会释放</small>
-				</div>
-				<div className="metric">
-					<span>
-						<ArrowUpRight />
-						持仓标的
-					</span>
-					<strong>
-						{p.positions.length}
-						<em> 只</em>
-					</strong>
-					<small>从每一次有理由的决策开始</small>
-				</div>
-			</div>
-			<div className="dashboard-grid">
-				<div className="stack">
-					<Positions
-						positions={p.positions}
-						onSymbol={onSymbol}
-						onExplore={onExplore}
-					/>
+			<div className="stack">
+				<Positions
+					positions={p.positions}
+					onSymbol={onSymbol}
+					onExplore={onExplore}
+				/>
+				<Alerts onSymbol={onSymbol} compact />
+				{p.composition && <Composition value={p.composition} />}
+				<div className="dashboard-grid">
 					<AssetHistory />
-				</div>
-				<div className="stack">
 					<Panel
 						title="现金账户"
 						action={
@@ -164,31 +126,21 @@ export function PortfolioView({
 							))}
 						</div>
 						<p className="footnote">
-							买入港美股时自动补足外币；卖出后的外币留在对应账户。
+							外币买入时可自动换汇，卖出所得留在对应币种账户。每笔成交收取 0.05%
+							模拟费用。
 						</p>
 					</Panel>
-					<section className="practice-note">
-						<span className="eyebrow">保持一点耐心</span>
-						<h2>
-							先记录判断，
-							<br />
-							再观察结果。
-						</h2>
-						<p>
-							价格会波动，决策可以复盘。每笔买卖按成交金额收取 0.05% 模拟费用。
-						</p>
-						<div className="worker">
-							<Clock size={16} />
-							<span>
-								{p.worker.status === "running"
-									? "委托处理正常"
-									: p.worker.status === "starting"
-										? "委托处理准备中"
-										: p.worker.status}{" "}
-								· {time(p.worker.last_run)}
-							</span>
-						</div>
-					</section>
+				</div>
+				<div className="worker">
+					<Clock size={16} />
+					<span>
+						{p.worker.status === "running"
+							? "委托处理正常"
+							: p.worker.status === "starting"
+								? "委托处理准备中"
+								: p.worker.status}{" "}
+						· {time(p.worker.last_run)}
+					</span>
 				</div>
 			</div>
 		</>

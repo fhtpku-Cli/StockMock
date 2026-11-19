@@ -58,6 +58,28 @@ export function Alerts({
 		onSuccess: () => client.invalidateQueries({ queryKey: ["alerts"] }),
 	});
 	const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+	if (
+		compact &&
+		unreadOnly &&
+		query.isSuccess &&
+		query.data.pages[0]?.unread_count === 0 &&
+		!read.isError &&
+		!selectedAlert
+	)
+		return (
+			<section className="panel alerts-empty">
+				<div className="section-heading">
+					<h2>计划提示 · 0 条未读</h2>
+					<button
+						type="button"
+						className="text-button"
+						onClick={() => setUnreadOnly(false)}
+					>
+						全部提示
+					</button>
+				</div>
+			</section>
+		);
 	return (
 		<Panel
 			title={roundId ? "历史站内提示" : "计划提示"}
@@ -71,10 +93,9 @@ export function Alerts({
 			>
 				导出提示
 			</a>
-			<div className="button-row alert-filter">
+			<fieldset className="segmented alert-filter" aria-label="筛选计划提示">
 				<button
 					type="button"
-					className={unreadOnly ? "button small primary" : "button small"}
 					aria-pressed={unreadOnly}
 					onClick={() => setUnreadOnly(true)}
 				>
@@ -82,13 +103,12 @@ export function Alerts({
 				</button>
 				<button
 					type="button"
-					className={!unreadOnly ? "button small primary" : "button small"}
 					aria-pressed={!unreadOnly}
 					onClick={() => setUnreadOnly(false)}
 				>
 					全部提示
 				</button>
-			</div>
+			</fieldset>
 			{query.isPending ? (
 				<Loading />
 			) : (

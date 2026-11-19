@@ -91,6 +91,7 @@ export type ReviewTarget = {
 	readonly roundId: string;
 	readonly subjectType: "plan" | "order";
 	readonly subjectId: string;
+	readonly orderId?: string;
 };
 export const reviewStateNames = {
 	pending: "待首次复盘",

@@ -12,7 +12,7 @@ export function CashReconciliation({
 			<p className="footnote">
 				日期范围：{statement.start_date ?? "本轮开始"} 至{" "}
 				{statement.end_date ?? "当前"}
-				（北京时间）。期初、期末和核对均包含全部类型，不随流水类型筛选改变。换汇分币种记录，不是投资收益。
+				（北京时间）。余额按全部流水核对，“所选类型净变化”随类型筛选。换汇分币种记录。
 			</p>
 			<div className="analysis-metrics">
 				{statement.currencies.map((row) => (

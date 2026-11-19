@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { reviewDetailSchema, conclusionResultSchema } from '../src/reviewSchema.ts';
-import { fixture, pathFor, detail, selected, overview, rows, assertSelected, fillDraft, assertDraft, capture, api } from './review-orders-support.mjs';
+import { fixture, pathFor, detail, selected, overview, rows, assertSelected, fillDraft, assertDraft, section, capture, api } from './review-orders-support.mjs';
 
 export async function refreshScenarios(page, context, card) {
   const entry = fixture.subjects.a;
@@ -11,6 +11,7 @@ export async function refreshScenarios(page, context, card) {
   const postPattern = `**${pathFor(entry)}/conclusions`;
   await page.route(postPattern, route => route.fulfill({ status: 409, json: { detail: { code: 'review_conflict', message: 'E1受控409：事实发生变化' } } }));
   for (const mode of ['preserve', 'remove', 'empty']) {
+    await section(card, '正式结论');
     await card.getByRole('button', { name: '保存本次复盘结论', exact: true }).click();
     await expect(card.getByRole('button', { name: '刷新事实并保留草稿', exact: true })).toBeVisible();
     const getPattern = `**${pathFor(entry)}?*`;
@@ -56,6 +57,7 @@ export async function coverageScenario(page, context, card) {
   expect(staleResponse.status()).toBe(409);
   await fillDraft(card, '完整508笔覆盖');
   const posted = page.waitForResponse(response => response.url().endsWith(`${pathFor(entry)}/conclusions`) && response.request().method() === 'POST');
+  await section(card, '正式结论');
   await card.getByRole('button', { name: '保存本次复盘结论', exact: true }).click();
   const response = await posted;
   expect(response.status()).toBe(200);

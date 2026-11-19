@@ -1,24 +1,25 @@
-import { useId, useState } from "react";
-import type { z } from "zod";
-import type { historySchema } from "./schema";
+import { useId } from "react";
+import type { HistoryRow } from "./schema";
 
 export function VolumeHistory({
 	rows,
 	market,
+	formatPrice,
+	selected,
+	onSelect,
 }: {
-	readonly rows: readonly z.infer<typeof historySchema>[number][];
+	readonly rows: readonly HistoryRow[];
+	readonly formatPrice: (value: string) => string;
+	readonly selected: HistoryRow | undefined;
+	readonly onSelect: (time: string) => void;
 	readonly market: string;
 }) {
 	const dateId = useId();
-	const [selectedDate, setSelectedDate] = useState("");
-	const days = [...rows].sort((a, b) => a.time.localeCompare(b.time));
-	const selected = days.find((row) => row.time === selectedDate) ?? days.at(-1);
 	const source = market === "US" ? "新浪日线" : "腾讯日线";
 	return (
 		<section aria-label="日成交量">
 			<div className="section-heading">
-				<h3>日成交量</h3>
-				<span className="muted">来源单位</span>
+				<h3>逐日价格与成交量</h3>
 			</div>
 			{selected ? (
 				<>
@@ -27,9 +28,9 @@ export function VolumeHistory({
 						<select
 							id={dateId}
 							value={selected.time}
-							onChange={(event) => setSelectedDate(event.target.value)}
+							onChange={(event) => onSelect(event.target.value)}
 						>
-							{[...days].reverse().map((row) => (
+							{[...rows].reverse().map((row) => (
 								<option key={row.time} value={row.time}>
 									{row.time.slice(0, 10)}
 								</option>
@@ -37,6 +38,14 @@ export function VolumeHistory({
 						</select>
 					</div>
 					<dl className="summary-list" aria-live="polite">
+						<div>
+							<dt>
+								{selected.complete === true
+									? "收盘价"
+									: "日线价格（收盘未确认）"}
+							</dt>
+							<dd>{formatPrice(selected.close)}</dd>
+						</div>
 						<div>
 							<dt>成交量（来源单位）</dt>
 							<dd>

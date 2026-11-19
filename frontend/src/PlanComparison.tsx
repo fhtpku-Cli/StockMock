@@ -24,15 +24,8 @@ export function PlanComparison({
 				。不能用当前计划补造历史。
 			</p>
 		);
-	return (
-		<section className="plan-comparison" aria-label="下单依据对照">
-			<p className="footnote">
-				参考价币种：{order.currency}。对照保留当时记录，不补造版本历史。
-			</p>
-			<h4>
-				下单时第 {snapshot.version} 版 · 当前
-				{current ? `第 ${current.version} 版` : "计划未知"}
-			</h4>
+	const rows = (
+		<>
 			{fields.map(([field, label]) => {
 				const previous =
 					field === "direction"
@@ -60,6 +53,27 @@ export function PlanComparison({
 					</div>
 				);
 			})}
+		</>
+	);
+	return (
+		<section className="plan-comparison" aria-label="下单依据对照">
+			<p className="footnote">
+				参考价币种：{order.currency}。对照保留当时记录，不补造版本历史。
+			</p>
+			<h4>
+				下单时第 {snapshot.version} 版 · 当前
+				{current ? `第 ${current.version} 版` : "计划未知"}
+			</h4>
+			{current &&
+			current.version === snapshot.version &&
+			fields.every(([field]) => snapshot[field] === current[field]) ? (
+				<details key={order.id}>
+					<summary>计划内容一致 · 查看六项对照</summary>
+					{rows}
+				</details>
+			) : (
+				rows
+			)}
 		</section>
 	);
 }

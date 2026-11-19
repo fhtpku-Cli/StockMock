@@ -50,7 +50,7 @@
 }
 .security-main small {
 	display: block;
-	font-size: 11px;
+	font-size: 12px;
 	margin-top: 4px;
 }
 .security-avatar {
@@ -96,7 +96,7 @@
 	margin-bottom: 4px;
 }
 .watch-card > span:not(.badge) {
-	font-size: 11px;
+	font-size: 12px;
 	color: var(--muted);
 }
 .watch-card .badge {
@@ -114,7 +114,7 @@
 .segmented button {
 	border: 0;
 	border-radius: 6px;
-	min-height: 40px;
+	min-height: 44px;
 	padding: 8px 16px;
 	background: transparent;
 	color: var(--muted);
@@ -175,4 +175,14 @@
 }
 .market-session p {
 	line-height: 1.7;
+}
+.order-direction {
+	background: var(--canvas);
+	color: var(--buy-direction);
+	border-radius: 4px;
+	padding: 2px 8px;
+}
+
+.order-direction.sell {
+	color: var(--sell-direction);
 }

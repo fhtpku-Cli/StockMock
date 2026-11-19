@@ -342,19 +342,27 @@ for (const engine of ["chromium", "webkit"]) {
 		await expect(page.getByRole("heading", { name: "委托记录" })).toBeVisible();
 		await control("advance");
 		await page.getByRole("button", { name: "复盘", exact: true }).click();
-		const card = page.locator(".review-card").filter({ hasText: "510300.SS" });
-		await card.getByRole("button", { name: "查看计划与实际结果" }).click();
+		const opener = page
+			.locator(".review-card")
+			.filter({ hasText: "510300.SS" });
+		const card = page.getByRole("dialog", { name: "相关计划与复盘" });
+		await opener.getByRole("button", { name: "查看计划与实际结果" }).click();
 		await expect(card).toContainText("部分卖出");
 		await expect(card).toContainText("第二设备修订：等待估值与盈利确认");
 		await expect(card).toContainText("下单后修改的计划");
 		await card.locator(".review-detail").scrollIntoViewIfNeeded();
 		await capture("review-partial-320");
+		await card.getByRole("button", { name: "正式结论", exact: true }).click();
 		await card
-			.getByLabel("计划或委托复盘内容")
+			.getByLabel("本次结论", { exact: true })
 			.fill("受控复盘：分批卖出后仍持有100份，净收益只统计卖出部分。");
-		await card.getByRole("button", { name: "保存复盘", exact: true }).click();
-		await page.getByLabel("复盘状态", { exact: true }).selectOption("reviewed");
-		await card.getByRole("button", { name: "查看计划与实际结果" }).click();
+		await card
+			.getByRole("button", { name: "保存本次复盘结论", exact: true })
+			.click();
+		await card.getByText("正式结论已保存，原结论继续保留。").waitFor();
+		await card.getByRole("button", { name: "关闭", exact: true }).click();
+		await page.getByRole("button", { name: /^已复盘 ·/ }).click();
+		await opener.getByRole("button", { name: "查看计划与实际结果" }).click();
 		await expect(card).toContainText("受控复盘：分批卖出");
 		await card.getByRole("button", { name: "结束本计划" }).click();
 		await card.getByRole("button", { name: "确认结束计划" }).click();
@@ -388,21 +396,29 @@ for (const engine of ["chromium", "webkit"]) {
 		});
 		await api(`orders/${cancelled.id}/cancel`, {});
 		await control("advance");
+		await card.getByRole("button", { name: "关闭", exact: true }).click();
 		await page.getByRole("button", { name: "刷新数据", exact: true }).click();
-		await page.getByLabel("复盘状态", { exact: true }).selectOption("all");
-		const legacy = page
+		await page.getByRole("button", { name: "全部状态", exact: true }).click();
+		const legacy = card;
+		const legacyOpener = page
 			.locator(".review-card")
 			.filter({ hasText: "600519.SS" })
 			.filter({ hasText: "未关联计划的委托" });
-		await legacy.getByRole("button", { name: "查看计划与实际结果" }).click();
+		await legacyOpener
+			.getByRole("button", { name: "查看计划与实际结果" })
+			.click();
 		await expect(legacy).toContainText("已撤单");
-		await expect(legacy).toContainText("尚未进入待复盘");
+		await expect(legacy).toContainText("暂未到复盘时点");
+		await legacy.getByRole("button", { name: "正式结论", exact: true }).click();
 		await legacy
-			.getByLabel("计划或委托复盘内容")
+			.getByLabel("本次结论", { exact: true })
 			.fill("受控撤单复盘：未成交，不计盈利交易。");
-		await legacy.getByRole("button", { name: "保存复盘", exact: true }).click();
+		await legacy
+			.getByRole("button", { name: "保存本次复盘结论", exact: true })
+			.click();
 		await expect(legacy).toContainText("已复盘");
 		await capture("cancelled-legacy-order");
+		await legacy.getByRole("button", { name: "关闭", exact: true }).click();
 		const archivedNoteCount = (await api("journal")).length + 510;
 		await control("history?count=510");
 		await page.locator(".account-button").click();
@@ -422,7 +438,7 @@ for (const engine of ["chromium", "webkit"]) {
 			archive.getByRole("heading", { name: "历史计划与交易复盘" }),
 		).toBeVisible();
 		await expect(
-			archive.getByRole("button", { name: "保存复盘", exact: true }),
+			archive.getByRole("button", { name: "保存本次复盘结论", exact: true }),
 		).toHaveCount(0);
 		await expect(
 			archive.getByRole("button", { name: "确认已读", exact: true }),

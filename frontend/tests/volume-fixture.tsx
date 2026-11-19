@@ -20,7 +20,7 @@ if (root) {
 					currency: "CNY",
 					kind: "stock",
 					lot_size: 100,
-					tick_size: "0.01",
+					tick_size: "0.001",
 					tradable: false,
 					restriction: "受控界面测试，不用于交易",
 				}}

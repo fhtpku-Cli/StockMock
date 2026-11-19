@@ -10,7 +10,7 @@ if (root) {
 				new QueryClient({ defaultOptions: { queries: { retry: false } } })
 			}
 		>
-			<Orders initialFilter="all" onJournal={() => {}} onReorder={() => {}} />
+			<Orders initialFilter="all" onReorder={() => {}} />
 		</QueryClientProvider>,
 	);
 }

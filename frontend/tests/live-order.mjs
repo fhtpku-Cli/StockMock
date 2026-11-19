@@ -78,12 +78,17 @@ try {
 		.first();
 	await expect(order).toContainText("等待成交");
 	await capture("live-cn-accepted");
-	acceptCancelDialog(page);
 	await order.getByRole("button", { name: "申请撤单" }).click();
+	await acceptCancelDialog(page);
 	await expect(order).toContainText("已撤单");
 	await capture("live-cn-cancelled");
 	await page.getByRole("button", { name: "资产", exact: true }).click();
-	await expect(page.locator(".metric").nth(1)).toContainText("¥0.00");
+	await expect(
+		page
+			.locator(".hero-cash > div")
+			.filter({ hasText: "人民币委托占用" })
+			.locator("dd"),
+	).toContainText("¥0.00");
 	await expect(page.locator(".asset-value")).toContainText("1,000,000.00");
 	await capture("live-cn-released");
 	evidence.result = "通过";

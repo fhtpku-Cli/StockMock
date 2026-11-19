@@ -3,7 +3,7 @@
 运行：backend/.venv/bin/python frontend/tests/controlled_server.py
 固定测试时钟：2026-10-22 08:00:00 北京时间，始终在 A 股开盘前。
 时钟每次读取只推进一微秒，保证创建记录的先后顺序，不依赖实际日期。
-报价为上一交易日 14:55 的完整样本，历史收盘日明确为 2026-10-21。
+报价为上一交易日 15:00 收盘时取得的完整样本，历史收盘日明确为 2026-10-21。
 时钟替换仅在此独立测试进程中生效；生产代码没有测试时钟入口。
 """
 
@@ -29,7 +29,7 @@ from app.storage import Store
 from test_engine import ControlledProvider
 
 TEST_NOW: Final = datetime(2026, 10, 22, 0, 0, tzinfo=UTC)
-QUOTE_TIME: Final = datetime(2026, 10, 21, 6, 55, tzinfo=UTC)
+QUOTE_TIME: Final = datetime(2026, 10, 21, 7, 0, tzinfo=UTC)
 
 
 class PremarketClock(datetime):
@@ -73,6 +73,7 @@ if __name__ == "__main__":
                 )
                 for item in CATALOG
             ),
+            clock=lambda: PremarketClock.now(UTC),
         )
         password = (ROOT / "backend/.local-password").read_text().strip()
         app = create_app(engine=engine, password=password, run_worker=False)

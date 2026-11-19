@@ -151,13 +151,16 @@ try {
 		.first()
 		.getByRole("button", { name: "写复盘" })
 		.click();
-	await page
-		.getByLabel("复盘内容")
+	const review = page.getByRole("dialog", { name: "相关计划与复盘" });
+	await review.getByRole("button", { name: "事实与笔记" }).click();
+	await review
+		.getByLabel("计划或委托普通笔记")
 		.fill("受控验收复盘：部分卖出已实现7.60美元，剩余6股继续观察。");
-	await page.getByRole("button", { name: "保存记录" }).click();
-	await expect(
-		page.getByRole("status").filter({ hasText: "普通笔记已保存。" }),
-	).toBeVisible();
+	await review.getByRole("button", { name: "保存普通笔记" }).click();
+	await expect(review.getByRole("status")).toContainText("普通笔记已保存");
+	await review.getByRole("button", { name: "关闭" }).click();
+	await page.getByRole("button", { name: "复盘", exact: true }).click();
+	await page.getByText("普通笔记与记录", { exact: true }).click();
 	await page.getByLabel("笔记市场").selectOption("US");
 	await page.getByRole("button", { name: "应用笔记筛选" }).click();
 	await expect(page.locator(".journal-list")).toContainText("部分卖出");
@@ -196,12 +199,12 @@ try {
 				.reserved,
 		),
 	).toBeGreaterThan(0);
-	acceptCancelDialog(page);
 	await page
 		.locator(".order-row")
 		.first()
 		.getByRole("button", { name: "申请撤单" })
 		.click();
+	await acceptCancelDialog(page);
 	await tick("AAPL", "102");
 	await expect(page.locator(".order-row").first()).toContainText("已撤单");
 	const released = (await read("/api/portfolio")).cash.find(
@@ -230,8 +233,6 @@ try {
 		"1000174.93",
 	);
 	await shot("converted-cash");
-	await page.getByRole("button", { name: "关闭", exact: true }).click();
-	await page.getByRole("button", { name: "复盘", exact: true }).click();
 	const downloadWait = page.waitForEvent("download");
 	await page
 		.getByRole("button", { name: "导出本轮完整流水", exact: true })
@@ -242,6 +243,7 @@ try {
 	expect(csv).toContain("fx_out");
 	expect(csv).toContain("sell");
 	expect(csv).toContain("fee");
+	await page.getByRole("button", { name: "关闭", exact: true }).click();
 	const audit = await new AxeBuilder({ page }).analyze();
 	expect(audit.violations).toEqual([]);
 	await page.getByRole("button", { name: /个人账户/ }).click();

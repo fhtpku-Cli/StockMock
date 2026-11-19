@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect } from '@playwright/test';
 import { launchBrowser } from './browser.mjs';
-import { url, output, password, fixture, overview, selected, rows, detail, openCard, assertSelected, assertLayout, fillDraft, assertDraft, enterReviews } from './review-orders-support.mjs';
+import { url, output, password, fixture, overview, selected, rows, detail, openCard, assertSelected, assertLayout, fillDraft, assertDraft, section, enterReviews } from './review-orders-support.mjs';
 
 // Given: 既有E1播种器生成的全新隔离受控历史；不是旧HTTP样本或真实账户。
 const browser = await launchBrowser();
@@ -59,7 +59,7 @@ try {
     await sellButton.focus();
     await page.keyboard.press('Enter');
     await assertSelected(card, a.orders[1].id);
-    await expect(sellButton).toBeFocused();
+    await expect(selected(card).getByRole('heading', { name: /所选委托依据/ })).toBeFocused();
     await expect(folded(card)).not.toHaveAttribute('open');
     await assertDraft(card, '阅读减负草稿');
     await folded(card).locator('summary').focus();
@@ -67,18 +67,18 @@ try {
     await expect(folded(card)).toHaveAttribute('open');
     await expect(folded(card).getByText('E1受控：A第二版', { exact: true })).toBeVisible();
     await expect(folded(card).getByText('E1受控：A第一版', { exact: true })).toHaveCount(0);
-    await capture(`reading-a-switch-${width}`, { keyboard: 'Enter/Space', resetOnSwitch: true, focusRetained: true, draftRetained: true, fullEvidenceReachable: true });
+    await capture(`reading-a-switch-${width}`, { keyboard: 'Enter/Space', resetOnSwitch: true, focus: '所选委托依据', draftRetained: true, fullEvidenceReachable: true });
     await openCard(page, 'other');
     card = await openCard(page, 'a');
     await assertSelected(card, a.orders[0].id);
     await expect(folded(card)).not.toHaveAttribute('open');
     await expect(card.getByLabel('本次结论', { exact: true })).toHaveValue('');
     await capture(`reading-subject-reset-${width}`, { resetOnReturn: true });
-    await card.getByRole('button', { name: '收起复盘详情', exact: true }).click();
+    await card.getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('button', { name: width === 1440 ? /个人账户/ : '账户设置', exact: width !== 1440 }).click();
     await page.getByRole('button', { name: '查看历史', exact: true }).click();
     const archive = page.getByRole('dialog', { name: '已归档练习 · 只读' });
-    await archive.getByLabel('复盘状态', { exact: true }).selectOption('all');
+    await archive.getByRole('button', { name: '全部状态', exact: true }).click();
     card = await openCard(page, 'b');
     await expect(folded(card)).not.toHaveAttribute('open');
     await expect(card).toContainText('已归档 · 只读');
@@ -92,6 +92,7 @@ try {
     await expect(rows(card)).not.toContainText('已撤单');
     await assertLayout(page, card);
     await capture(`reading-archive-${width}`, { readOnly: true, expiredNotCancelled: true, missingPnlNotZero: true, fullEvidenceReachable: true });
+    await card.getByRole('button', { name: '关闭', exact: true }).click();
     await archive.getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('dialog', { name: '练习设置', exact: true }).getByRole('button', { name: '关闭', exact: true }).click();
     await enterReviews(page);
@@ -102,16 +103,28 @@ try {
   // When: 使用既有冲突刷新入口，以真实详情GET刷新同一笔（仅POST回执模拟409）。
   const pattern = `**/api/reviews/plan/${fixture.subjects.a.id}/conclusions`;
   await page.route(pattern, route => route.fulfill({ status: 409, json: { detail: { code: 'review_conflict', message: '受控冲突，触发同笔刷新' } } }));
+  await section(card, '正式结论');
   await card.getByRole('button', { name: '保存本次复盘结论', exact: true }).click();
   await card.getByRole('button', { name: '刷新事实并保留草稿', exact: true }).click();
   await expect(card.getByRole('button', { name: '刷新事实并保留草稿', exact: true })).toHaveCount(0);
+  await section(card,'委托依据');
   await expect(folded(card)).toHaveAttribute('open');
   await assertDraft(card, '同笔刷新草稿');
   await capture('reading-same-order-refresh', { realDetailGet: true, simulatedPost409: true, expandedAndDraftRetained: true });
+  await section(card, '正式结论');
+  await card.getByRole('button', { name: '保存本次复盘结论', exact: true }).click();
+  const detailPattern = `**/api/reviews/plan/${fixture.subjects.a.id}?*`;
+  await page.route(detailPattern, route => route.fulfill({ json: { ...a, read_only: true } }));
+  await card.getByRole('button', { name: '刷新事实并保留草稿', exact: true }).click();
+  await expect(card.getByLabel('本次结论', { exact: true })).toHaveAttribute('readonly', '');
+  await expect(card.getByLabel('本次结论', { exact: true })).toHaveValue('同笔刷新草稿：本次结论');
+  await expect(card.getByRole('button', { name: '保存本次复盘结论', exact: true })).toHaveCount(0);
+  await capture('became-read-only', { simulatedArchiveDuringDraft: true, noSubmitButton: true, retainedCopyableDraft: true });
+  await page.unroute(detailPattern);
   await page.unroute(pattern);
   // Then: 除上述明确拦截的POST外，浏览期间只有GET，没有业务数据写入。
   const writes = requests.slice(browsingStart).filter(request => request.method !== 'GET');
-  expect(writes).toEqual([{ method: 'POST', path: `/api/reviews/plan/${fixture.subjects.a.id}/conclusions` }]);
+  expect(writes).toEqual(Array.from({ length: 2 }, () => ({ method: 'POST', path: `/api/reviews/plan/${fixture.subjects.a.id}/conclusions` })));
   expect(errors).toEqual([]);
   passed = true;
 } catch (error) {

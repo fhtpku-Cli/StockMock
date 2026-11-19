@@ -10,9 +10,8 @@ export async function assetScenarios(h) {
 			.locator("[data-position]")
 			.evaluateAll((rows) => rows.map((row) => row.dataset.position)),
 	).toEqual(["AAPL", "MSFT", "510300.SS"]);
-	await expect(page.locator('[data-position="AAPL"]')).toContainText(
-		"参考估值",
-	);
+	await expect(page.getByText("持仓参考估值与收益说明")).toBeVisible();
+	await page.locator(".position-filters > summary").click();
 	await page.getByLabel("持仓市场").selectOption("US");
 	await expect(page.locator("[data-position]")).toHaveCount(2);
 	await expect(page.locator('[data-position="AAPL"]')).toContainText("0.70%");
@@ -36,7 +35,17 @@ export async function assetScenarios(h) {
 		await capture(`composition-${width}`);
 		await page.locator(".composition details").scrollIntoViewIfNeeded();
 		await capture(`composition-end-${width}`);
-		await page.getByLabel("持仓排序").scrollIntoViewIfNeeded();
+		const holdings = page.locator(".positions-panel .table-scroll");
+		expect(
+			await holdings.evaluate((el) => el.scrollWidth - el.clientWidth),
+		).toBe(0);
+		const pnl = holdings.locator(
+			'[data-position="AAPL"] .position-pnl > strong',
+		);
+		await pnl.scrollIntoViewIfNeeded();
+		await expect(pnl).toHaveClass("gain");
+		await expect(pnl).toHaveText("+US$200.00");
+		await expect(pnl).toBeInViewport();
 		await capture(`positions-${width}`);
 	}
 	await page.locator('[data-position="AAPL"] .symbol-link').click();

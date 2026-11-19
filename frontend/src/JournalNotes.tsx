@@ -33,7 +33,7 @@ export function JournalNotes({ roundId }: { readonly roundId?: string }) {
 				}}
 			/>
 			<p className="footnote">
-				笔记日期按保存时间筛选，独立于上方复盘的最近记录日期和下方资金核对。证券与市场先取关联计划，再取关联委托；未关联或归属未知仅在全部显示。
+				按笔记保存日期筛选。要查看未关联证券的笔记，请清空证券和市场条件。
 			</p>
 			<button
 				className="text-button"
@@ -78,6 +78,7 @@ export function JournalNotes({ roundId }: { readonly roundId?: string }) {
 												roundId: query.roundId,
 												subjectType: entry.review_subject_type,
 												subjectId: entry.review_subject_id,
+												...(entry.order_id ? { orderId: entry.order_id } : {}),
 											});
 									}}
 								>

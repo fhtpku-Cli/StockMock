@@ -18,7 +18,7 @@ export function ReorderTrade({
 }: {
 	readonly order: Order;
 	readonly onClose: () => void;
-	readonly onSuccess: () => void;
+	readonly onSuccess: (order: Order) => void;
 }) {
 	const query = useQuery({
 		queryKey: ["reorder", order.id],

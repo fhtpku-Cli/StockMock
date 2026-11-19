@@ -28,10 +28,13 @@ export async function detail(context, label) {
   return reviewDetailSchema.parse(await (await api(context, `${pathFor(entry)}?round_id=${entry.round_id}`)).json());
 }
 export async function openCard(page, label) {
+  const modal = page.getByRole('dialog', { name: '相关计划与复盘', exact: true });
+  if (await modal.isVisible()) await modal.getByRole('button', { name: '关闭', exact: true }).click();
   const card = page.locator(`[data-review-id="${fixture.subjects[label].id}"]`);
   await card.getByRole('button', { name: '查看计划与实际结果', exact: true }).click();
-  await expect(overview(card)).toBeVisible();
-  return card;
+  await section(modal, '委托依据');
+  await expect(overview(modal)).toBeVisible();
+  return modal;
 }
 export async function capture(page, name, observable) {
   const artifact = resolve(output, `${name}.png`);
@@ -53,13 +56,20 @@ export async function assertLayout(page, card) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (bounds.length) await expect(rows(card).first().getByRole('button')).toBeVisible();
 }
+export async function section(modal, name) {
+  await modal.getByRole('group', { name: '复盘详情内容' }).getByRole('button', { name, exact: true }).click();
+}
 export async function fillDraft(card, label) {
+  await section(card, '正式结论');
   for (const field of ['本次结论', '与原计划的偏差', '下次怎么做']) await card.getByLabel(field, { exact: true }).fill(`${label}：${field}`);
+  await section(card, '委托依据');
 }
 export async function assertDraft(card, label) {
+  await section(card, '正式结论');
   for (const field of ['本次结论', '与原计划的偏差', '下次怎么做']) await expect(card.getByLabel(field, { exact: true })).toHaveValue(`${label}：${field}`);
+  await section(card, '委托依据');
 }
 export async function enterReviews(page) {
   await page.getByRole('button', { name: '复盘', exact: true }).click();
-  await page.getByLabel('复盘状态', { exact: true }).selectOption('all');
+  await page.getByRole('button', { name: '全部状态', exact: true }).click();
 }

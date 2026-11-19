@@ -175,7 +175,7 @@ details .footnote {
 .price-chart figcaption {
 	display: flex;
 	justify-content: space-between;
-	font-size: 11px;
+	font-size: 12px;
 	color: var(--muted);
 }
 .confirm-check {
@@ -224,10 +224,10 @@ details .footnote {
 	margin-block: 8px;
 }
 .price-chart .trade-mark.buy {
-	fill: var(--accent);
+	fill: var(--buy-direction);
 }
 .price-chart .trade-mark.sell {
-	fill: var(--error);
+	fill: var(--sell-direction);
 }
 .trade-list ul {
 	list-style: none;
@@ -245,10 +245,10 @@ details .footnote {
 	margin-right: 6px;
 }
 .trade-glyph.buy {
-	color: var(--accent);
+	color: var(--buy-direction);
 }
 .trade-glyph.sell {
-	color: var(--error);
+	color: var(--sell-direction);
 }
 .reference-line {
 	font-size: 13px;

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { api, errorMessage } from "./api";
 import { OrderRecord } from "./OrderRecord";
@@ -8,22 +8,29 @@ import {
 	RecordFilters,
 	recordMatches,
 } from "./RecordFilters";
+import { OrderReviewModal } from "./ReviewDetail";
 import { canReorder } from "./ReorderTrade";
 import { type Order, orderSchema } from "./schema";
-import { Empty, ErrorNotice, Loading, Panel } from "./ui";
+import { Empty, ErrorNotice, Loading, Modal, Panel } from "./ui";
 import { useOnline } from "./useOnline";
 export const CANCEL_CONFIRM =
 	"撤单申请提交后不能撤回；委托生效后，系统要等撤单前的延迟数据确认，期间仍可能成交。";
 export function Orders({
-	onJournal,
+	receipt,
 	onReorder,
 	initialFilter,
 }: {
-	readonly onJournal: (id: string) => void;
+	readonly receipt?: Order;
 	readonly onReorder: (order: Order) => void;
 	readonly initialFilter: "all" | "active";
 }) {
 	const online = useOnline();
+	const receiptRef = useRef<HTMLParagraphElement>(null);
+	useEffect(() => {
+		if (receipt) receiptRef.current?.scrollIntoView({ block: "nearest" });
+	}, [receipt]);
+	const [reviewOrder, setReviewOrder] = useState<Order | null>(null);
+	const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
 	const [recordFilter, setRecordFilter] = useState(initialRecordFilter);
 	const [filter, setFilter] = useState<string>(initialFilter);
 	const client = useQueryClient();
@@ -54,6 +61,13 @@ export function Orders({
 	);
 	return (
 		<div className="stack">
+			{receipt && (
+				<p role="status" className="trade-receipt" ref={receiptRef}>
+					已收到 {receipt.symbol} 的{receipt.side === "buy" ? "买入" : "卖出"}
+					委托 · {receipt.quantity} 股 / 份 · 编号 {receipt.id.slice(0, 8)}
+					。最新状态见委托记录。
+				</p>
+			)}
 			<div className="notice">
 				委托以有效市场行情判断成交，回执可能延迟。撤单确认前，原占用资金或持仓继续保留。
 			</div>
@@ -105,7 +119,7 @@ export function Orders({
 										<button
 											type="button"
 											className="text-button"
-											onClick={() => onJournal(o.id)}
+											onClick={() => setReviewOrder(o)}
 										>
 											写复盘
 										</button>
@@ -124,10 +138,7 @@ export function Orders({
 												type="button"
 												className="button small"
 												disabled={!online || cancel.isPending}
-												onClick={() => {
-													if (window.confirm(CANCEL_CONFIRM))
-														cancel.mutate(o.id);
-												}}
+												onClick={() => setCancelOrder(o)}
 											>
 												{cancel.isPending ? "处理中…" : "申请撤单"}
 											</button>
@@ -139,6 +150,49 @@ export function Orders({
 					</div>
 				)}
 			</Panel>
+			{reviewOrder && (
+				<OrderReviewModal
+					order={reviewOrder}
+					onClose={() => setReviewOrder(null)}
+				/>
+			)}
+			{cancelOrder && (
+				<Modal title="确认申请撤单" onClose={() => setCancelOrder(null)}>
+					<p>
+						{cancelOrder.symbol} ·{" "}
+						{cancelOrder.side === "buy" ? "买入" : "卖出"}{" "}
+						{cancelOrder.quantity} 股 / 份 · 编号 {cancelOrder.id.slice(0, 8)}
+					</p>
+					<p className="notice">{CANCEL_CONFIRM}</p>
+					<div className="button-row">
+						<button
+							type="button"
+							className="button"
+							onClick={() => setCancelOrder(null)}
+						>
+							保留委托
+						</button>
+						<button
+							type="button"
+							className="button danger"
+							disabled={
+								!online ||
+								cancel.isPending ||
+								!query.data?.some(
+									(order) =>
+										order.id === cancelOrder.id && order.status === "accepted",
+								)
+							}
+							onClick={() => {
+								cancel.mutate(cancelOrder.id);
+								setCancelOrder(null);
+							}}
+						>
+							确认申请撤单
+						</button>
+					</div>
+				</Modal>
+			)}
 		</div>
 	);
 }

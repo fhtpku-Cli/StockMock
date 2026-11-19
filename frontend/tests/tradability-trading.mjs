@@ -125,6 +125,7 @@ export async function verifyTrading({
 			page.getByRole("heading", { name: "确认这笔委托" }),
 		).toBeVisible();
 		await capture(`${engine}-preview-${width}`);
+		await page.getByRole("button", { name: "返回标的详情" }).click();
 		await page.keyboard.press("Escape");
 		await expect(page.locator(`[data-symbol="${symbol}"]`)).toContainText(
 			"可模拟交易",
@@ -152,6 +153,7 @@ export async function verifyTrading({
 		await expect(page.getByRole("heading", { name: /模拟卖出/ })).toBeVisible();
 		await expect(page.locator("#quantity")).toBeEnabled();
 		await capture(`${engine}-persisted-sell-${width}`);
+		await page.getByRole("button", { name: "返回标的详情" }).click();
 		await page.keyboard.press("Escape");
 		observations.push({
 			scenario: `${engine}-${width}-启用与缓存刷新`,

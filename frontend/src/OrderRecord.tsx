@@ -29,7 +29,7 @@ export function OrderRecord({
 			<div className="order-top">
 				<div>
 					<strong>{o.symbol}</strong>
-					<span className={o.side === "buy" ? "positive" : "negative"}>
+					<span className={`order-direction ${o.side}`}>
 						{o.side === "buy" ? "买入" : "卖出"} {o.quantity} 股 / 份
 					</span>
 				</div>

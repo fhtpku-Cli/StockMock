@@ -5,7 +5,7 @@ import {
 	X,
 } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 export function Panel({
 	title,
 	action,
@@ -96,8 +96,9 @@ export function Modal({
 	readonly wide?: boolean;
 }) {
 	const ref = useRef<HTMLDialogElement>(null);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const dialog = ref.current;
+		const opener = document.activeElement;
 		dialog?.showModal();
 		const viewport = window.visualViewport;
 		const resize = () => {
@@ -113,6 +114,8 @@ export function Modal({
 			viewport?.removeEventListener("resize", resize);
 			viewport?.removeEventListener("scroll", resize);
 			dialog?.close();
+			if (opener instanceof HTMLElement && opener.isConnected)
+				opener.focus({ preventScroll: true });
 		};
 	}, []);
 	return (

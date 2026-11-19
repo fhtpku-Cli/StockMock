@@ -4,6 +4,7 @@ import { dateRangeError, filterParams } from "./analysis";
 import { api, errorMessage, money, time } from "./api";
 import { CsvDownload } from "./CsvDownload";
 import { snapshotRangeSchema } from "./history";
+import { SignedValue } from "./SignedValue";
 import { SnapshotChart } from "./SnapshotChart";
 import { ErrorNotice, Loading, Panel } from "./ui";
 
@@ -88,10 +89,15 @@ export function AssetHistory({ roundId }: { readonly roundId?: string }) {
 				</form>
 			)}
 			<p className="footnote">
-				北京时间自然日。
-				{roundId ? "快捷范围截至本轮归档日。" : "快捷范围截至今天。"}
-				只展示后台实际留存的记录，不补画历史；采集时资产不是收盘净值。当天不完整记录可恢复为当天首次成功保存的完整观察，保留首次失败说明；刷新或重入可查看恢复结果，不会重新取得历史价格。
+				按北京时间记录采集时的资产。缺日或估值不完整时，曲线断开。
 			</p>
+			<details className="reading-note">
+				<summary>资产轨迹口径说明</summary>
+				<p className="footnote">
+					{roundId ? "快捷范围截至本轮归档日。" : "快捷范围截至今天。"}
+					每个日期保留首次完整估值，金额可能与收盘时不同。当天首次采集失败后仍可补记，并保留失败原因。刷新可查看结果，历史日期不会补采。
+				</p>
+			</details>
 			{query.isPending ? (
 				<Loading />
 			) : query.isError ? (
@@ -107,13 +113,10 @@ export function AssetHistory({ roundId }: { readonly roundId?: string }) {
 					</p>
 					<div className="history-summary">
 						<span>已记录首末资产变化</span>
-						<strong>
-							{query.data.change_cny !== null &&
-							Number(query.data.change_cny) > 0
-								? "+"
-								: ""}
-							{money(query.data.change_cny)}
-						</strong>
+						<SignedValue
+							value={query.data.change_cny}
+							text={money(query.data.change_cny)}
+						/>
 						<p>{query.data.reason}</p>
 						<small>
 							实际记录 {query.data.recorded_days} 天 · 完整估值{" "}

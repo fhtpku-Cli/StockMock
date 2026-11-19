@@ -79,6 +79,7 @@ try {
 	await expect(page.getByRole("button", { name: "确认提交委托" })).toHaveCount(
 		0,
 	);
+	await page.getByRole("button", { name: "返回标的详情" }).click();
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "资产", exact: true }).click();
 	await page.setViewportSize({ width: 390, height: 844 });
@@ -161,11 +162,14 @@ try {
 	).toBeDisabled();
 	await shot("trade-offline-blocked");
 	await page.context().setOffline(false);
+	await page.getByRole("button", { name: "返回标的详情" }).click();
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "复盘", exact: true }).click();
-	await page.getByLabel("起始日期").fill("2026-10-22");
-	await page.getByLabel("结束日期").fill("2026-10-22");
-	await page.getByLabel("关联市场").selectOption("CN");
+	await page.locator(".review-filter-options > summary").click();
+	await page.getByLabel("复盘起始日期").fill("2026-10-22");
+	await page.getByLabel("复盘结束日期").fill("2026-10-22");
+	await page.getByLabel("复盘市场", { exact: true }).selectOption("CN");
+	await page.getByRole("button", { name: "应用复盘筛选" }).click();
 	await shot("records-filters-desktop");
 	await page.setViewportSize({ width: 390, height: 844 });
 	await shot("records-filters-phone");

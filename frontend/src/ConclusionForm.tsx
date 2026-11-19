@@ -35,7 +35,8 @@ export function ConclusionForm({
 	const [coverage, setCoverage] = useState(detail.coverage);
 	const [pending, setPending] = useState<Submission | null>(null);
 	const [conflict, setConflict] = useState(false);
-	const [readOnly, setReadOnly] = useState(detail.read_only);
+	const [receiptReadOnly, setReadOnly] = useState(detail.read_only);
+	const readOnly = detail.read_only || receiptReadOnly;
 	const refresh = useMutation({
 		mutationFn: () =>
 			api(
@@ -86,6 +87,8 @@ export function ConclusionForm({
 		},
 	});
 	const locked = pending !== null;
+	if (readOnly && !conclusion && !deviation && !nextAction && !locked)
+		return null;
 	return (
 		<section className="conclusion-form">
 			<h3>{detail.conclusions.length ? "补充复盘" : "保存本次复盘结论"}</h3>
@@ -98,7 +101,7 @@ export function ConclusionForm({
 				{coverage.due_review_date
 					? `已到复盘日 ${coverage.due_review_date}`
 					: "尚无已到达的复盘日"}
-				。覆盖来自完整事实，不受下方分页影响。
+				。包括已加载页以外的成交。
 			</p>
 			{readOnly ? (
 				<p className="notice">
@@ -108,7 +111,7 @@ export function ConclusionForm({
 			<form
 				onSubmit={(event) => {
 					event.preventDefault();
-					if (!online || conflict || readOnly) return;
+					if (!online || conflict || (readOnly && !pending)) return;
 					const body = pending ?? {
 						request_id: crypto.randomUUID(),
 						round_id: target.roundId,
@@ -128,6 +131,7 @@ export function ConclusionForm({
 						required
 						maxLength={2000}
 						value={conclusion}
+						readOnly={readOnly}
 						disabled={locked}
 						onChange={(event) => setConclusion(event.target.value)}
 					/>
@@ -138,6 +142,7 @@ export function ConclusionForm({
 						aria-label="与原计划的偏差"
 						maxLength={2000}
 						value={deviation}
+						readOnly={readOnly}
 						disabled={locked}
 						onChange={(event) => setDeviation(event.target.value)}
 					/>
@@ -148,6 +153,7 @@ export function ConclusionForm({
 						aria-label="下次怎么做"
 						maxLength={2000}
 						value={nextAction}
+						readOnly={readOnly}
 						disabled={locked}
 						onChange={(event) => setNextAction(event.target.value)}
 					/>
@@ -162,7 +168,7 @@ export function ConclusionForm({
 						保存结果尚未确认，已保留原提交。请重试确认，避免重复保存。
 					</p>
 				)}
-				{conflict && (
+				{conflict && !readOnly && (
 					<p className="notice">
 						事实已变化，草稿已保留。请刷新覆盖事实后，核对变化再保存。
 					</p>
@@ -172,7 +178,7 @@ export function ConclusionForm({
 					<ErrorNotice message={errorMessage(refresh.error)} />
 				)}
 				<div className="button-row">
-					{!readOnly && (
+					{(!readOnly || locked) && (
 						<button
 							className="button primary"
 							type="submit"
@@ -191,7 +197,7 @@ export function ConclusionForm({
 									: "保存本次复盘结论"}
 						</button>
 					)}
-					{conflict && (
+					{conflict && !readOnly && (
 						<button
 							className="button"
 							type="button"

@@ -72,13 +72,15 @@ try {
 		.getByRole("button", { name: "添加自选 苹果", exact: true })
 		.waitFor();
 	await page.getByRole("button", { name: "复盘", exact: true }).click();
+	await page.getByText("普通笔记与记录", { exact: true }).click();
 	const note = "界面联调记录：先记录判断，再观察结果。此条为本地验收写入。";
 	await page.getByLabel("复盘内容").fill(note);
 	await page.getByRole("button", { name: "保存记录", exact: true }).click();
-	await page.getByText("已保存到本轮复盘。", { exact: true }).waitFor();
+	await page.getByText("普通笔记已保存。", { exact: true }).waitFor();
 	await expect(page.locator(".journal-list")).toContainText(note);
 	await page.reload();
 	await page.getByRole("button", { name: "复盘", exact: true }).click();
+	await page.getByText("普通笔记与记录", { exact: true }).click();
 	await expect(page.locator(".journal-list")).toContainText(note);
 	await capture("journal-persisted");
 	await page.getByRole("button", { name: "资产", exact: true }).click();

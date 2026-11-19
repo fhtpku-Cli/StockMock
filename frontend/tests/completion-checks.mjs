@@ -75,7 +75,13 @@ export async function verifyArchive({ page, archive, shot }) {
 	const note = archive.locator(".journal-list > article");
 	await note.getByRole("button", { name: "查看相关复盘" }).click();
 	const review = page.getByRole("dialog", { name: "相关计划与复盘" });
-	await expect(review).toContainText("US$396.20");
+	await review.getByRole("button", { name: "委托依据", exact: true }).click();
+	await review
+		.locator(".review-order-evidence .order-row details > summary")
+		.click();
+	await expect(review.locator(".review-order-evidence")).toContainText(
+		"US$396.20",
+	);
 	await expect(review).toContainText("US$7.60");
 	await expect(review).toContainText("US$120.00 / US$80.00");
 	await expect(review).toContainText("controlled-test");

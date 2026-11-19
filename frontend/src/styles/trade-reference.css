@@ -1,0 +1,21 @@
+.trade-reference {
+	background: var(--canvas);
+	border-left: 3px solid var(--accent);
+	padding: 8px 12px;
+	margin: 0 0 16px;
+	font-size: 13px;
+}
+.trade-reference p {
+	margin: 2px 0;
+}
+.trade-preview-start {
+	scroll-margin-block-start: 76px;
+}
+
+.trade-receipt {
+	margin: 0;
+	padding: 12px 16px;
+	color: var(--ink);
+	background: var(--soft);
+	border-left: 3px solid var(--accent);
+}

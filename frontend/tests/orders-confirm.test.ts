@@ -64,7 +64,6 @@ test.each([false, true])(
 		const page = await browser.newPage();
 		let requests = 0;
 		let current = accepted;
-		const messages: string[] = [];
 		try {
 			// Given：真实 Orders 组件；所有请求在浏览器中受控，不连接账户服务。
 			await page.route("**/*", async (route) => {
@@ -89,20 +88,20 @@ test.each([false, true])(
 			await page.addScriptTag({ content: fixture });
 			const button = page.getByRole("button", { name: "申请撤单" });
 			await expectBrowser(button).toBeEnabled();
-			page.once("dialog", async (dialog) => {
-				messages.push(dialog.message());
-				if (confirmed) await dialog.accept();
-				else await dialog.dismiss();
-			});
-			// When：用户真实点击并选择确认框分支。
 			await button.click();
+			const dialog = page.getByRole("dialog", { name: "确认申请撤单" });
+			await expectBrowser(dialog.locator(".notice")).toHaveText(CANCEL_CONFIRM);
+			expect(requests).toBe(0);
+			await dialog
+				.getByRole("button", { name: confirmed ? "确认申请撤单" : "保留委托" })
+				.click();
+			await expectBrowser(dialog).toHaveCount(0);
 			// Then：确认后等待请求回执落在页面；取消后按钮仍可用。
 			if (confirmed)
 				await expectBrowser(page.locator(".order-row")).toContainText(
 					"撤单确认中",
 				);
 			else await expectBrowser(button).toBeEnabled();
-			expect(messages).toEqual([CANCEL_CONFIRM]);
 			expect(requests).toBe(confirmed ? 1 : 0);
 		} finally {
 			await browser.close();

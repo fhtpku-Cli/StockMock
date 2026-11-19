@@ -1,13 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { ApiError, api, errorMessage, fullTime } from "./api";
+import { ApiError, api, errorMessage, fullTime, money, price } from "./api";
 import { PlanPicker } from "./PlanPicker";
 import { type Plan, planSchema } from "./planSchema";
 import type { Instrument, Order } from "./schema";
 import { orderSchema, portfolioSchema, previewSchema } from "./schema";
+import "./styles/trade-reference.css";
 import { TradePreview } from "./TradePreview";
 import { ErrorNotice, Modal } from "./ui";
+import { useTradeReference } from "./useTradeReference";
 import { useOnline } from "./useOnline";
 
 type Side = "buy" | "sell";
@@ -33,9 +35,17 @@ export function Trade({
 	readonly original?: Order;
 	readonly draftRoundId?: string;
 	readonly onClose: () => void;
-	readonly onSuccess: () => void;
+	readonly onSuccess: (order: Order) => void;
 }) {
 	const online = useOnline();
+	const { portfolio, quote } = useTradeReference(instrument.symbol);
+	const cash = portfolio.data?.cash.find(
+		(row) => row.currency === instrument.currency,
+	);
+	const position = portfolio.data?.positions.find(
+		(row) => row.symbol === instrument.symbol,
+	);
+	const previewStart = useRef<HTMLDivElement>(null);
 	const [draft, setDraft] = useState<Draft>({
 		quantity: original
 			? String(original.quantity)
@@ -131,6 +141,11 @@ export function Trade({
 			return api("orders/preview", previewSchema, payload);
 		},
 	});
+	useEffect(() => {
+		if (!preview.isSuccess) return;
+		previewStart.current?.focus({ preventScroll: true });
+		previewStart.current?.scrollIntoView({ block: "start" });
+	}, [preview.isSuccess]);
 	const sizing = useMutation({
 		mutationFn: (percent: number) =>
 			api(
@@ -184,12 +199,12 @@ export function Trade({
 				}
 			}
 		},
-		onSuccess: async () => {
+		onSuccess: async (order) => {
 			await Promise.all([
 				client.invalidateQueries({ queryKey: ["portfolio"] }),
 				client.invalidateQueries({ queryKey: ["orders"] }),
 			]);
-			onSuccess();
+			onSuccess(order);
 		},
 	});
 	useEffect(() => {
@@ -230,6 +245,37 @@ export function Trade({
 			title={`${side === "buy" ? "模拟买入" : "模拟卖出"} · ${instrument.name}`}
 			onClose={onClose}
 		>
+			{!original && (
+				<button
+					type="button"
+					className="text-button"
+					disabled={!!unresolved || submit.isPending}
+					onClick={onClose}
+				>
+					返回标的详情
+				</button>
+			)}
+			<div className="trade-reference">
+				<p>
+					参考报价 ·{" "}
+					{quote.isSuccess && online
+						? `${price(quote.data.price, quote.data.currency, quote.data.tick_size ?? instrument.tick_size ?? undefined)} · ${fullTime(quote.data.market_time)}（北京时间） · ${quote.data.source}`
+						: quote.isPending && online
+							? "读取中…"
+							: "暂不可用"}
+				</p>
+				{quote.isSuccess && online && quote.data.message && (
+					<p>{quote.data.message}</p>
+				)}
+				<p>
+					{side === "buy"
+						? `${instrument.currency} 可用现金 · ${portfolio.isSuccess && online && cash ? money(cash.available, cash.currency) : "暂不可用"}`
+						: `当前可卖 · ${portfolio.isSuccess && online ? `${position?.sellable ?? 0} 股 / 份` : "暂不可用"}`}
+					{side === "buy" &&
+						instrument.currency !== "CNY" &&
+						" · 换汇金额见预览"}
+				</p>
+			</div>
 			{original && (
 				<p className="notice">
 					已按原参数建立新草稿，原委托和历史计划不变。请重新预览并确认提交。
@@ -497,11 +543,18 @@ export function Trade({
 					</p>
 				)}
 				{preview.isSuccess && (
-					<TradePreview
-						preview={preview.data}
-						currency={instrument.currency}
-						side={side}
-					/>
+					<div
+						ref={previewStart}
+						tabIndex={-1}
+						aria-label="委托预览"
+						className="trade-preview-start"
+					>
+						<TradePreview
+							preview={preview.data}
+							currency={instrument.currency}
+							side={side}
+						/>
+					</div>
 				)}
 				<p className="footnote">
 					提交后等待有效行情确认，可能延迟成交。撤单确认前，资金或持仓继续占用。

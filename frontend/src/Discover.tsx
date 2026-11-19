@@ -2,6 +2,7 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
+import { marketName } from "./analysis";
 import { api, errorMessage } from "./api";
 import { DiscoveryResults } from "./DiscoveryResults";
 import type { Instrument } from "./schema";
@@ -31,11 +32,35 @@ function InstrumentList({
 	readonly pending: boolean;
 }) {
 	const [visible, setVisible] = useState(PAGE_SIZE);
+	const sharedRules = new Map<string, string>();
+	for (const market of new Set(items.map((item) => item.market))) {
+		const tradable = items.filter(
+			(item) => item.market === market && item.tradable,
+		);
+		const rule = tradable[0]?.restriction;
+		if (
+			tradable.length > 1 &&
+			rule &&
+			tradable.every((item) => item.restriction === rule)
+		)
+			sharedRules.set(market, rule);
+	}
 	return items.length === 0 ? (
 		<Empty title={empty}>可调整筛选，或在在线搜索中查找目录外的证券。</Empty>
 	) : (
 		<>
+			{sharedRules.size > 0 && (
+				<details className="reading-note">
+					<summary>本列表可交易标的的共同规则</summary>
+					{Array.from(sharedRules, ([market, rule]) => (
+						<p key={market} className="footnote">
+							{marketName(market)} · {rule}
+						</p>
+					))}
+				</details>
+			)}
 			<DiscoveryResults
+				sharedRules={sharedRules}
 				items={items.slice(0, visible)}
 				onSelect={onSelect}
 				{...actions}

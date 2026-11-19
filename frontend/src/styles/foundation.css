@@ -18,6 +18,8 @@
 	--soft: #e9f1ec;
 	--warning: #8a5b20;
 	--warning-bg: #fcf4e6;
+	--buy-direction: #3e607d;
+	--sell-direction: #60546a;
 	--error: #a4413c;
 	--error-bg: #fbefed;
 	--radius: 12px;
@@ -119,9 +121,6 @@ svg {
 }
 .positive {
 	color: var(--accent);
-}
-.negative {
-	color: var(--error);
 }
 .gain {
 	color: var(--error);

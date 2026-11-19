@@ -47,30 +47,6 @@ export function Settings({
 		<>
 			<Modal title="练习设置" onClose={onClose}>
 				<div className="settings-section">
-					<h3>个人空间</h3>
-					<p>这里的资金与交易均为模拟，不连接真实证券账户。</p>
-					<button
-						type="button"
-						className="button"
-						onClick={() => logout.mutate()}
-						disabled={logout.isPending}
-					>
-						退出登录
-					</button>
-					{logout.isError && (
-						<ErrorNotice message={errorMessage(logout.error)} />
-					)}
-				</div>
-				<div className="settings-section">
-					<h3>公司行动</h3>
-					<p>核对公告后，人工登记分红、拆股或合股，保留完整账本依据。</p>
-					<button
-						type="button"
-						className="button"
-						onClick={() => setAdjusting(true)}
-					>
-						分红与拆股
-					</button>
 					<h3>练习轮次</h3>
 					{rounds.isPending ? (
 						<Loading />
@@ -98,6 +74,35 @@ export function Settings({
 								</div>
 							))
 					)}
+				</div>
+				<div className="settings-section">
+					<h3>个人空间</h3>
+					<p>这里的资金与交易均为模拟，不连接真实证券账户。</p>
+					<button
+						type="button"
+						className="button"
+						onClick={() => logout.mutate()}
+						disabled={logout.isPending}
+					>
+						退出登录
+					</button>
+					{logout.isError && (
+						<ErrorNotice message={errorMessage(logout.error)} />
+					)}
+				</div>
+				<div className="settings-section">
+					<h3>公司行动</h3>
+					<p>核对公告后，人工登记分红、拆股或合股，保留完整账本依据。</p>
+					<button
+						type="button"
+						className="button"
+						onClick={() => setAdjusting(true)}
+					>
+						分红与拆股
+					</button>
+				</div>
+				<div className="settings-section">
+					<h3>开始新练习</h3>
 					<p className="footnote">
 						结束当前轮次后保留历史记录，新轮次恢复 100
 						万元本金。有进行中的委托时，请先等待结束或撤单。

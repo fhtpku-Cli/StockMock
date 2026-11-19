@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect } from '@playwright/test';
 import { launchBrowser } from './browser.mjs';
-import { url, output, password, fixture, observations, overview, selected, rows, api, detail, openCard, capture, assertSelected, assertLayout, fillDraft, assertDraft, enterReviews } from './review-orders-support.mjs';
+import { url, output, password, fixture, observations, overview, selected, rows, api, detail, openCard, capture, assertSelected, assertLayout, fillDraft, assertDraft, section, enterReviews } from './review-orders-support.mjs';
 import { refreshScenarios, coverageScenario } from './review-orders-refresh.mjs';
 
 const browser = await launchBrowser();
@@ -40,11 +40,14 @@ try {
     await page.setViewportSize({ width, height: 1000 });
     let card = await openCard(page, 'a');
     await expect(rows(card)).toHaveCount(2);
+    await section(card, '计划与结果');
     await expect(card.getByRole('button', { name: '结束本计划', exact: true })).toBeVisible();
     await card.getByRole('button', { name: '结束本计划', exact: true }).click();
     await expect(card).toContainText('未完成的委托不会自动撤销');
     await card.getByRole('button', { name: '继续保留', exact: true }).click();
+    await section(card, '计划与结果');
     await expect(card.getByRole('button', { name: '结束本计划', exact: true })).toBeVisible();
+    await section(card, '委托依据');
     for (const order of raw.a.orders) {
       const row = overview(card).locator(`[data-review-order-id="${order.id}"]`);
       await expect(row).toContainText('已成交');
@@ -70,13 +73,13 @@ try {
     await page.keyboard.press('Tab');
     await expect(second).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(second).toBeFocused();
+    await expect(selected(card).getByRole('heading', { name: /所选委托依据/ })).toBeFocused();
     await assertSelected(card, fixture.subjects.a.orders[1]);
     await expect(selected(card).getByRole('region', { name: '下单依据对照' })).toContainText('下单时第 2 版 · 当前第 2 版');
     await assertDraft(card, '仅浏览草稿');
     await overview(card).scrollIntoViewIfNeeded();
     await assertLayout(page, card);
-    await capture(page, `a-keyboard-${width}`, { completeSummary: true, targetPrice: '10→11', pnl: '198.90', retainedFocus: true, draft: '三个字段保留', width });
+    await capture(page, `a-keyboard-${width}`, { completeSummary: true, targetPrice: '10→11', pnl: '198.90', focus: '所选委托依据', draft: '三个字段保留', width });
     card = await openCard(page, 'other');
     await expect(rows(card)).toHaveCount(1);
     await assertSelected(card, fixture.subjects.other.orders[0]);
@@ -91,7 +94,9 @@ try {
       await expect(rows(card)).toHaveCount(fixture.subjects[label].orders.length);
       if (label === 'empty') {
         await expect(overview(card)).toContainText('尚无关联委托，也可以主动记录观察结论');
+        await section(card, '正式结论');
         await expect(card.getByLabel('本次结论', { exact: true })).toBeVisible();
+        await section(card, '委托依据');
       } else await assertSelected(card, fixture.subjects[label].orders[0]);
       if (label === 'legacy') {
         await expect(overview(card)).toContainText('当时计划未保存');
@@ -134,10 +139,11 @@ try {
       await assertSelected(card, fixture.subjects[label].orders[0]);
       await openCard(page, 'single');
     }
+    await card.getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('button', { name: width === 1440 ? /个人账户/ : '账户设置', exact: width !== 1440 }).click();
     await page.getByRole('button', { name: '查看历史', exact: true }).click();
     const archive = page.getByRole('dialog', { name: '已归档练习 · 只读' });
-    await archive.getByLabel('复盘状态', { exact: true }).selectOption('all');
+    await archive.getByRole('button', { name: '全部状态', exact: true }).click();
     card = await openCard(page, 'b');
     await expect(rows(card)).toHaveCount(1);
     await expect(rows(card)).toContainText('已过期');
@@ -149,19 +155,42 @@ try {
     await overview(card).scrollIntoViewIfNeeded();
     await assertLayout(page, card);
     await capture(page, `archive-b-${width}`, { readOnly: true, cancelledRequest: true, terminal: 'expired', realHTTP: true, width });
+    await card.getByRole('button', { name: '关闭', exact: true }).click();
     await archive.getByRole('button', { name: '关闭', exact: true }).click();
     await page.getByRole('dialog', { name: '练习设置', exact: true }).getByRole('button', { name: '关闭', exact: true }).click();
     await enterReviews(page);
     card = await openCard(page, 'a');
     await assertSelected(card, fixture.subjects.a.orders[0]);
+    await section(card, '计划与结果');
     await expect(card.getByRole('button', { name: '结束本计划', exact: true })).toBeVisible();
-    await card.getByRole('button', { name: '收起复盘详情', exact: true }).click();
+    await card.getByRole('button', { name: '关闭', exact: true }).click();
   }
   expect(requests.slice(browsingStart).filter(request => request.method !== 'GET')).toEqual([]);
   await capture(page, 'browse-without-writes', { nonGetRequests: 0, source: '浏览选择、分页、主体和归档切换的实际网络记录' });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await refreshScenarios(page, context, await openCard(page, 'a'));
   await coverageScenario(page, context, await openCard(page, 'many508'));
+  await page.getByRole('dialog', { name: '相关计划与复盘' }).getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('button', { name: '委托', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: '相关计划与复盘' });
+  for (const [label, index] of [['many508', 37], ['legacy', 0]]) {
+    const entry = fixture.subjects[label];
+    const orderId = entry.orders[index];
+    const opener = page.locator(`[data-order-id="${orderId}"]`).getByRole('button', { name: '写复盘' });
+    await opener.click();
+    await expect(selected(modal).locator(`[data-order-id="${orderId}"]`)).toBeVisible();
+    await section(modal, '事实与笔记');
+    const note = '从委托记录补充的独立样本 ' + orderId;
+    await modal.getByLabel('计划或委托普通笔记').fill(note);
+    const saved = page.waitForResponse(res => res.request().method() === 'POST' && res.url().endsWith('/api/journal'));
+    await modal.getByRole('button', { name: '保存普通笔记', exact: true }).click();
+    expect((await saved).status()).toBe(200);
+    const notes = await (await api(context, '/api/journal')).json();
+    expect(notes.find(record => record.text === note).order_id).toBe(orderId);
+    await capture(page, 'order-direct-' + label, { orderId, subjectId: entry.id, noteBoundToOrder: true });
+    await modal.getByRole('button', { name: '关闭', exact: true }).click();
+    await expect(opener).toBeFocused();
+  }
   expect(errors).toEqual([]);
   passed = true;
 } catch (error) {

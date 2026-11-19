@@ -7,14 +7,17 @@ export async function archiveScenarios(h, archivedId) {
 		.getByRole("button", { name: "关闭", exact: true })
 		.click();
 	await page.getByRole("button", { name: "复盘", exact: true }).click();
-	await expect(page.locator(".cash-statement")).toBeVisible();
-	await capture("journal-shared-statement");
+	await expect(
+		page.getByRole("heading", { name: "计划与交易复盘" }),
+	).toBeVisible();
+	await expect(page.locator(".cash-statement")).toHaveCount(0);
+	await capture("journal-dedicated-workspace");
 	await page.getByRole("button", { name: "账户设置", exact: true }).click();
 	await page.getByLabel("输入“重新开始”以确认").fill("重新开始");
 	await page.getByRole("button", { name: "归档本轮，开始新练习" }).click();
 	await expect(page.getByRole("dialog")).toHaveCount(0);
 	await page.getByRole("button", { name: "资产", exact: true }).click();
-	await expect(page.getByText("第一笔投资，从观察开始")).toBeVisible();
+	await expect(page.getByRole("heading", { name: "暂无持仓", exact: true })).toBeVisible();
 	await expect(page.locator(".composition")).toContainText("100.00%");
 	await capture("new-round-pure-cash");
 	for (let i = 0; i < 51; i++) await control("append");

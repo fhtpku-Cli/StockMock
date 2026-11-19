@@ -12,25 +12,25 @@ export const navigation = [
 		id: "assets",
 		label: "资产",
 		icon: ChartPieSlice,
-		subtitle: "看清全局，专注每一次决策。",
+		subtitle: "持仓以原币计价，总资产折合人民币。",
 	},
 	{
 		id: "watchlist",
 		label: "自选",
 		icon: Star,
-		subtitle: "从熟悉的标的，建立自己的观察清单。",
+		subtitle: "查看自选，也可按市场或代码发现标的。",
 	},
 	{
 		id: "orders",
 		label: "委托",
 		icon: ArrowsLeftRight,
-		subtitle: "每一笔计划，都有清楚的来路与去向。",
+		subtitle: "查看成交结果和仍在等待的委托。",
 	},
 	{
 		id: "journal",
 		label: "复盘",
 		icon: Notebook,
-		subtitle: "记录判断，让经验慢慢积累。",
+		subtitle: "对照计划与实际交易，记录本次结论。",
 	},
 ] as const;
 export type Page = (typeof navigation)[number]["id"];
@@ -54,9 +54,7 @@ export function Sidebar({
 				<span className="brand-icon">
 					<ChartBar weight="fill" size={24} />
 				</span>
-				<span>
-					持仓练习<small>让判断慢慢生长</small>
-				</span>
+				<span>持仓练习</span>
 			</button>
 			<div className="workspace-label">我的投资空间</div>
 			<nav aria-label="主导航">

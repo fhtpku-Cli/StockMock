@@ -155,8 +155,8 @@ try {
 		path: output + "same-account-desktop.png",
 		animations: "disabled",
 	});
-	acceptCancelDialog(page);
 	await page.getByRole("button", { name: "申请撤单" }).tap();
+	await acceptCancelDialog(page);
 	await expect(page.locator(".order-row")).toContainText("已撤单");
 	await second.getByRole("button", { name: "刷新数据", exact: true }).click();
 	await expect(second.locator(".order-row")).toContainText("已撤单");

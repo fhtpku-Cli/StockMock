@@ -45,9 +45,14 @@ export function App() {
 	const [ordersEntry, setOrdersEntry] = useState<{
 		readonly id: number;
 		readonly filter: "all" | "active";
+		readonly receipt?: Order;
 	}>({ id: 0, filter: "all" });
-	const openOrders = (filter: "all" | "active") => {
-		setOrdersEntry((entry) => ({ id: entry.id + 1, filter }));
+	const openOrders = (filter: "all" | "active", receipt?: Order) => {
+		setOrdersEntry((entry) => ({
+			id: entry.id + 1,
+			filter,
+			...(receipt && { receipt }),
+		}));
 		setPage("orders");
 	};
 	const navigate = (next: Page) => {
@@ -55,7 +60,6 @@ export function App() {
 		else setPage(next);
 	};
 	const [overlay, setOverlay] = useState<Overlay>({ kind: "none" });
-	const [journalOrder, setJournalOrder] = useState<string | null>(null);
 	const [online, setOnline] = useState(navigator.onLine);
 	const [sessionExpired, setSessionExpired] = useState(false);
 	const [actionError, setActionError] = useState("");
@@ -77,7 +81,7 @@ export function App() {
 		const expire = () => {
 			setSessionExpired(true);
 			setOverlay({ kind: "none" });
-			setJournalOrder(null);
+			setOrdersEntry({ id: 0, filter: "all" });
 			setActionError("");
 			void client.cancelQueries();
 			client.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
@@ -214,18 +218,10 @@ export function App() {
 								key={ordersEntry.id}
 								initialFilter={ordersEntry.filter}
 								onReorder={(order) => setOverlay({ kind: "reorder", order })}
-								onJournal={(id) => {
-									setJournalOrder(id);
-									setPage("journal");
-								}}
+								{...(ordersEntry.receipt && { receipt: ordersEntry.receipt })}
 							/>
 						)}{" "}
-						{page === "journal" && (
-							<Journal
-								orderId={journalOrder}
-								onSaved={() => setJournalOrder(null)}
-							/>
-						)}
+						{page === "journal" && <Journal />}
 					</div>
 					<footer className="page-footer">
 						<span>持仓练习 · 不涉及真实资金</span>
@@ -266,9 +262,9 @@ export function App() {
 					key={overlay.order.id}
 					order={overlay.order}
 					onClose={close}
-					onSuccess={() => {
+					onSuccess={(order) => {
 						close();
-						openOrders("all");
+						openOrders("all", order);
 					}}
 				/>
 			)}
@@ -276,10 +272,12 @@ export function App() {
 				<Trade
 					instrument={overlay.instrument}
 					side={overlay.side}
-					onClose={close}
-					onSuccess={() => {
+					onClose={() =>
+						setOverlay({ kind: "detail", instrument: overlay.instrument })
+					}
+					onSuccess={(order) => {
 						close();
-						openOrders("all");
+						openOrders("all", order);
 					}}
 				/>
 			)}

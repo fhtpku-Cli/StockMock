@@ -71,7 +71,7 @@
 }
 .ledger-list small {
 	display: block;
-	font-size: 10px;
+	font-size: 12px;
 }
 .round-row {
 	display: flex;
@@ -126,7 +126,7 @@ td {
 }
 td small {
 	display: block;
-	font-size: 10px;
+	font-size: 12px;
 }
 .symbol-link {
 	border: 0;

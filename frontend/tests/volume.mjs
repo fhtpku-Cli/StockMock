@@ -90,26 +90,56 @@ try {
 	await page.goto(`${base}tests/volume.html`);
 	// Then: 默认日期是最新市场日，大值和小数保持精度。
 	await expect(volume.getByRole("combobox")).toHaveValue("2026-10-22");
-	await expect(volume.locator("dd")).toHaveText("123,456,789,012,345,678.125");
+	await expect(
+		volume.getByText("成交量（来源单位）", { exact: true }).locator("+ dd"),
+	).toHaveText("123,456,789,012,345,678.125");
 	await volume.scrollIntoViewIfNeeded();
 	const overflow = await page
 		.getByRole("dialog")
 		.evaluate((node) => node.scrollWidth > node.clientWidth);
 	expect(overflow).toBe(false);
+	await expect(
+		volume.getByText("日线价格（收盘未确认）", { exact: true }).locator("+ dd"),
+	).toHaveText("¥10.000");
+	const scale = page.locator(".price-scale span");
+	await expect(scale).toHaveCount(1);
+	await expect(scale).toHaveText("¥10.000");
+	const yDifference = await page.locator(".price-plot").evaluate((node) => {
+		const label = node
+			.querySelector(".price-scale span")
+			.getBoundingClientRect();
+		const dot = node.querySelector(".chart-day-dot").getBoundingClientRect();
+		return Math.abs(label.y + label.height / 2 - dot.y - dot.height / 2);
+	});
+	expect(yDifference).toBeLessThan(2);
 	await capture("latest-large-390");
 	// Given: 已显示最新日期；When: 选择零量日；Then: 日期及值一起变化。
 	await volume.getByRole("combobox").selectOption("2026-10-20");
-	await expect(volume.locator("dd")).toHaveText("0");
+	await expect(
+		volume.getByText("成交量（来源单位）", { exact: true }).locator("+ dd"),
+	).toHaveText("0");
 	await expect(volume.locator(".footnote")).toContainText("2026-10-20");
 	await capture("selected-zero");
+	const svg = page.locator(".price-chart svg");
+	const bounds = await svg.boundingBox();
+	if (!bounds) throw new Error("日线图不可见");
+	await svg.click({ position: { x: bounds.width / 2, y: bounds.height / 2 } });
+	await expect(volume.getByRole("combobox")).toHaveValue("2026-10-21");
+	await expect(
+		volume.getByText("成交量（来源单位）", { exact: true }).locator("+ dd"),
+	).toHaveText("12.345678");
 	// Given: 小数成交量；When: 切换日期；Then: 小数不被千分位拆开。
 	await volume.getByRole("combobox").selectOption("2026-10-21");
-	await expect(volume.locator("dd")).toHaveText("12.345678");
+	await expect(
+		volume.getByText("成交量（来源单位）", { exact: true }).locator("+ dd"),
+	).toHaveText("12.345678");
 	await capture("selected-fraction");
 	// Given: 仅一个样本；When: 美股详情载入；Then: 可查看单日量且保留市场日期。
 	history = [bar("2026-10-20", "1000")];
 	await page.goto(`${base}tests/volume.html?market=US`);
-	await expect(volume.locator("dd")).toHaveText("1,000");
+	await expect(
+		volume.getByText("成交量（来源单位）", { exact: true }).locator("+ dd"),
+	).toHaveText("1,000");
 	await expect(volume.getByRole("combobox")).toHaveValue("2026-10-20");
 	await expect(volume.locator(".footnote")).toContainText("新浪日线");
 	await expect(page.locator(".price-chart")).toHaveCount(0);
@@ -118,13 +148,17 @@ try {
 	history = [];
 	await page.goto(`${base}tests/volume.html?market=HK`);
 	await expect(volume).toBeVisible();
-	await expect(volume.locator("dd")).toHaveCount(0);
+	await expect(
+		volume.getByText("成交量（来源单位）", { exact: true }).locator("+ dd"),
+	).toHaveCount(0);
 	await expect(volume.getByRole("combobox")).toHaveCount(0);
 	await capture("empty-history");
 	// Given: 上游失败；When: 详情重新请求；Then: 提示失败且不显示伪造/缓存量。
 	historyStatus = 503;
 	await page.reload();
-	await expect(page.getByRole("alert")).toBeVisible();
+	await expect(
+		page.getByRole("alert").filter({ hasText: "历史价格与成交量暂不可用" }),
+	).toBeVisible();
 	await expect(volume).toHaveCount(0);
 	await capture("failed-history");
 	expect(errors).toEqual([]);

@@ -66,11 +66,17 @@
 	margin-block: var(--s2);
 }
 .positions-table {
-	min-width: 720px;
+	width: 100%;
+	table-layout: fixed;
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 .active-orders-summary {
-	padding: var(--s4) var(--s6);
-	margin-bottom: var(--s5);
+	padding: 4px var(--s4);
+	margin-bottom: var(--s3);
+}
+.active-orders-summary > .footnote {
+	margin: -4px 0 6px;
 }
 .active-orders-summary .section-heading {
 	flex-wrap: wrap;
@@ -88,28 +94,86 @@
 .sellability-details small {
 	margin-top: var(--s1);
 }
-.position-sellability-list {
+.positions-panel {
+	container-type: inline-size;
+}
+.positions-table td {
+	vertical-align: top;
+}
+.positions-panel > .section-heading {
+	margin-bottom: 0;
+	flex-wrap: wrap;
+}
+.position-actions {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.positions-table .sellability-details {
+	width: auto;
+}
+.position-filters > summary,
+.reading-note > summary {
+	color: var(--accent);
+	font-size: 12px;
+}
+.position-label {
 	display: none;
 }
-@media (max-width: 700px) {
-	.positions-table .sellability-details {
-		display: none;
-	}
-	.position-sellability-list {
+@container (max-width: 650px) {
+	.positions-table,
+	.positions-table tbody {
 		display: block;
 	}
-	.position-sellability-list section {
-		padding-block: var(--s4);
-		border-bottom: 1px solid var(--line);
-		overflow-wrap: anywhere;
+	.positions-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
 	}
-	.position-sellability-list strong {
+	.positions-table tbody tr {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+		padding-block: 16px;
+		border-top: 1px solid var(--line);
+	}
+	.positions-table td {
+		min-width: 0;
+		border: 0;
+		padding: 0;
+	}
+	.position-name {
+		grid-row: 1;
+		grid-column: 1 / -1;
+	}
+	.position-value {
+		grid-row: 2;
+		grid-column: 1;
+	}
+	.position-pnl {
+		grid-row: 2;
+		grid-column: 2;
+	}
+	.position-cost {
+		grid-row: 3;
+		grid-column: 1 / -1;
+	}
+	.position-quantity {
+		grid-row: 4;
+		grid-column: 1 / -1;
+	}
+	.position-label {
+		display: block;
+		color: var(--muted);
 		font-size: 12px;
 	}
-	.position-sellability-list .sellability-details {
-		width: auto;
+	.positions-table .change-column {
+		display: none;
 	}
-	.position-sellability-list small {
+	.positions-table .change-inline {
 		display: block;
 	}
 }
@@ -166,11 +230,12 @@
 .change-inline {
 	display: none;
 }
-@media (max-width: 700px) {
-	.positions-table .change-column {
-		display: none;
-	}
-	.change-inline {
-		display: block;
-	}
+.alerts-empty {
+	padding-block: 4px;
+}
+.alerts-empty .section-heading {
+	margin: 0;
+}
+.stack > .alerts-panel {
+	margin-block: 0;
 }

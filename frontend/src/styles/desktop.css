@@ -27,15 +27,6 @@
 		grid-template-columns: 1fr 1fr;
 		align-items: start;
 	}
-	.metric-grid {
-		gap: 12px;
-	}
-	.metric {
-		padding: 16px;
-	}
-	.metric > strong {
-		font-size: 20px;
-	}
 	.brand {
 		padding: 0 4px;
 		font-size: 18px;
