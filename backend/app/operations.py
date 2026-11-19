@@ -12,7 +12,9 @@ from app.storage import read_rows
 
 def convert(engine: Engine, request: ConvertInput, now: datetime) -> None:
     """按真实参考汇率原子兑换可用外币。"""
-    payload = "convert:" + request.model_dump_json()
+    payload = "convert:" + request.model_dump_json(
+        exclude={"expected_round_id"} if request.expected_round_id is None else set()
+    )
     with engine.store.transaction() as connection:
         rows = read_rows(connection, "SELECT payload FROM requests WHERE id=?", (request.request_id,))
         if rows:
@@ -20,6 +22,8 @@ def convert(engine: Engine, request: ConvertInput, now: datetime) -> None:
                 raise DomainError("idempotency_conflict", "请求编号已用于其他操作")
             return
         round_id = engine.store.load(connection).id
+        if request.expected_round_id is not None and request.expected_round_id != round_id:
+            raise DomainError("round_changed", "练习轮次已变化，请刷新后重新操作")
     rates = engine.provider.fx_rates()
     rate = next((r for r in rates if r.currency == request.currency), None)
     if rate is None or now - rate.market_time > timedelta(days=5) or rate.market_time > now:

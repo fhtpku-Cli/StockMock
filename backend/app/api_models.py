@@ -29,6 +29,7 @@ class ConvertInput(Model):
     request_id: str = Field(min_length=8, max_length=100)
     currency: Literal["USD", "HKD"]
     amount: Decimal = Field(gt=0, max_digits=15, decimal_places=2)
+    expected_round_id: str | None = Field(default=None, max_length=36)
 
 
 class ResetInput(Model):

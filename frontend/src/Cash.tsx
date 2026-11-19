@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { api, errorMessage, money } from "./api";
+import { useEffect, useState } from "react";
+import { ApiError, api, errorMessage, money } from "./api";
 import { CashStatement } from "./CashStatement";
 import { fxDate, fxRate } from "./fxDisplay";
 import { fxSchema, portfolioSchema } from "./schema";
@@ -16,14 +16,23 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 		queryKey: ["portfolio"],
 		queryFn: () => api("portfolio", portfolioSchema),
 	});
+	const [draftRoundId, setDraftRoundId] = useState<string | null>(null);
+	useEffect(() => {
+		if (draftRoundId === null && portfolio.data)
+			setDraftRoundId(portfolio.data.round_id);
+	}, [draftRoundId, portfolio.data]);
 	const fx = useQuery({ queryKey: ["fx"], queryFn: () => api("fx", fxSchema) });
 	const convert = useMutation({
-		mutationFn: () =>
-			api("fx/convert", portfolioSchema, {
+		mutationFn: () => {
+			if (!draftRoundId)
+				throw new ApiError("round_unavailable", "请等待账户读取完成。", 409);
+			return api("fx/convert", portfolioSchema, {
 				request_id: requestId,
+				expected_round_id: draftRoundId,
 				currency,
 				amount,
-			}),
+			});
+		},
 		onSuccess: async () => {
 			setAmount("");
 			setRequestId(crypto.randomUUID());
@@ -31,6 +40,10 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 			await client.invalidateQueries({ queryKey: ["ledger"] });
 		},
 	});
+	const roundChanged =
+		(draftRoundId !== null && portfolio.data?.round_id !== draftRoundId) ||
+		(convert.error instanceof ApiError &&
+			convert.error.code === "round_changed");
 	return (
 		<Modal title="现金与换汇" onClose={onClose} wide>
 			<CashStatement />
@@ -79,7 +92,7 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 					convert.mutate();
 				}}
 			>
-				<fieldset disabled={!online || convert.isPending}>
+				<fieldset disabled={!online || convert.isPending || roundChanged}>
 					<div className="form-grid">
 						<div className="field">
 							<label htmlFor="fx-currency">卖出币种</label>
@@ -115,7 +128,28 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 						</div>
 					</div>
 				</fieldset>
-				{convert.isError && (
+				{roundChanged && (
+					<div className="error" role="alert">
+						<p>练习轮次已变化，旧换汇草稿已暂停。请在当前轮重新填写金额。</p>
+						<button
+							type="button"
+							className="text-button"
+							disabled={!online || portfolio.isFetching || convert.isPending}
+							onClick={async () => {
+								const current = await portfolio.refetch();
+								if (current.isSuccess) {
+									setDraftRoundId(current.data.round_id);
+									setAmount("");
+									setRequestId(crypto.randomUUID());
+									convert.reset();
+								}
+							}}
+						>
+							在当前轮重新建立换汇
+						</button>
+					</div>
+				)}
+				{convert.isError && !roundChanged && (
 					<ErrorNotice message={errorMessage(convert.error)} />
 				)}{" "}
 				{convert.isSuccess && (
@@ -126,7 +160,13 @@ export function Cash({ onClose }: { readonly onClose: () => void }) {
 				<button
 					type="submit"
 					className="button primary full"
-					disabled={!online || convert.isPending || !fx.isSuccess}
+					disabled={
+						!online ||
+						convert.isPending ||
+						!fx.isSuccess ||
+						!draftRoundId ||
+						roundChanged
+					}
 				>
 					{convert.isPending ? "换汇中…" : "确认换回人民币"}
 				</button>
