@@ -89,11 +89,13 @@ export function Modal({
 	children,
 	onClose,
 	wide = false,
+	closeDisabled = false,
 }: {
 	readonly title: string;
 	readonly children: ReactNode;
 	readonly onClose: () => void;
 	readonly wide?: boolean;
+	readonly closeDisabled?: boolean;
 }) {
 	const ref = useRef<HTMLDialogElement>(null);
 	useLayoutEffect(() => {
@@ -123,9 +125,14 @@ export function Modal({
 			aria-label={title}
 			ref={ref}
 			className={wide ? "modal wide" : "modal"}
-			onCancel={onClose}
+			onCancel={(event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				if (!closeDisabled) onClose();
+			}}
 			onKeyDown={(event) => {
 				if (event.key !== "Tab") return;
+				event.stopPropagation();
 				const dialog = event.currentTarget;
 				const controls = Array.from(
 					dialog.querySelectorAll<HTMLElement>(
@@ -155,6 +162,7 @@ export function Modal({
 					type="button"
 					className="icon-button"
 					aria-label="关闭"
+					disabled={closeDisabled}
 					onClick={onClose}
 				>
 					<X size={22} />

@@ -9,8 +9,8 @@ import { orderSchema, portfolioSchema, previewSchema } from "./schema";
 import "./styles/trade-reference.css";
 import { TradePreview } from "./TradePreview";
 import { ErrorNotice, Modal } from "./ui";
-import { useTradeReference } from "./useTradeReference";
 import { useOnline } from "./useOnline";
+import { useTradeReference } from "./useTradeReference";
 
 type Side = "buy" | "sell";
 type Draft = {
@@ -45,7 +45,7 @@ export function Trade({
 	const position = portfolio.data?.positions.find(
 		(row) => row.symbol === instrument.symbol,
 	);
-	const previewStart = useRef<HTMLDivElement>(null);
+	const previewStart = useRef<HTMLElement>(null);
 	const [draft, setDraft] = useState<Draft>({
 		quantity: original
 			? String(original.quantity)
@@ -244,6 +244,7 @@ export function Trade({
 		<Modal
 			title={`${side === "buy" ? "模拟买入" : "模拟卖出"} · ${instrument.name}`}
 			onClose={onClose}
+			closeDisabled={!!unresolved || submit.isPending}
 		>
 			{!original && (
 				<button
@@ -539,11 +540,11 @@ export function Trade({
 				)}
 				{unresolved && !submit.isPending && (
 					<p className="notice" role="status">
-						委托结果尚未确认。请联网后重试确认结果；将核对原委托，不会重复创建。确认前暂不能修改交易内容。
+						委托结果尚未确认。请联网后重试确认结果；将核对原委托，不会重复创建。确认前暂不能修改交易内容或关闭窗口。
 					</p>
 				)}
 				{preview.isSuccess && (
-					<div
+					<section
 						ref={previewStart}
 						tabIndex={-1}
 						aria-label="委托预览"
@@ -554,7 +555,7 @@ export function Trade({
 							currency={instrument.currency}
 							side={side}
 						/>
-					</div>
+					</section>
 				)}
 				<p className="footnote">
 					提交后等待有效行情确认，可能延迟成交。撤单确认前，资金或持仓继续占用。

@@ -66,7 +66,7 @@ try {
 	}
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole("button", { name: "自选", exact: true }).tap();
-	await page.getByLabel("搜索代码或名称").fill("600519");
+	await page.getByLabel("筛选已可交易证券").fill("600519");
 	await page.locator('[data-symbol="600519.SS"] .security-main').tap();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).tap();
 	await page.getByLabel("限价（CNY）").fill("100");
@@ -107,6 +107,8 @@ try {
 	).toBeVisible();
 	const submissions = [];
 	let dropped = false;
+	let releaseResponse;
+	const heldResponse = new Promise((resolve) => { releaseResponse = resolve; });
 	await page.route("**/api/orders", async (route) => {
 		if (route.request().method() !== "POST") {
 			await route.continue();
@@ -117,11 +119,20 @@ try {
 			dropped = true;
 			const response = await route.fetch();
 			expect(response.status()).toBe(200);
+			await heldResponse;
 			await route.abort("failed");
 		} else await route.continue();
 	});
 	await page.getByRole("button", { name: "确认提交委托" }).tap();
+	await expect(page.getByRole("button", { name: "关闭", exact: true })).toBeDisabled();
+	await page.keyboard.press("Escape");
+	await expect(page.getByLabel("数量（每手 100）")).toBeVisible();
+	await shot("pending-close-protected");
+	releaseResponse();
 	await expect(page.getByRole("alert")).toContainText("无法连接");
+	await expect(page.getByRole("button", { name: "关闭", exact: true })).toBeDisabled();
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("button", { name: "重试确认委托结果" })).toBeVisible();
 	await shot("lost-response");
 	await page.evaluate(() =>
 		document.dispatchEvent(new Event("visibilitychange")),
@@ -184,7 +195,7 @@ try {
 	});
 	await page.getByRole("button", { name: "关闭" }).tap();
 	await page.getByRole("button", { name: "自选", exact: true }).tap();
-	await page.getByLabel("搜索代码或名称").fill("600519");
+	await page.getByLabel("筛选已可交易证券").fill("600519");
 	await page.locator('[data-symbol="600519.SS"] .security-main').tap();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).tap();
 	await page.getByLabel("限价（CNY）").fill("100");
@@ -209,7 +220,10 @@ try {
 	await expect(
 		page.getByRole("button", { name: "重试确认委托结果" }),
 	).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "关闭", exact: true })).toBeEnabled();
 	await shot("definite-rejection-unlocks-form");
+	await page.keyboard.press("Escape");
+	await expect(page.getByLabel("数量（每手 100）")).toHaveCount(0);
 	for (const audit of audits) expect(audit.violations).toEqual([]);
 	expect(errors).toEqual([]);
 	await writeFile(
