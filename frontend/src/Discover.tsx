@@ -18,7 +18,7 @@ const coverageGroups = [
 	{ market: "US", kind: "ETF", label: "美股 ETF" },
 ] as const;
 
-function InstrumentList({
+export function InstrumentList({
 	items,
 	onSelect,
 	empty,
@@ -32,18 +32,17 @@ function InstrumentList({
 	readonly pending: boolean;
 }) {
 	const [visible, setVisible] = useState(PAGE_SIZE);
+	const ruleCounts = new Map<string, Map<string, number>>();
+	for (const item of items) {
+		if (!item.tradable || !item.restriction) continue;
+		const counts = ruleCounts.get(item.market) ?? new Map<string, number>();
+		counts.set(item.restriction, (counts.get(item.restriction) ?? 0) + 1);
+		ruleCounts.set(item.market, counts);
+	}
 	const sharedRules = new Map<string, string>();
-	for (const market of new Set(items.map((item) => item.market))) {
-		const tradable = items.filter(
-			(item) => item.market === market && item.tradable,
-		);
-		const rule = tradable[0]?.restriction;
-		if (
-			tradable.length > 1 &&
-			rule &&
-			tradable.every((item) => item.restriction === rule)
-		)
-			sharedRules.set(market, rule);
+	for (const [market, counts] of ruleCounts) {
+		const mostCommon = Array.from(counts).sort((a, b) => b[1] - a[1])[0];
+		if (mostCommon && mostCommon[1] > 1) sharedRules.set(market, mostCommon[0]);
 	}
 	return items.length === 0 ? (
 		<Empty title={empty}>可调整筛选，或在在线搜索中查找目录外的证券。</Empty>
@@ -54,7 +53,7 @@ function InstrumentList({
 					<summary>本列表可交易标的的共同规则</summary>
 					{Array.from(sharedRules, ([market, rule]) => (
 						<p key={market} className="footnote">
-							{marketName(market)} · {rule}
+							{marketName(market)}（除行内另注外） · {rule}
 						</p>
 					))}
 				</details>

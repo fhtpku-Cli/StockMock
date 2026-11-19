@@ -6,6 +6,7 @@ import { MarketSession } from "./MarketSession";
 import { changeDisplay } from "./marketView";
 import { Plans } from "./Plans";
 import { PriceHistory } from "./PriceHistory";
+import { SignedValue } from "./SignedValue";
 import type { Instrument } from "./schema";
 import { historySchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
@@ -196,7 +197,12 @@ export function Detail({
 					</div>
 					<div>
 						<dt>参考浮动收益</dt>
-						<dd>{money(position.pnl, position.currency)}</dd>
+						<dd>
+							<SignedValue
+								value={position.pnl}
+								text={money(position.pnl, position.currency)}
+							/>
+						</dd>
 					</div>
 				</dl>
 			)}

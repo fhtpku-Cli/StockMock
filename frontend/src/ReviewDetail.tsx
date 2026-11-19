@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { z } from "zod";
 import { api, errorMessage, money, time } from "./api";
 import { ConclusionForm } from "./ConclusionForm";
@@ -168,6 +168,18 @@ function DetailContent({
 		target.orderId ? "委托依据" : "计划与结果",
 	);
 	const navigation = useRef<HTMLFieldSetElement>(null);
+	useLayoutEffect(() => {
+		const tabs = navigation.current;
+		const heading = tabs?.closest("dialog")?.querySelector(".modal-heading");
+		if (!tabs || !heading) return;
+		const align = () => {
+			tabs.style.top = `${heading.getBoundingClientRect().height}px`;
+		};
+		align();
+		const observer = new ResizeObserver(align);
+		observer.observe(heading);
+		return () => observer.disconnect();
+	}, []);
 	const review = detail.review;
 	const plan = review.plan;
 	const online = useOnline();

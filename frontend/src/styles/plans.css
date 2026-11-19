@@ -261,10 +261,11 @@
 }
 
 .review-sections.segmented {
+	width: 100%;
 	position: sticky;
-	top: 76px;
+	top: 0;
 	z-index: 1;
-	background: var(--canvas);
+	background: var(--paper);
 }
 
 @media (max-width: 700px) {
@@ -272,7 +273,6 @@
 		padding-inline: 2px;
 	}
 	.review-sections.segmented {
-		top: 68px;
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		width: 100%;
