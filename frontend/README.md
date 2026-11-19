@@ -45,7 +45,7 @@ bun run --cwd frontend build --outDir ../.omo/evidence/local-check/candidate-dis
 | `tests/tradability.mjs` | 独立5197/8027、随机测试口令和临时库；要求`.omo/evidence/tradability-ui/site`中的候选包，包含真实启用流程和明确受控的外部来源 |
 | `tests/iteration-ui.mjs` | 0.2.0历史矩阵，调用`backend/tests/iteration_server.py`，使用8202及历史候选目录；数据库/输出路径有历史固定值，不能原样重跑覆盖原证据 |
 
-常用浏览器助手优先使用`CHROME_PATH`，其次使用macOS系统Chrome，否则用已安装的Playwright Chromium。不同矩阵可能另用WebKit，应先读对应脚本。截图和私有响应留在Git忽略的`.omo/evidence/`或`work/`，不进入公有仓库。需要重新验证旧矩阵时，先适配独立新目录和当前接口；不能通过改掉安全断言让旧脚本变绿。
+部分历史浏览器脚本按`CHROME_PATH`、macOS系统Chrome、已安装的Playwright Chromium顺序选择浏览器；这只是旧脚本行为。当前人工浏览器验证使用Ego Lite，先读取已安装的ego-browser技能；旧矩阵运行前需核对并适配，不能将旧默认值作为现行浏览器选择。截图和私有响应留在Git忽略的`.omo/evidence/`或`work/`，不进入公有仓库。需要重新验证旧矩阵时，先适配独立新目录和当前接口；不能通过改掉安全断言让旧脚本变绿。
 
 0.4.7历史浏览器范围见[该版计划](../outputs/0.4.7迭代计划.md)和[执行记录](../outputs/0.4.7执行与验收记录.md)；0.5.0当前完整流程、真实美股及正式只读验收见[发布记录](../outputs/0.5.0发布收尾与验收.md)。私有辅助工具不是新克隆仓库自带的测试依赖。
 
@@ -64,7 +64,7 @@ A股与美股在线搜索结果可在详情申请启用模拟交易；成功核�
 
 ## 0.5.0 验证与使用限制
 
-本版提供长日线范围、今日涨跌、同期参照、成交标记及撤单确认。日线未确认定稿时不计入同期参照；缺成交日日线时保留列表，来源补齐后刷新。完整流程脚本已按现行目录和分页恢复，26 场景实际通过；最新工程测试以发布记录为准。`completion_server.py` 必须显式指定独立 `FRONTEND_TEST_PASSWORD`、`FRONTEND_TEST_PORT`、`FRONTEND_TEST_DIST`，浏览器指定相同 `FRONTEND_TEST_URL` 与独立 `FRONTEND_TEST_OUTPUT`，禁止连接正式账户或默认 8000。历史其它脚本的环境假设仍需逐项确认，不能一键对正式账户运行。
+本版提供长日线范围、今日涨跌、同期参照、成交标记及撤单确认。同期参照只纳入应用判定为完整的共同日线日期；该判断不保证来源此后永不修订，见[RM05调查](../outputs/RM05-1美股日线定稿调查.md)。缺成交日日线时保留列表，来源补齐后刷新。完整流程脚本已按现行目录和分页恢复，26 场景实际通过；最新工程测试以发布记录为准。`completion_server.py` 必须显式指定独立 `FRONTEND_TEST_PASSWORD`、`FRONTEND_TEST_PORT`、`FRONTEND_TEST_DIST`，浏览器指定相同 `FRONTEND_TEST_URL` 与独立 `FRONTEND_TEST_OUTPUT`，禁止连接正式账户或默认 8000。历史其它脚本的环境假设仍需逐项确认，不能一键对正式账户运行。
 
 ## E1复盘模块的隔离验证
 
@@ -73,3 +73,9 @@ E1仅增加关联委托概览，并将原有逐笔详情/计划版本对照放�
 `tests/review_orders_server.py`使用临时SQLite和受控历史样本，停止后删除临时数据库。必须显式设置 `FRONTEND_TEST_PORT`（本机非8000端口）、`FRONTEND_TEST_DIST`（独立构建目录）、`FRONTEND_TEST_OUTPUT`（本轮证据目录）和 `FRONTEND_TEST_PASSWORD`（临时测试口令）。不读取个人数据库或`.local-password`，后台关闭，不依赖本机历史验收文件。
 
 从候选根目录执行 `backend/.venv/bin/python frontend/tests/review_orders_server.py`；另一个终端带相同测试配置执行 `bun frontend/tests/review-orders-ui.mjs`。浏览器脚本按显式端口连接本机隔离服务，会在测试账户保存受控结论，不能指向正式实例。完整构建、场景及操作步骤见实施记录第5节。测试覆盖当前/归档、版本变化、部分卖出、未成交/旧字段缺失、21/508笔分页、草稿/刷新、1440/375px和键盘操作；模拟409及异常GET响应与真实HTTP验证分别记录，不等同本人设备验收。
+
+## 2026-11-20组合交付
+
+复盘阅读减负与持仓练习前端体验整改已上线：窄屏持仓卡片、日线选日与价格刻度、交易预览及委托回执、站内撤单确认、复盘分区与指定委托直达。复盘“时间与交易计划”默认收起，重要提示及版本对照保留，完整依据可展开，切换委托后重新收起。接口、数据库及交易规则保持原有范围。
+
+组合候选记录为194项自动测试、491项断言，类型检查与构建通过；另2个旧Chrome撤单场景由Ego真实交互替代，不表述为196项自动测试全部通过。正式账户空复盘只验证可访问，桌面复盘宽度的数值证据不完整，不能扩大为全量正式视觉验收。本次文档整理未重跑产品测试。完整交付和证据边界见[组合上线记录](../outputs/复盘阅读减负走查与计划.md#9-与前端体验整改统一交付)。
