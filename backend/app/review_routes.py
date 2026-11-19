@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Query, Response
 from app.auth import Auth
 from app.engine import Engine
 from app.models import State
+from app.order_views import WaitingContext
 from app.plan_alerts import alerts, read_alert
 from app.plan_exports import export_alerts
 from app.plan_models import Alert, AlertPage, Page, Review
@@ -21,11 +22,12 @@ from app.review_journal import journal_page
 from app.review_models import ConclusionResult, FactPage, JournalPage, ReviewDetail, ReviewPage
 from app.review_queries import RecordQuery, WorkbenchQuery, workbench
 from app.review_repository import read_context
+from app.worker import Worker
 
 
-def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
+def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker) -> None:
     """将提示和复盘筛选保持为独立的 HTTP 责任。"""
-    register_workbench(app, engine, auth)
+    register_workbench(app, engine, auth, worker)
 
     def state_for(round_id: str | None) -> State:
         return engine.store.read_round(round_id) if round_id else engine.store.read()
@@ -57,7 +59,7 @@ def register(app: FastAPI, engine: Engine, auth: Auth) -> None:
         return page([r for r in items if query.status in ("all", r.status)], query)
 
 
-def register_workbench(app: FastAPI, engine: Engine, auth: Auth) -> None:
+def register_workbench(app: FastAPI, engine: Engine, auth: Auth, worker: Worker) -> None:
     """注册新版复盘详情、笔记和工作台接口。"""
 
     @app.get("/api/reviews/page", dependencies=[Depends(auth.require)])
@@ -70,7 +72,14 @@ def register_workbench(app: FastAPI, engine: Engine, auth: Auth) -> None:
 
     @app.get("/api/reviews/{subject_type}/{subject_id}", dependencies=[Depends(auth.require)])
     def review_detail(subject_type: SubjectType, subject_id: UUID, round_id: str | None = None) -> ReviewDetail:
-        return detail(read_context(engine.store, round_id), (subject_type, str(subject_id)), datetime.now(UTC))
+        now = datetime.now(UTC)
+        return detail(
+            read_context(engine.store, round_id),
+            (subject_type, str(subject_id)),
+            now,
+            engine.catalog,
+            waiting=WaitingContext(now, engine.paused, worker.failures),
+        )
 
     @app.post("/api/reviews/{subject_type}/{subject_id}/conclusions", dependencies=[Depends(auth.require)])
     def conclude(subject_type: SubjectType, subject_id: UUID, body: ConclusionInput) -> ConclusionResult:

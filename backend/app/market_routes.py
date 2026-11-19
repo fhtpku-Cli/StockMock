@@ -20,9 +20,11 @@ from app.market_session import project
 from app.market_session_models import Market, MarketSessionView
 from app.marketdata_models import Bar, Quote
 from app.models import (
+    DomainError,
     Instrument,
 )
 from app.order_rules import tick_size
+from app.storage import read_rows
 from app.views import CLOSE_BUFFER, Change, bar_complete, quote_change
 
 
@@ -56,16 +58,25 @@ def _bars(
     return engine.provider.history(item.symbol), False
 
 
-def register(app: FastAPI, engine: Engine, auth: Auth, display: RuleProvider | None = None) -> None:
-    """注册本模块的个人账户 HTTP 接口。"""
-    discovery = Discovery()
+def _catalog_instrument(symbol: str, engine: Engine) -> Instrument | None:
+    """按已有证券代码规范精确匹配当前交易目录。"""
+    return next((item for item in engine.catalog if symbol_identity(item.symbol) == symbol_identity(symbol)), None)
 
-    def lookup(symbol: str) -> Instrument | ObservationInstrument:
-        return next(
-            (item for item in engine.catalog if symbol_identity(item.symbol) == symbol_identity(symbol)), None
-        ) or discovery.lookup(symbol, engine.store)
 
-    _ = app.get("/api/markets/{market}/session", dependencies=[Depends(auth.require)])(market_session)
+def _local_instrument(symbol: str, engine: Engine) -> Instrument | ObservationInstrument:
+    """只查询当前规则和持久化观察身份，不请求行情源。"""
+    item = _catalog_instrument(symbol, engine)
+    if item is not None:
+        return item
+    with engine.store.transaction() as connection:
+        rows = read_rows(connection, "SELECT data FROM observations WHERE symbol=?", (symbol,))
+    if rows:
+        return ObservationInstrument.model_validate_json(rows[0][0])
+    raise DomainError("unknown_instrument", "本地不存在该证券", 404)
+
+
+def _register_instruments(app: FastAPI, engine: Engine, auth: Auth, discovery: Discovery) -> None:
+    """注册证券目录、搜索及本地精确身份接口。"""
 
     @app.get("/api/instruments/search", dependencies=[Depends(auth.require)])
     def search(q: Annotated[str, Query(max_length=80)] = "") -> SearchResult:
@@ -74,6 +85,23 @@ def register(app: FastAPI, engine: Engine, auth: Auth, display: RuleProvider | N
     @app.get("/api/instruments", dependencies=[Depends(auth.require)])
     def instruments(q: str = "") -> list[Instrument]:
         return [i for i in engine.catalog if q.lower() in (i.symbol + i.name + i.market + i.kind).lower()]
+
+    @app.get("/api/instruments/{symbol}", dependencies=[Depends(auth.require)])
+    def local_instrument(symbol: str) -> Instrument | ObservationInstrument:
+        """读取本地证券身份，包括移出自选后仍持久保存的观察标的。"""
+        return _local_instrument(symbol, engine)
+
+
+def register(app: FastAPI, engine: Engine, auth: Auth, display: RuleProvider | None = None) -> None:
+    """注册本模块的个人账户 HTTP 接口。"""
+    discovery = Discovery()
+
+    def lookup(symbol: str) -> Instrument | ObservationInstrument:
+        return _catalog_instrument(symbol, engine) or discovery.lookup(symbol, engine.store)
+
+    _ = app.get("/api/markets/{market}/session", dependencies=[Depends(auth.require)])(market_session)
+
+    _register_instruments(app, engine, auth, discovery)
 
     @app.get("/api/instruments/{symbol}/quote", dependencies=[Depends(auth.require)])
     def quote(symbol: str) -> QuoteView:

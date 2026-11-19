@@ -116,7 +116,7 @@ def create_app(
     register_asset_routes(app, engine, auth, worker, plan_worker, display=display)
     register_personal_routes(app, engine, auth)
     register_plan_routes(app, engine, auth)
-    register_review_routes(app, engine, auth)
+    register_review_routes(app, engine, auth, worker)
     register_archive_routes(app, engine, auth)
     register_analysis_routes(app, engine, auth)
 

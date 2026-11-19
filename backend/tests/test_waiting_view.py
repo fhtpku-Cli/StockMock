@@ -7,7 +7,7 @@ from types import MappingProxyType
 import pytest
 from fastapi.testclient import TestClient
 
-from app import trading_routes
+from app import review_routes, trading_routes
 from app import worker as worker_module
 from app.engine import Engine
 from app.main import create_app
@@ -150,6 +150,7 @@ def test_trading_http_projects_waiting_but_archive_keeps_none(engine: Engine, mo
             return clock[0]
 
     monkeypatch.setattr(trading_routes, "datetime", Clock)
+    monkeypatch.setattr(review_routes, "datetime", Clock)
     plan = create_plan(engine, plan_body(), NOW)
     password = secrets.token_urlsafe(24)
     with TestClient(create_app(engine, password, run_worker=False)) as client:
@@ -173,7 +174,7 @@ def test_trading_http_projects_waiting_but_archive_keeps_none(engine: Engine, mo
         assert planned.items[0].waiting is None
         reviewed = client.get(f"/api/reviews/plan/{plan.id}")
         assert reviewed.status_code == 200
-        assert reviewed.json()["orders"][0]["waiting"] is None
+        assert reviewed.json()["orders"][0]["waiting"] == listed.json()[0]["waiting"]
         clock[0] = NOW + timedelta(minutes=1)
         cancelled = client.post(f"/api/orders/{placed_body.id}/cancel")
         assert cancelled.status_code == 200

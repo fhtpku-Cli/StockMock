@@ -2,8 +2,9 @@
 
 from datetime import UTC, datetime
 
-from app.models import DomainError
-from app.order_views import order_view
+from app.catalog import CATALOG
+from app.models import DomainError, Instrument
+from app.order_views import WaitingContext, order_view
 from app.plan_reviews import context_reviews
 from app.review_core_models import Conclusion, ConclusionInput, SubjectType
 from app.review_models import ConclusionResult, ReviewDetail
@@ -11,7 +12,14 @@ from app.review_repository import ReviewContext, load_context
 from app.storage import Store, read_rows
 
 
-def detail(context: ReviewContext, subject: tuple[SubjectType, str], now: datetime) -> ReviewDetail:
+def detail(
+    context: ReviewContext,
+    subject: tuple[SubjectType, str],
+    now: datetime,
+    catalog: tuple[Instrument, ...] = CATALOG,
+    *,
+    waiting: WaitingContext | None = None,
+) -> ReviewDetail:
     """主体归属必须精确；有计划的委托没有独立完成状态。"""
     kind, identifier = subject
     if kind == "order":
@@ -27,7 +35,11 @@ def detail(context: ReviewContext, subject: tuple[SubjectType, str], now: dateti
         read_only=context.state.archived_at is not None,
         review=review,
         coverage=review.coverage,
-        orders=[order_view(o) for o in orders if o is not None],
+        orders=[
+            order_view(o, catalog, waiting=waiting if context.state.archived_at is None else None)
+            for o in orders
+            if o is not None
+        ],
         conclusions=[c for c in context.conclusions if (c.subject_type, c.subject_id) == subject],
     )
 
