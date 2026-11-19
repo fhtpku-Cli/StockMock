@@ -10,6 +10,7 @@ import { Pagination } from "./Pagination";
 import { alertPageSchema, alertSchema } from "./planSchema";
 import { ReviewModal } from "./ReviewDetail";
 import { Badge, ErrorNotice, Loading, Panel } from "./ui";
+import type { SymbolError } from "./useInstrumentNavigation";
 import { useOnline } from "./useOnline";
 
 export function Alerts({
@@ -17,11 +18,15 @@ export function Alerts({
 	roundId,
 	onSymbol,
 	compact = false,
+	symbolError = null,
+	onReviewOpen,
 }: {
 	readonly compact?: boolean;
 	readonly symbol?: string;
 	readonly roundId?: string;
 	readonly onSymbol?: (symbol: string) => void;
+	readonly symbolError?: SymbolError;
+	readonly onReviewOpen?: () => void;
 }) {
 	const [selectedAlert, setSelectedAlert] = useState<z.infer<
 		typeof alertSchema
@@ -146,6 +151,12 @@ export function Alerts({
 							</Badge>
 						</div>
 						<p>{item.message}</p>
+						{symbolError?.symbol === item.symbol && onSymbol && (
+							<ErrorNotice
+								message={symbolError.message}
+								retry={() => onSymbol(item.symbol)}
+							/>
+						)}
 						{item.market_time && (
 							<p className="footnote">
 								观察样本 {item.price ?? "未记录"} · 市场时间{" "}
@@ -159,7 +170,10 @@ export function Alerts({
 						<button
 							type="button"
 							className="button small"
-							onClick={() => setSelectedAlert(item)}
+							onClick={() => {
+								onReviewOpen?.();
+								setSelectedAlert(item);
+							}}
 						>
 							查看相关计划/复盘
 						</button>

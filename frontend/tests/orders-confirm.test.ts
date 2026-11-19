@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from "bun:test";
-import { chromium, expect as expectBrowser } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { chromium, expect as expectBrowser } from "@playwright/test";
 import { CANCEL_CONFIRM } from "../src/Orders";
 import { orderSchema } from "../src/schema";
 
@@ -103,6 +103,62 @@ test.each([false, true])(
 				);
 			else await expectBrowser(button).toBeEnabled();
 			expect(requests).toBe(confirmed ? 1 : 0);
+		} finally {
+			await browser.close();
+		}
+	},
+	20000,
+);
+
+test.each(["进行中", "已成交"])(
+	" %s 空结果一键清除日期、市场和状态筛选",
+	async (status) => {
+		const executablePath =
+			process.env.CHROME_PATH ??
+			[
+				"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+				"/usr/bin/google-chrome",
+			].find((path) => existsSync(path));
+		const browser = await chromium.launch({
+			...(executablePath ? { executablePath } : {}),
+			headless: true,
+		});
+		const page = await browser.newPage();
+		try {
+			await page.route("**/*", async (route) => {
+				const path = new URL(route.request().url()).pathname;
+				if (path === "/api/orders")
+					await route.fulfill({ json: [{ ...accepted, status: "cancelled" }] });
+				else if (path === "/")
+					await route.fulfill({
+						contentType: "text/html",
+						body: '<div id="root"></div>',
+					});
+				else await route.abort();
+			});
+			await page.goto("http://stockmock-confirm.test/");
+			await page.addScriptTag({ content: fixture });
+			await expectBrowser(page.locator(".order-row")).toHaveCount(1);
+			await page.getByRole("button", { name: status, exact: true }).click();
+			await expectBrowser(
+				page.getByText("当前筛选下没有委托", { exact: true }),
+			).toBeVisible();
+			await page.getByLabel("起始日期").fill("2026-11-01");
+			await page.getByLabel("结束日期").fill("2026-11-02");
+			await page.getByLabel("关联市场").selectOption("CN");
+			await page
+				.getByRole("button", { name: "清除全部筛选", exact: true })
+				.click();
+			await expectBrowser(page.getByLabel("起始日期")).toHaveValue("");
+			await expectBrowser(page.getByLabel("结束日期")).toHaveValue("");
+			await expectBrowser(page.getByLabel("关联市场")).toHaveValue("all");
+			await expectBrowser(
+				page.getByRole("button", { name: "全部", exact: true }),
+			).toHaveAttribute("aria-pressed", "true");
+			await expectBrowser(page.locator(".order-row")).toHaveCount(1);
+			await expectBrowser(
+				page.getByRole("button", { name: "清除全部筛选", exact: true }),
+			).toHaveCount(0);
 		} finally {
 			await browser.close();
 		}

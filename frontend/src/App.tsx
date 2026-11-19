@@ -4,8 +4,13 @@ import {
 	MagnifyingGlass,
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { z } from "zod";
+import {
+	type Dispatch,
+	type SetStateAction,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { api, errorMessage, SESSION_EXPIRED } from "./api";
 import { Cash } from "./Cash";
 import { Detail } from "./Detail";
@@ -20,9 +25,10 @@ import { Settings } from "./Settings";
 import type { Page } from "./Sidebar";
 import { navigation, Sidebar } from "./Sidebar";
 import type { Instrument, Order } from "./schema";
-import { instrumentSchema, sessionSchema } from "./schema";
+import { sessionSchema } from "./schema";
 import { Trade } from "./Trade";
 import { ErrorNotice, Loading } from "./ui";
+import { useInstrumentNavigation } from "./useInstrumentNavigation";
 
 type Overlay =
 	| { readonly kind: "none" }
@@ -42,12 +48,23 @@ export function App() {
 		retry: false,
 	});
 	const [page, setPage] = useState<Page>("assets");
+	const main = useRef<HTMLElement>(null);
+	const [overlay, updateOverlay] = useState<Overlay>({ kind: "none" });
+	const symbols = useInstrumentNavigation((instrument) =>
+		updateOverlay({ kind: "detail", instrument }),
+	);
+	const setOverlay: Dispatch<SetStateAction<Overlay>> = (next) => {
+		symbols.cancel();
+		updateOverlay(next);
+	};
 	const [ordersEntry, setOrdersEntry] = useState<{
 		readonly id: number;
 		readonly filter: "all" | "active";
 		readonly receipt?: Order;
 	}>({ id: 0, filter: "all" });
 	const openOrders = (filter: "all" | "active", receipt?: Order) => {
+		symbols.cancel();
+		if (!receipt) main.current?.scrollTo({ top: 0 });
 		setOrdersEntry((entry) => ({
 			id: entry.id + 1,
 			filter,
@@ -56,13 +73,13 @@ export function App() {
 		setPage("orders");
 	};
 	const navigate = (next: Page) => {
+		symbols.cancel();
+		main.current?.scrollTo({ top: 0 });
 		if (next === "orders") openOrders("all");
 		else setPage(next);
 	};
-	const [overlay, setOverlay] = useState<Overlay>({ kind: "none" });
 	const [online, setOnline] = useState(navigator.onLine);
 	const [sessionExpired, setSessionExpired] = useState(false);
-	const [actionError, setActionError] = useState("");
 	const client = useQueryClient();
 	useEffect(() => {
 		const up = () => {
@@ -80,9 +97,9 @@ export function App() {
 	useEffect(() => {
 		const expire = () => {
 			setSessionExpired(true);
-			setOverlay({ kind: "none" });
+			symbols.cancel();
+			updateOverlay({ kind: "none" });
 			setOrdersEntry({ id: 0, filter: "all" });
-			setActionError("");
 			void client.cancelQueries();
 			client.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
 			client.setQueryData(["session"], {
@@ -92,24 +109,10 @@ export function App() {
 		};
 		window.addEventListener(SESSION_EXPIRED, expire);
 		return () => window.removeEventListener(SESSION_EXPIRED, expire);
-	}, [client]);
+	}, [client, symbols.cancel]);
 	useEffect(() => {
 		document.title = `${navigation.find((n) => n.id === page)?.label ?? "资产"} · 持仓练习`;
 	}, [page]);
-	const openSymbol = async (symbol: string) => {
-		try {
-			const instruments = await api(
-				`instruments?q=${encodeURIComponent(symbol)}`,
-				z.array(instrumentSchema),
-			);
-			const match = instruments.find((i) => i.symbol === symbol);
-			if (match) setOverlay({ kind: "detail", instrument: match });
-			else setActionError("该标的暂不在可查询范围内。");
-		} catch (error) {
-			if (error instanceof Error) setActionError(error.message);
-			else throw error;
-		}
-	};
 	if (session.isPending)
 		return (
 			<div className="splash">
@@ -148,7 +151,7 @@ export function App() {
 				setPage={navigate}
 				onSettings={() => setOverlay({ kind: "settings" })}
 			/>
-			<main id="main" className="main-scroll">
+			<main id="main" className="main-scroll" ref={main}>
 				<header className="topbar">
 					<div className="breadcrumb">
 						我的空间 <span>/</span> {current.label}
@@ -186,7 +189,7 @@ export function App() {
 							<button
 								type="button"
 								className="button"
-								onClick={() => setPage("watchlist")}
+								onClick={() => navigate("watchlist")}
 							>
 								<MagnifyingGlass size={18} />
 								发现标的
@@ -196,14 +199,15 @@ export function App() {
 					{!online && (
 						<ErrorNotice message="当前离线。显示内容可能已过时，联网后请刷新；交易暂不可提交。" />
 					)}
-					{actionError && <ErrorNotice message={actionError} />}
 					<div className="page-view">
 						{page === "assets" && (
 							<PortfolioView
 								onOrders={() => openOrders("active")}
-								onExplore={() => setPage("watchlist")}
+								onExplore={() => navigate("watchlist")}
 								onCash={() => setOverlay({ kind: "cash" })}
-								onSymbol={(s) => void openSymbol(s)}
+								onSymbol={(symbol) => void symbols.open(symbol)}
+								symbolError={symbols.error}
+								onReviewOpen={symbols.cancel}
 							/>
 						)}{" "}
 						{page === "watchlist" && (

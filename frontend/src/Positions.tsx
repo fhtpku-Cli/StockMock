@@ -12,15 +12,18 @@ import { ChangeLine } from "./ChangeLine";
 import { changeDisplay } from "./marketView";
 import { SellabilityDetails } from "./SellabilityDetails";
 import { SignedValue } from "./SignedValue";
-import { Empty, Panel } from "./ui";
+import { Empty, ErrorNotice, Panel } from "./ui";
+import type { SymbolError } from "./useInstrumentNavigation";
 export function Positions({
 	positions,
 	onSymbol,
 	onExplore,
+	symbolError = null,
 }: {
 	readonly positions: readonly Position[];
 	readonly onSymbol: (symbol: string) => void;
 	readonly onExplore: () => void;
+	readonly symbolError?: SymbolError;
 }) {
 	const [market, setMarket] = useState("");
 	const [currency, setCurrency] = useState("");
@@ -160,6 +163,12 @@ export function Positions({
 														</small>
 													</button>
 													<small>{time(row.price_time)}</small>
+													{symbolError?.symbol === row.symbol && (
+														<ErrorNotice
+															message={symbolError.message}
+															retry={() => onSymbol(row.symbol)}
+														/>
+													)}
 													{row.change_status !== "market_disabled" && (
 														<span className="change-inline">
 															<ChangeLine

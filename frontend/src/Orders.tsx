@@ -8,8 +8,8 @@ import {
 	RecordFilters,
 	recordMatches,
 } from "./RecordFilters";
-import { OrderReviewModal } from "./ReviewDetail";
 import { canReorder } from "./ReorderTrade";
+import { OrderReviewModal } from "./ReviewDetail";
 import { type Order, orderSchema } from "./schema";
 import { Empty, ErrorNotice, Loading, Modal, Panel } from "./ui";
 import { useOnline } from "./useOnline";
@@ -105,8 +105,28 @@ export function Orders({
 						retry={() => void query.refetch()}
 					/>
 				) : orders?.length === 0 ? (
-					<Empty title="还没有委托记录">
-						做好判断后，从标的详情提交第一笔模拟委托。
+					<Empty
+						title={
+							query.data?.length === 0 ? "还没有委托记录" : "当前筛选下没有委托"
+						}
+					>
+						{query.data?.length === 0 ? (
+							"做好判断后，从标的详情提交第一笔模拟委托。"
+						) : (
+							<>
+								<span>可调整日期、市场或委托状态筛选，查看其他委托。</span>
+								<button
+									type="button"
+									className="text-button"
+									onClick={() => {
+										setRecordFilter(initialRecordFilter);
+										setFilter("all");
+									}}
+								>
+									清除全部筛选
+								</button>
+							</>
+						)}
 					</Empty>
 				) : (
 					<div className="order-list">

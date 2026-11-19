@@ -9,16 +9,21 @@ import { Positions } from "./Positions";
 import { SignedValue } from "./SignedValue";
 import { portfolioSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Panel } from "./ui";
+import type { SymbolError } from "./useInstrumentNavigation";
 export function PortfolioView({
 	onExplore,
 	onCash,
 	onSymbol,
 	onOrders,
+	symbolError = null,
+	onReviewOpen,
 }: {
 	readonly onExplore: () => void;
 	readonly onCash: () => void;
 	readonly onSymbol: (symbol: string) => void;
 	readonly onOrders: () => void;
+	readonly symbolError?: SymbolError;
+	readonly onReviewOpen?: () => void;
 }) {
 	const query = useQuery({
 		queryKey: ["portfolio"],
@@ -83,9 +88,15 @@ export function PortfolioView({
 				<Positions
 					positions={p.positions}
 					onSymbol={onSymbol}
+					symbolError={symbolError}
 					onExplore={onExplore}
 				/>
-				<Alerts onSymbol={onSymbol} compact />
+				<Alerts
+					onSymbol={onSymbol}
+					symbolError={symbolError}
+					{...(onReviewOpen && { onReviewOpen })}
+					compact
+				/>
 				{p.composition && <Composition value={p.composition} />}
 				<div className="dashboard-grid">
 					<AssetHistory />
