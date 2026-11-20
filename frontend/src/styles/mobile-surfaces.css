@@ -134,6 +134,7 @@
 	}
 	.main-scroll {
 		padding-bottom: calc(76px + env(safe-area-inset-bottom));
+		scroll-padding-bottom: calc(76px + env(safe-area-inset-bottom));
 	}
 	.topbar {
 		height: calc(56px + env(safe-area-inset-top));

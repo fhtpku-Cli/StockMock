@@ -5,6 +5,7 @@ import { Alerts } from "./Alerts";
 import { AssetHistory } from "./AssetHistory";
 import { api, errorMessage, money, time } from "./api";
 import { CashStatement } from "./CashStatement";
+import { CsvDownload } from "./CsvDownload";
 import { JournalNotes } from "./JournalNotes";
 import { OrderRecord } from "./OrderRecord";
 import { Pagination } from "./Pagination";
@@ -66,9 +67,9 @@ export function Archive({
 					</div>
 					<AssetHistory roundId={roundId} />
 					<AdjustmentRecords roundId={roundId} />
-					<a className="text-button" href={`/api/${base}/export.csv`} download>
+					<CsvDownload path={`${base}/export.csv`} name="ledger.csv">
 						导出本轮完整资金流水
-					</a>
+					</CsvDownload>
 					<section>
 						<h3>归档时现金余额</h3>
 						<dl className="summary-list">

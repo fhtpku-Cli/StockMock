@@ -70,13 +70,7 @@ export function PortfolioView({
 			</section>
 			<p className="footnote">
 				估值状态：
-				{p.valuation_status === "complete"
-					? "完整"
-					: p.valuation_status === "stale"
-						? "行情过时，仅供参考"
-						: p.valuation_status === "missing"
-							? "数据缺失，不能确认总收益"
-							: p.valuation_status}
+				{p.valuation_status}
 			</p>
 			{p.warnings.map((w) => (
 				<div className="notice" key={w}>

@@ -1,17 +1,43 @@
 import { expect, test } from "bun:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
 	compareDecimal,
 	dateRangeError,
 	filterParams,
 	type Position,
+	percent,
 	sortPositions,
 } from "../src/analysis";
+import { money } from "../src/api";
 import { snapshotRangeSchema } from "../src/history";
+import { SignedValue } from "../src/SignedValue";
 import {
 	cashStatementSchema,
 	ledgerKindValue,
 	ledgerPageSchema,
 } from "../src/statementSchema";
+
+test.each([
+	["0.001", "<strong>¥0.00</strong>", "<strong>0.00%</strong>"],
+	["-0.001", "<strong>¥0.00</strong>", "<strong>0.00%</strong>"],
+	[
+		"0.02",
+		'<strong class="gain">+¥0.02</strong>',
+		'<strong class="gain">+0.02%</strong>',
+	],
+	[
+		"-0.02",
+		'<strong class="loss">-¥0.02</strong>',
+		'<strong class="loss">-0.02%</strong>',
+	],
+	[null, "<strong>—</strong>", "<strong>未知</strong>"],
+] as const)("收益 %p 的符号和颜色符合实际显示精度", (value, amount, rate) => {
+	const render = (text: string) =>
+		renderToStaticMarkup(createElement(SignedValue, { value, text }));
+	expect(render(money(value))).toBe(amount);
+	expect(render(percent(value))).toBe(rate);
+});
 
 const position = (symbol: string, value: string | null): Position => ({
 	symbol,

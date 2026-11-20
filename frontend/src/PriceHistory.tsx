@@ -187,10 +187,16 @@ export function PriceHistory({
 								</span>
 								{shortDay(mark.day)} {mark.side === "buy" ? "买入" : "卖出"}{" "}
 								{number(mark.quantity)} 股 @{price(mark.price, currency)}
-								{!mark.onChart && (
+								{!indexOf.has(mark.day) ? (
 									<small>
 										成交日的日线暂缺；日线补齐后，刷新可在图上查看标记
 									</small>
+								) : (
+									!mark.onChart && (
+										<small>
+											历史样本不足，成交保留在列表中；日线增加后可在图上查看标记
+										</small>
+									)
 								)}
 							</li>
 						))}

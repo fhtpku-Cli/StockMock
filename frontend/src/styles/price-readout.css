@@ -28,3 +28,13 @@
 	stroke: var(--accent);
 	stroke-width: 2px;
 }
+.price-chart figcaption {
+	gap: 12px;
+}
+.price-chart figcaption > span:first-child {
+	flex-shrink: 0;
+	white-space: nowrap;
+}
+.price-chart figcaption > span:last-child {
+	text-align: right;
+}

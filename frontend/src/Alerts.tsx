@@ -6,6 +6,7 @@ import {
 import { useState } from "react";
 import type { z } from "zod";
 import { api, errorMessage, time } from "./api";
+import { CsvDownload } from "./CsvDownload";
 import { Pagination } from "./Pagination";
 import { alertPageSchema, alertSchema } from "./planSchema";
 import { ReviewModal } from "./ReviewDetail";
@@ -91,13 +92,12 @@ export function Alerts({
 			className="alerts-panel"
 			action={<Badge>{query.data?.pages[0]?.unread_count ?? "—"} 条未读</Badge>}
 		>
-			<a
-				className="text-button"
-				href={`/api/alerts/export.csv${roundId ? `?round_id=${encodeURIComponent(roundId)}` : ""}`}
-				download
+			<CsvDownload
+				path={`alerts/export.csv${roundId ? `?round_id=${encodeURIComponent(roundId)}` : ""}`}
+				name="alerts.csv"
 			>
 				导出提示
-			</a>
+			</CsvDownload>
 			<fieldset className="segmented alert-filter" aria-label="筛选计划提示">
 				<button
 					type="button"
@@ -167,26 +167,28 @@ export function Alerts({
 						<p className="footnote">
 							记录于 {time(item.created_at)}（北京时间） · 不会自动买卖或撤单
 						</p>
-						<button
-							type="button"
-							className="button small"
-							onClick={() => {
-								onReviewOpen?.();
-								setSelectedAlert(item);
-							}}
-						>
-							查看相关计划/复盘
-						</button>
-						{!roundId && !item.read_at && (
+						<div className="button-row">
 							<button
 								type="button"
 								className="button small"
-								disabled={!online || read.isPending}
-								onClick={() => read.mutate(item.id)}
+								onClick={() => {
+									onReviewOpen?.();
+									setSelectedAlert(item);
+								}}
 							>
-								确认已读
+								查看相关计划/复盘
 							</button>
-						)}
+							{!roundId && !item.read_at && (
+								<button
+									type="button"
+									className="button small"
+									disabled={!online || read.isPending}
+									onClick={() => read.mutate(item.id)}
+								>
+									确认已读
+								</button>
+							)}
+						</div>
 					</article>
 				))}
 			</div>

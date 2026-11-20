@@ -66,6 +66,7 @@ export function Reviews({ roundId }: { readonly roundId?: string }) {
 	);
 	const refresh = () => {
 		setSelected(null);
+		setRoundNotice(false);
 		setGeneration((value) => value + 1);
 	};
 	return (

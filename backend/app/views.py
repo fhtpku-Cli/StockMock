@@ -186,6 +186,9 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView, display: RulePr
         )
     assets = valuation.total
     active_statuses = [order.status for order in state.orders if order.status in ACTIVE]
+    valuation_status = "行情缺失或过期"
+    if assets is not None:
+        valuation_status = "当前无持仓" if not positions else "参考估值，持仓收益待核对"
     return Portfolio(
         round_id=state.id,
         active_orders=ActiveOrdersView(
@@ -195,7 +198,7 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView, display: RulePr
         composition=composition(state, positions, valuation),
         total_assets_cny=assets,
         pnl_cny=money(assets - Decimal(1000000)) if assets is not None else None,
-        valuation_status="参考估值，持仓收益待核对" if assets is not None else "行情缺失或过期",
+        valuation_status=valuation_status,
         cash=cash,
         positions=positions,
         worker=worker,

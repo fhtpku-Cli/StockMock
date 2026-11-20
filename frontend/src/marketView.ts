@@ -191,7 +191,10 @@ export function tradeMarks(
 			onChart: false,
 		}))
 		.filter((mark) => mark.day >= first)
-		.map((mark) => ({ ...mark, onChart: days.has(mark.day) }))
+		.map((mark) => ({
+			...mark,
+			onChart: visible.length >= 2 && days.has(mark.day),
+		}))
 		.sort((a, b) => a.day.localeCompare(b.day) || a.id.localeCompare(b.id));
 }
 
