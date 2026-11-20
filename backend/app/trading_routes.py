@@ -1,22 +1,42 @@
 """启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
+import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, Header, Query
 
 from app.auth import Auth
 from app.engine import Engine
 from app.models import (
     DomainError,
+    Order,
     OrderInput,
     OrderView,
     Preview,
 )
+from app.order_requests import OrderRejection, order_receipt, reject_order
 from app.order_views import WaitingContext, order_view
 from app.personal_models import Sizing
 from app.sizing import size_order
 from app.worker import Worker
+
+
+def place_order(engine: Engine, body: OrderInput, now: datetime, *, retry: bool) -> Order:
+    """恢复重试遇到业务拒绝时，在短事务中保存唯一最终结果。"""
+    try:
+        order = engine.place(body, now)
+    except DomainError as error:
+        if not retry or error.status >= HTTPStatus.INTERNAL_SERVER_ERROR:
+            raise
+        rejection = OrderRejection(code=error.code, message=error.message)
+        with engine.store.transaction() as connection:
+            order = reject_order(connection, body, rejection)
+        if order is None:
+            raise rejection.error() from error
+    return order
 
 
 def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker) -> None:
@@ -34,17 +54,27 @@ def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker) -> None:
         return size_order(engine, body, datetime.now(UTC), percent)
 
     @app.post("/api/orders", dependencies=[Depends(auth.require)])
-    def place(body: OrderInput) -> OrderView:
+    def place(body: OrderInput, retry: Annotated[str | None, Header(alias="X-StockMock-Retry")] = None) -> OrderView:
         """以请求编号保证委托受理幂等。"""
         now = datetime.now(UTC)
-        return order_view(
-            engine.place(body, now), engine.catalog, waiting=WaitingContext(now, engine.paused, worker.failures)
-        )
+        order = place_order(engine, body, now, retry=retry == "1")
+        return order_view(order, engine.catalog, waiting=WaitingContext(now, engine.paused, worker.failures))
 
     @app.get("/api/orders", dependencies=[Depends(auth.require)])
     def orders() -> list[OrderView]:
         context = WaitingContext(datetime.now(UTC), engine.paused, worker.failures)
         return [order_view(o, engine.catalog, waiting=context) for o in reversed(engine.store.read().orders)]
+
+    @app.get("/api/orders/receipts/{request_id}", dependencies=[Depends(auth.require)])
+    def receipt(request_id: str) -> OrderView:
+        """只读核对原编号的受理结果，包括已经归档的委托。"""
+        with closing(sqlite3.connect(f"{engine.store.path.resolve().as_uri()}?mode=ro", uri=True)) as connection:
+            _ = connection.execute("BEGIN")
+            order = order_receipt(connection, request_id)
+        if order is None:
+            raise DomainError("order_receipt_missing", "尚未查询到此编号的已受理委托", 404)
+        context = WaitingContext(datetime.now(UTC), engine.paused, worker.failures)
+        return order_view(order, engine.catalog, waiting=context)
 
     @app.post("/api/orders/{order_id}/cancel", dependencies=[Depends(auth.require)])
     def cancel(order_id: str) -> OrderView:

@@ -18,8 +18,10 @@ import { Discover } from "./Discover";
 import { Journal } from "./Journal";
 import { Login } from "./Login";
 import { refreshWithMarketSession } from "./marketSessionQuery";
+import { OrderRecovery } from "./OrderRecovery";
 import { Orders } from "./Orders";
 import { PortfolioView } from "./Portfolio";
+import { readPendingOrder, usePendingOrder } from "./pendingOrder";
 import { ReorderTrade } from "./ReorderTrade";
 import { Settings } from "./Settings";
 import type { Page } from "./Sidebar";
@@ -42,6 +44,8 @@ type Overlay =
 			readonly side: "buy" | "sell";
 	  };
 export function App() {
+	const pendingOrder = usePendingOrder();
+	const [recoveryOpen, setRecoveryOpen] = useState(pendingOrder);
 	const session = useQuery({
 		queryKey: ["session"],
 		queryFn: () => api("auth/session", sessionSchema),
@@ -113,6 +117,43 @@ export function App() {
 	useEffect(() => {
 		document.title = `${navigation.find((n) => n.id === page)?.label ?? "资产"} · 持仓练习`;
 	}, [page]);
+	const previousRecoveryContext = useRef({
+		pending: false,
+		authenticated: false,
+		trading: false,
+	});
+	useEffect(() => {
+		const authenticated = session.data?.authenticated === true;
+		const trading = overlay.kind === "trade" || overlay.kind === "reorder";
+		const previous = previousRecoveryContext.current;
+		previousRecoveryContext.current = {
+			pending: pendingOrder,
+			authenticated,
+			trading,
+		};
+		const needsAutomaticCheck =
+			!previous.authenticated || !previous.pending || previous.trading;
+		if (!pendingOrder || !authenticated || trading || !needsAutomaticCheck)
+			return;
+		try {
+			const pending = readPendingOrder();
+			if (
+				!pending ||
+				(page === "orders" &&
+					ordersEntry.receipt?.request_id === pending.request_id)
+			)
+				return;
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+		}
+		setRecoveryOpen(true);
+	}, [
+		pendingOrder,
+		session.data?.authenticated,
+		overlay.kind,
+		page,
+		ordersEntry.receipt,
+	]);
 	if (session.isPending)
 		return (
 			<div className="splash">
@@ -199,6 +240,15 @@ export function App() {
 					{!online && (
 						<ErrorNotice message="当前离线。显示内容可能已过时，联网后请刷新；交易暂不可提交。" />
 					)}
+					{pendingOrder && (
+						<button
+							type="button"
+							className="button"
+							onClick={() => setRecoveryOpen(true)}
+						>
+							核对上一次委托
+						</button>
+					)}
 					<div className="page-view">
 						{page === "assets" && (
 							<PortfolioView
@@ -221,7 +271,11 @@ export function App() {
 							<Orders
 								key={ordersEntry.id}
 								initialFilter={ordersEntry.filter}
-								onReorder={(order) => setOverlay({ kind: "reorder", order })}
+								onReorder={(order) =>
+									pendingOrder
+										? setRecoveryOpen(true)
+										: setOverlay({ kind: "reorder", order })
+								}
 								{...(ordersEntry.receipt && { receipt: ordersEntry.receipt })}
 							/>
 						)}{" "}
@@ -233,7 +287,8 @@ export function App() {
 					</footer>
 				</div>
 			</main>
-			{overlay.kind === "settings" && (
+			{recoveryOpen && <OrderRecovery onClose={() => setRecoveryOpen(false)} />}
+			{!recoveryOpen && overlay.kind === "settings" && (
 				<Settings
 					onClose={close}
 					onLogout={() => {
@@ -242,8 +297,8 @@ export function App() {
 					}}
 				/>
 			)}
-			{overlay.kind === "cash" && <Cash onClose={close} />}{" "}
-			{overlay.kind === "detail" && (
+			{!recoveryOpen && overlay.kind === "cash" && <Cash onClose={close} />}{" "}
+			{!recoveryOpen && overlay.kind === "detail" && (
 				<Detail
 					key={overlay.instrument.symbol}
 					instrument={overlay.instrument}
@@ -257,11 +312,17 @@ export function App() {
 						)
 					}
 					onTrade={(side) =>
-						setOverlay({ kind: "trade", instrument: overlay.instrument, side })
+						pendingOrder
+							? setRecoveryOpen(true)
+							: setOverlay({
+									kind: "trade",
+									instrument: overlay.instrument,
+									side,
+								})
 					}
 				/>
 			)}{" "}
-			{overlay.kind === "reorder" && (
+			{!recoveryOpen && overlay.kind === "reorder" && (
 				<ReorderTrade
 					key={overlay.order.id}
 					order={overlay.order}
@@ -272,7 +333,7 @@ export function App() {
 					}}
 				/>
 			)}
-			{overlay.kind === "trade" && (
+			{!recoveryOpen && overlay.kind === "trade" && (
 				<Trade
 					instrument={overlay.instrument}
 					side={overlay.side}

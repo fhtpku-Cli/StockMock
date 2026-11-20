@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { api, errorMessage } from "./api";
+import { CsvDownload } from "./CsvDownload";
 import { OrderRecord } from "./OrderRecord";
+import { clearPendingOrder } from "./pendingOrder";
 import {
 	initialRecordFilter,
 	RecordFilters,
@@ -26,8 +28,18 @@ export function Orders({
 }) {
 	const online = useOnline();
 	const receiptRef = useRef<HTMLParagraphElement>(null);
+	const [receiptStorageError, setReceiptStorageError] = useState<string | null>(
+		null,
+	);
 	useEffect(() => {
-		if (receipt) receiptRef.current?.scrollIntoView({ block: "nearest" });
+		if (!receipt || !receiptRef.current) return;
+		receiptRef.current.scrollIntoView({ block: "nearest" });
+		try {
+			clearPendingOrder(receipt.request_id);
+			setReceiptStorageError(null);
+		} catch (error) {
+			setReceiptStorageError(errorMessage(error));
+		}
 	}, [receipt]);
 	const [reviewOrder, setReviewOrder] = useState<Order | null>(null);
 	const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
@@ -68,15 +80,16 @@ export function Orders({
 					。最新状态见委托记录。
 				</p>
 			)}
+			{receiptStorageError && <ErrorNotice message={receiptStorageError} />}
 			<div className="notice">
 				委托以有效市场行情判断成交，回执可能延迟。撤单确认前，原占用资金或持仓继续保留。
 			</div>
 			<Panel
 				title="委托记录"
 				action={
-					<a className="text-button" href="/api/export.csv" download>
+					<CsvDownload path="export.csv" name="ledger.csv">
 						导出流水
-					</a>
+					</CsvDownload>
 				}
 			>
 				<RecordFilters value={recordFilter} onChange={setRecordFilter} />

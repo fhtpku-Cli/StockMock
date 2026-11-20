@@ -1,8 +1,22 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { ApiError, api, errorMessage, fullTime, money, price } from "./api";
+import {
+	ApiError,
+	api,
+	errorMessage,
+	fullTime,
+	money,
+	price,
+	SESSION_EXPIRED,
+} from "./api";
 import { PlanPicker } from "./PlanPicker";
+import {
+	clearPendingOrder,
+	isFinalOrderRejection,
+	type Submission,
+	savePendingOrder,
+} from "./pendingOrder";
 import { type Plan, planSchema } from "./planSchema";
 import type { Instrument, Order } from "./schema";
 import { orderSchema, portfolioSchema, previewSchema } from "./schema";
@@ -68,7 +82,21 @@ export function Trade({
 		original?.plan_id ? "正在核对原关联计划…" : "",
 	);
 	const attempted = useRef(new Set<string>());
+	const retried = useRef(new Set<string>());
+	const previewRound = useRef("");
 	const actionLock = useRef(false);
+	const mounted = useRef(true);
+	useEffect(() => {
+		mounted.current = true;
+		const expire = () => {
+			mounted.current = false;
+		};
+		window.addEventListener(SESSION_EXPIRED, expire);
+		return () => {
+			mounted.current = false;
+			window.removeEventListener(SESSION_EXPIRED, expire);
+		};
+	}, []);
 	const assertRound = async () => {
 		if (
 			draftRoundId &&
@@ -128,7 +156,6 @@ export function Trade({
 		...(draft.target ? { target_price: draft.target } : {}),
 		...(draft.stop ? { stop_price: draft.stop } : {}),
 	};
-	type Submission = typeof payload & { readonly expected_expires_at: string };
 	const [unresolved, setUnresolved] = useState<Submission | null>(null);
 	const [validityNotice, setValidityNotice] = useState("");
 	const preview = useMutation({
@@ -137,8 +164,17 @@ export function Trade({
 		},
 		mutationFn: async () => {
 			setValidityNotice("");
-			await assertRound();
-			return api("orders/preview", previewSchema, payload);
+			previewRound.current = (await api("portfolio", portfolioSchema)).round_id;
+			if (draftRoundId && previewRound.current !== draftRoundId)
+				throw new ApiError(
+					"round_changed",
+					"练习轮次已变化，请关闭后重新建立委托。",
+					409,
+				);
+			return api("orders/preview", previewSchema, {
+				...payload,
+				expected_round_id: draftRoundId ?? previewRound.current,
+			});
 		},
 	});
 	useEffect(() => {
@@ -167,31 +203,60 @@ export function Trade({
 			actionLock.current = false;
 		},
 		mutationFn: async (original: Submission) => {
-			if (!attempted.current.has(original.request_id)) await assertRound();
+			const retry = attempted.current.has(original.request_id);
+			if (!retry) {
+				await assertRound();
+				if (!mounted.current)
+					throw new ApiError("session_changed", "请重新登录后核对委托。");
+				savePendingOrder(original);
+				setUnresolved(original);
+			}
 			attempted.current.add(original.request_id);
-			return api("orders", orderSchema, original);
+			if (retry) retried.current.add(original.request_id);
+			return api(
+				"orders",
+				orderSchema,
+				original,
+				retry ? { headers: { "X-StockMock-Retry": "1" } } : undefined,
+			);
 		},
 		onError: async (error, original) => {
-			if (
-				error instanceof ApiError &&
-				error.status !== undefined &&
-				error.status >= 400 &&
-				error.status < 500 &&
-				error.status !== 408
-			) {
+			if (!mounted.current) return;
+			const finalRejection = isFinalOrderRejection(
+				error,
+				retried.current.has(original.request_id),
+			);
+			if (finalRejection) {
+				try {
+					clearPendingOrder(original.request_id);
+				} catch (storageError) {
+					setValidityNotice(errorMessage(storageError));
+					return;
+				}
 				attempted.current.delete(original.request_id);
+				retried.current.delete(original.request_id);
 				setUnresolved(null);
+				setDraft((previous) => ({
+					...previous,
+					requestId: crypto.randomUUID(),
+				}));
 				preview.reset();
 			}
-			if (error instanceof ApiError && error.code === "validity_changed") {
+			if (
+				finalRejection &&
+				error instanceof ApiError &&
+				error.code === "validity_changed"
+			) {
 				const previous = `原预览有效至 ${fullTime(original.expected_expires_at)}（北京时间）`;
 				setValidityNotice(`${previous}；正在核对新的有效期。草稿已保留。`);
 				try {
 					const current = await api("orders/preview", previewSchema, original);
+					if (!mounted.current) return;
 					setValidityNotice(
 						`${previous}；当前有效至 ${fullTime(current.expires_at)}（北京时间）。本次提交未受理，请重新预览后确认。`,
 					);
 				} catch (previewError) {
+					if (!mounted.current) return;
 					if (!(previewError instanceof Error)) throw previewError;
 					setValidityNotice(
 						`${previous}；新有效期暂无法取得，请重新预览。草稿已保留。`,
@@ -199,8 +264,9 @@ export function Trade({
 				}
 			}
 		},
-		onSuccess: async (order) => {
-			await Promise.all([
+		onSuccess: (order) => {
+			if (!mounted.current) return;
+			void Promise.all([
 				client.invalidateQueries({ queryKey: ["portfolio"] }),
 				client.invalidateQueries({ queryKey: ["orders"] }),
 			]);
@@ -300,9 +366,9 @@ export function Trade({
 					else if (preview.isSuccess) {
 						const submission = {
 							...payload,
+							expected_round_id: draftRoundId ?? previewRound.current,
 							expected_expires_at: preview.data.expires_at,
 						};
-						setUnresolved(submission);
 						submit.mutate(submission);
 					} else preview.mutate();
 				}}

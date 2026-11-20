@@ -65,6 +65,11 @@ def test_archived_retry_returns_final_order_after_reload(
     # When: 重新加载持久库后，使用相同请求从真实 API 重试。
     with server(create_app(restarted, PASSWORD, run_worker=False)) as url, client() as http:
         _ = http.post(url + "/api/auth/login", json={"password": PASSWORD})
+        receipt = http.get(url + f"/api/orders/receipts/{payload.request_id}")
+        assert receipt.status_code == 200
+        recovered = OrderView.model_validate_json(receipt.content)
+        assert recovered.waiting is None
+        assert recovered.model_dump(exclude={"first_candidate_interval", "waiting"}) == final.model_dump()
         response = http.post(url + "/api/orders", json=payload.model_dump(mode="json"))
         # Then: 返回最终记录；不同请求体仍拒绝，所有轮次原始 JSON 均不写回。
         assert response.status_code == 200

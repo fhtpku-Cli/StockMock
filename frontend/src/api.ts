@@ -43,6 +43,7 @@ export async function api<T>(
 		readonly timeout?: number;
 		readonly method?: "post" | "put";
 		readonly signal?: AbortSignal;
+		readonly headers?: Readonly<Record<string, string>>;
 	},
 ): Promise<T> {
 	try {
