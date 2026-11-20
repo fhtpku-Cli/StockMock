@@ -1,4 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { PlanPicker } from "../src/PlanPicker";
 import { alertPageSchema, planSchema, reviewSchema } from "../src/planSchema";
 
 const plan = {
@@ -25,6 +29,40 @@ const plan = {
 		source: null,
 	},
 };
+
+it.each([false, true])(
+	"原关联计划在已加载分页中为 %p 时仍唯一选中",
+	(loaded) => {
+		const selected = planSchema.parse(plan);
+		const first = { ...selected, id: "first", reason: "首屏其他计划" };
+		const pages = [{ items: [first], total: 2, offset: 0, limit: 1 }];
+		if (loaded)
+			pages.push({ items: [selected], total: 2, offset: 1, limit: 1 });
+		const client = new QueryClient();
+		client.setQueryData(["plans", "order", selected.symbol], {
+			pages,
+			pageParams: pages.map((page) => page.offset),
+		});
+		const html = renderToStaticMarkup(
+			createElement(
+				QueryClientProvider,
+				{ client },
+				createElement(PlanPicker, {
+					symbol: selected.symbol,
+					selected,
+					onSelect: () => {},
+				}),
+			),
+		);
+		const result =
+			html.match(/<option[^>]*value="controlled-plan"[^>]*>[^<]*<\/option>/g) ??
+			[];
+		expect(result).toHaveLength(1);
+		expect(result[0]).toContain('selected=""');
+		expect(result[0]).toContain(selected.reason);
+		client.clear();
+	},
+);
 
 describe("计划与复盘接口边界", () => {
 	it("保留精确原币价格与不可判断的监控状态，不补造报价", () => {

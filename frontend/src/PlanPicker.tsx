@@ -46,7 +46,13 @@ export function PlanPicker({
 				`无法重新核对计划：${errorMessage(error)}；请重试或明确不关联计划。`,
 			),
 	});
-	const available = plans.items.filter((plan) => plan.status !== "ended");
+	const availableById = new Map(
+		plans.items
+			.filter((plan) => plan.status !== "ended")
+			.map((plan) => [plan.id, plan]),
+	);
+	if (selected) availableById.set(selected.id, selected);
+	const available = [...availableById.values()];
 	return (
 		<div className="field">
 			<label htmlFor="order-plan">
