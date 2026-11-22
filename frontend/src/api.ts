@@ -20,7 +20,9 @@ const http = ky.create({
 		afterResponse: [
 			(request, _options, response) => {
 				if (
-					response.status === 401 &&
+					(response.status === 401 ||
+						(response.status === 403 &&
+							new URL(request.url).pathname.endsWith("/auth/session"))) &&
 					!new URL(request.url).pathname.endsWith("/auth/login")
 				)
 					window.dispatchEvent(new Event(SESSION_EXPIRED));
@@ -83,6 +85,11 @@ export async function api<T>(
 			);
 		}
 		if (error instanceof ApiError) throw error;
+		if (error instanceof SyntaxError)
+			throw new ApiError(
+				"invalid_response",
+				"返回的数据格式不完整，请稍后重试。",
+			);
 		if (error instanceof Error)
 			throw new ApiError("connection", "暂时无法连接服务，请检查连接后重试。");
 		throw error;

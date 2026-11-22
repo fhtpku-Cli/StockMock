@@ -67,3 +67,29 @@ test("重开清除未挂载委托页的旧轮缓存，保留登录状态及其�
 		client.clear();
 	}
 });
+
+test("换轮后新资产读取失败仍清除旧资产和委托", async () => {
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	});
+	const unsubscribes = ["portfolio", "orders"].map((key) => {
+		client.setQueryData([key], { round_id: "old-round", amount: "1234567" });
+		return new QueryObserver(client, {
+			queryKey: [key],
+			staleTime: Infinity,
+			queryFn: async () => {
+				throw new Error("新轮暂不可读");
+			},
+		}).subscribe(() => {});
+	});
+	try {
+		await refreshAfterRoundReset(client);
+		for (const key of ["portfolio", "orders"]) {
+			expect(client.getQueryData([key])).toBeUndefined();
+			expect(client.getQueryState([key])?.status).toBe("error");
+		}
+	} finally {
+		for (const unsubscribe of unsubscribes) unsubscribe();
+		client.clear();
+	}
+});

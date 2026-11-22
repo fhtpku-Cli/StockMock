@@ -1,4 +1,9 @@
 import { z } from "zod";
+export const workerSchema = z.object({
+	last_run: z.string().nullable(),
+	status: z.string(),
+});
+export const healthSchema = workerSchema.extend({ plan_worker: workerSchema });
 export const decimal = z.string().regex(/^-?\d+(\.\d+)?$/);
 // 0.5.0 展示字段全部可选，旧后端缺少时页面显示“不可用”。
 export const changeStatusSchema = z.enum([
@@ -110,7 +115,7 @@ export const portfolioSchema = z.object({
 			change_status: changeStatusSchema.nullable().optional(),
 		}),
 	),
-	worker: z.object({ last_run: z.string().nullable(), status: z.string() }),
+	worker: workerSchema,
 	warnings: z.array(z.string()),
 });
 export type Portfolio = z.infer<typeof portfolioSchema>;

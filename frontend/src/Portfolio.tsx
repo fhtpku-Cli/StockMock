@@ -1,9 +1,10 @@
-import { ArrowRight, Clock } from "@phosphor-icons/react";
+import { ArrowRight } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { ActiveOrdersSummary } from "./ActiveOrdersSummary";
 import { Alerts } from "./Alerts";
 import { AssetHistory } from "./AssetHistory";
-import { api, errorMessage, money, time } from "./api";
+import { api, errorMessage, fullTime, money } from "./api";
+import { BackgroundStatus } from "./BackgroundStatus";
 import { Composition } from "./Composition";
 import { Positions } from "./Positions";
 import { SignedValue } from "./SignedValue";
@@ -32,7 +33,7 @@ export function PortfolioView({
 		refetchInterval: 30000,
 	});
 	if (query.isPending) return <Loading />;
-	if (query.isError)
+	if (!query.data)
 		return (
 			<ErrorNotice
 				message={errorMessage(query.error)}
@@ -43,6 +44,12 @@ export function PortfolioView({
 	const cny = p.cash.find((c) => c.currency === "CNY");
 	return (
 		<>
+			{query.isError && (
+				<ErrorNotice
+					message={`资产刷新失败，当前显示最近成功读取的数据（北京时间 ${fullTime(new Date(query.dataUpdatedAt).toISOString())}）。${errorMessage(query.error)}`}
+					retry={() => void query.refetch()}
+				/>
+			)}
 			<section className="asset-hero">
 				<div className="hero-top">
 					<span className="eyebrow">
@@ -136,17 +143,7 @@ export function PortfolioView({
 						</p>
 					</Panel>
 				</div>
-				<div className="worker">
-					<Clock size={16} />
-					<span>
-						{p.worker.status === "running"
-							? "委托处理正常"
-							: p.worker.status === "starting"
-								? "委托处理准备中"
-								: p.worker.status}{" "}
-						· {time(p.worker.last_run)}
-					</span>
-				</div>
+				<BackgroundStatus />
 			</div>
 		</>
 	);

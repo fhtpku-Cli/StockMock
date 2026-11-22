@@ -11,7 +11,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { api, errorMessage, SESSION_EXPIRED } from "./api";
+import { ApiError, api, errorMessage, SESSION_EXPIRED } from "./api";
 import { Cash } from "./Cash";
 import { Detail } from "./Detail";
 import { Discover } from "./Discover";
@@ -48,7 +48,8 @@ export function App() {
 	const [recoveryOpen, setRecoveryOpen] = useState(pendingOrder);
 	const session = useQuery({
 		queryKey: ["session"],
-		queryFn: () => api("auth/session", sessionSchema),
+		queryFn: ({ signal }) =>
+			api("auth/session", sessionSchema, undefined, { signal }),
 		retry: false,
 	});
 	const [page, setPage] = useState<Page>("assets");
@@ -115,6 +116,16 @@ export function App() {
 		return () => window.removeEventListener(SESSION_EXPIRED, expire);
 	}, [client, symbols.cancel]);
 	useEffect(() => {
+		if (session.data?.authenticated !== false) return;
+		symbols.cancel();
+		updateOverlay({ kind: "none" });
+		setOrdersEntry({ id: 0, filter: "all" });
+		void client.cancelQueries({
+			predicate: (q) => q.queryKey[0] !== "session",
+		});
+		client.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+	}, [client, session.data?.authenticated, symbols.cancel]);
+	useEffect(() => {
 		document.title = `${navigation.find((n) => n.id === page)?.label ?? "资产"} · 持仓练习`;
 	}, [page]);
 	const previousRecoveryContext = useRef({
@@ -160,7 +171,11 @@ export function App() {
 				<Loading />
 			</div>
 		);
-	if (session.isError)
+	const recoverableSessionError =
+		session.error instanceof ApiError &&
+		(session.error.code === "connection" ||
+			(session.error.status !== undefined && session.error.status >= 500));
+	if (!session.data || (session.isError && !recoverableSessionError))
 		return (
 			<div className="splash">
 				<ErrorNotice
@@ -237,6 +252,12 @@ export function App() {
 							</button>
 						)}
 					</div>
+					{session.isError && (
+						<ErrorNotice
+							message="暂时无法核对登录状态，正在显示上次读取的账户内容。请联网后重试。"
+							retry={() => void session.refetch()}
+						/>
+					)}
 					{!online && (
 						<ErrorNotice message="当前离线。显示内容可能已过时，联网后请刷新；交易暂不可提交。" />
 					)}
