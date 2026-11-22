@@ -3,7 +3,7 @@
 import os
 import tempfile
 from contextlib import ExitStack
-from datetime import timedelta
+from datetime import UTC, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -17,6 +17,7 @@ from app.discovery_models import ObservationInstrument
 from app.engine import Engine
 from app.main import create_app
 from app.marketdata import MarketDataClient
+from app.marketdata_reference import QuoteReference
 from app.marketdata_models import Bar, FxRate, Quote
 from app.storage import Store
 
@@ -49,10 +50,10 @@ def quote(_self, item):
                  "受控测试行情", True, QUOTE_TIME - timedelta(minutes=5), Decimal("1000"))
 
 
-def history(self, item):
+def history(self, item, *, retrieved_not_before=None):
     return tuple(Bar(item.symbol, day, Decimal("100"), Decimal("100"), Decimal("100"),
                      Decimal("100"), Decimal(1000 + offset), item.currency,
-                     QUOTE_TIME, TEST_NOW, "受控测试日线")
+                     QUOTE_TIME, TEST_NOW, "tencent-public")
                  for offset, day in enumerate((
                      (TEST_NOW - timedelta(days=150)).date(),
                      (TEST_NOW - timedelta(days=2)).date(), QUOTE_TIME.date(),
@@ -66,6 +67,8 @@ if __name__ == "__main__":
             stack.enter_context(patch(f"{module}.datetime", PremarketClock))
         stack.enter_context(patch.object(Discovery, "search", search))
         stack.enter_context(patch.object(MarketDataClient, "quote", quote))
+        stack.enter_context(patch.object(MarketDataClient, "quote_reference", lambda self, item: QuoteReference(quote(self, item), Decimal("100"))))
+        stack.enter_context(patch.object(MarketDataClient, "chart_history", history))
         stack.enter_context(patch.object(MarketDataClient, "history", history))
         stack.enter_context(patch.object(AdmissionSources, "maturity_history", history))
         stack.enter_context(patch.object(AdmissionSources, "_load", price_limit_payload))
@@ -75,7 +78,7 @@ if __name__ == "__main__":
             FxRate("HKD", Decimal(".9"), TEST_NOW, TEST_NOW, "受控测试汇率"),
         )))
         client = MarketDataClient()
-        engine = Engine(Store(Path(temp) / "test.sqlite3"), client)
+        engine = Engine(Store(Path(temp) / "test.sqlite3"), client, clock=lambda: PremarketClock.now(UTC))
         engine.provider = RuleProvider(engine.registry, client)
         app = create_app(engine=engine, password=os.environ["TRADABILITY_TEST_PASSWORD"], run_worker=False)
         uvicorn.run(app, host="127.0.0.1", port=int(os.environ["TRADABILITY_TEST_PORT"]), log_level="warning")

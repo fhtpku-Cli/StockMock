@@ -44,7 +44,7 @@
 	}
 	.discovery .security-row {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 44px;
+		grid-template-columns: minmax(0, 1fr) auto 44px;
 		gap: 10px;
 	}
 	.discovery .security-main {

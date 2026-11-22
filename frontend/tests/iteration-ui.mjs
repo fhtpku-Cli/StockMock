@@ -115,7 +115,7 @@ for (const engine of ["chromium", "webkit"]) {
 		};
 		const open = async (target, symbol = "510300.SS") => {
 			await target.getByRole("button", { name: "自选", exact: true }).click();
-			await target.getByLabel("筛选已可交易证券").fill(symbol);
+			await target.getByLabel("搜索代码或名称").fill(symbol);
 			await target
 				.locator(`[data-symbol="${symbol}"] .security-main`)
 				.first()
@@ -130,10 +130,10 @@ for (const engine of ["chromium", "webkit"]) {
 		await capture("assets-desktop");
 		await page.getByRole("button", { name: "自选", exact: true }).click();
 		await expect(
-			page.getByRole("heading", { name: "已可交易", exact: true }),
+			page.getByRole("heading", { name: "证券搜索", exact: true }),
 		).toBeVisible();
 		const catalog = page.locator("section.panel").filter({
-			has: page.getByRole("heading", { name: "已可交易", exact: true }),
+			has: page.getByRole("heading", { name: "证券搜索", exact: true }),
 		});
 		await expect(catalog.locator(".security-row")).toHaveCount(24);
 		await catalog.getByRole("button", { name: /再显示/ }).click();
@@ -142,7 +142,7 @@ for (const engine of ["chromium", "webkit"]) {
 		for (const width of [390, 320]) {
 			await page.setViewportSize({ width, height: 844 });
 			await page
-				.getByRole("heading", { name: "已可交易", exact: true })
+				.getByRole("heading", { name: "证券搜索", exact: true })
 				.scrollIntoViewIfNeeded();
 			await capture(`discover-${width}`);
 		}
@@ -150,8 +150,8 @@ for (const engine of ["chromium", "webkit"]) {
 		await page.route("**/api/instruments/search?*", (route) =>
 			route.abort("failed"),
 		);
-		await page.getByLabel("搜索代码或名称").fill("NO-CONNECTION");
-		await expect(page.getByRole("alert")).toContainText("在线结果当前不可用");
+		await page.getByLabel("搜索代码或名称").fill("510300");
+		await expect(page.getByRole("alert")).toContainText("在线搜索暂不可用");
 		await expect(catalog.locator(".security-row").first()).toBeVisible();
 		await page.getByRole("alert").scrollIntoViewIfNeeded();
 		await capture("online-error-retains-local");

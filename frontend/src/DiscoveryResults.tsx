@@ -1,10 +1,14 @@
 import { Plus, Star } from "@phosphor-icons/react";
+import { canVerifyOnBuy, tradingLabel } from "./instrumentAdmission";
 import type { Instrument } from "./schema";
 import { Badge } from "./ui";
+
+import { useOnline } from "./useOnline";
 
 export function DiscoveryResults({
 	items,
 	onSelect,
+	onBuy,
 	onToggle,
 	contains,
 	pending,
@@ -12,11 +16,13 @@ export function DiscoveryResults({
 }: {
 	readonly items: readonly Instrument[];
 	readonly onSelect: (instrument: Instrument) => void;
+	readonly onBuy: (instrument: Instrument) => void;
 	readonly onToggle: (instrument: Instrument) => void;
 	readonly contains: (symbol: string) => boolean;
 	readonly pending: boolean;
 	readonly sharedRules: ReadonlyMap<string, string>;
 }) {
+	const online = useOnline();
 	return (
 		<div className="security-list">
 			{items.map((instrument) => (
@@ -48,8 +54,18 @@ export function DiscoveryResults({
 						</span>
 					</button>
 					<Badge tone={instrument.tradable ? "good" : "warn"}>
-						{instrument.tradable ? "可模拟交易" : "仅观察"}
+						{tradingLabel(instrument)}
 					</Badge>
+					<button
+						type="button"
+						className="button small"
+						disabled={
+							!online || (!instrument.tradable && !canVerifyOnBuy(instrument))
+						}
+						onClick={() => onBuy(instrument)}
+					>
+						买入
+					</button>
 					<button
 						type="button"
 						className="icon-button"

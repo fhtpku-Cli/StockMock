@@ -15,6 +15,7 @@ import { ApiError, api, errorMessage, SESSION_EXPIRED } from "./api";
 import { Cash } from "./Cash";
 import { Detail } from "./Detail";
 import { Discover } from "./Discover";
+import { canVerifyOnBuy } from "./instrumentAdmission";
 import { Journal } from "./Journal";
 import { Login } from "./Login";
 import { refreshWithMarketSession } from "./marketSessionQuery";
@@ -29,11 +30,17 @@ import { navigation, Sidebar } from "./Sidebar";
 import type { Instrument, Order } from "./schema";
 import { sessionSchema } from "./schema";
 import { Trade } from "./Trade";
-import { ErrorNotice, Loading } from "./ui";
+import { ErrorNotice, Loading, Modal } from "./ui";
+import { useEnableInstrument } from "./useEnableInstrument";
 import { useInstrumentNavigation } from "./useInstrumentNavigation";
 
 type Overlay =
 	| { readonly kind: "none" }
+	| {
+			readonly kind: "admission";
+			readonly instrument: Instrument;
+			readonly error?: string;
+	  }
 	| { readonly kind: "reorder"; readonly order: Order }
 	| { readonly kind: "settings" }
 	| { readonly kind: "cash" }
@@ -55,10 +62,12 @@ export function App() {
 	const [page, setPage] = useState<Page>("assets");
 	const main = useRef<HTMLElement>(null);
 	const [overlay, updateOverlay] = useState<Overlay>({ kind: "none" });
+	const { verify, cancel: cancelAdmission } = useEnableInstrument();
 	const symbols = useInstrumentNavigation((instrument) =>
 		updateOverlay({ kind: "detail", instrument }),
 	);
 	const setOverlay: Dispatch<SetStateAction<Overlay>> = (next) => {
+		cancelAdmission();
 		symbols.cancel();
 		updateOverlay(next);
 	};
@@ -68,6 +77,7 @@ export function App() {
 		readonly receipt?: Order;
 	}>({ id: 0, filter: "all" });
 	const openOrders = (filter: "all" | "active", receipt?: Order) => {
+		cancelAdmission();
 		symbols.cancel();
 		if (!receipt) main.current?.scrollTo({ top: 0 });
 		setOrdersEntry((entry) => ({
@@ -78,6 +88,7 @@ export function App() {
 		setPage("orders");
 	};
 	const navigate = (next: Page) => {
+		cancelAdmission();
 		symbols.cancel();
 		main.current?.scrollTo({ top: 0 });
 		if (next === "orders") openOrders("all");
@@ -91,17 +102,26 @@ export function App() {
 			setOnline(true);
 			void refreshWithMarketSession(client);
 		};
-		const down = () => setOnline(false);
+		const down = () => {
+			setOnline(false);
+			cancelAdmission();
+			updateOverlay((current) =>
+				current.kind === "admission"
+					? { ...current, error: "当前离线，请联网后重试。" }
+					: current,
+			);
+		};
 		window.addEventListener("online", up);
 		window.addEventListener("offline", down);
 		return () => {
 			window.removeEventListener("online", up);
 			window.removeEventListener("offline", down);
 		};
-	}, [client]);
+	}, [client, cancelAdmission]);
 	useEffect(() => {
 		const expire = () => {
 			setSessionExpired(true);
+			cancelAdmission();
 			symbols.cancel();
 			updateOverlay({ kind: "none" });
 			setOrdersEntry({ id: 0, filter: "all" });
@@ -114,9 +134,10 @@ export function App() {
 		};
 		window.addEventListener(SESSION_EXPIRED, expire);
 		return () => window.removeEventListener(SESSION_EXPIRED, expire);
-	}, [client, symbols.cancel]);
+	}, [client, symbols.cancel, cancelAdmission]);
 	useEffect(() => {
 		if (session.data?.authenticated !== false) return;
+		cancelAdmission();
 		symbols.cancel();
 		updateOverlay({ kind: "none" });
 		setOrdersEntry({ id: 0, filter: "all" });
@@ -124,7 +145,7 @@ export function App() {
 			predicate: (q) => q.queryKey[0] !== "session",
 		});
 		client.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
-	}, [client, session.data?.authenticated, symbols.cancel]);
+	}, [client, session.data?.authenticated, symbols.cancel, cancelAdmission]);
 	useEffect(() => {
 		document.title = `${navigation.find((n) => n.id === page)?.label ?? "资产"} · 持仓练习`;
 	}, [page]);
@@ -195,6 +216,31 @@ export function App() {
 				}}
 			/>
 		);
+	const openTrade = (instrument: Instrument, side: "buy" | "sell") => {
+		let needsRecovery = pendingOrder;
+		try {
+			needsRecovery ||= Boolean(readPendingOrder());
+		} catch {
+			needsRecovery = true;
+		}
+		if (needsRecovery) {
+			setOverlay({ kind: "none" });
+			setRecoveryOpen(true);
+			return;
+		}
+		if (!navigator.onLine || instrument.market === "HK") return;
+		if (instrument.tradable) {
+			setOverlay({ kind: "trade", instrument, side });
+		} else if (side === "buy" && canVerifyOnBuy(instrument)) {
+			symbols.cancel();
+			updateOverlay({ kind: "admission", instrument });
+			void verify(
+				instrument.symbol,
+				(eligible) => openTrade(eligible, "buy"),
+				(error) => updateOverlay({ kind: "admission", instrument, error }),
+			);
+		}
+	};
 	const current = navigation.find((n) => n.id === page) ?? navigation[0];
 	const close = () => setOverlay({ kind: "none" });
 	return (
@@ -283,6 +329,7 @@ export function App() {
 						)}{" "}
 						{page === "watchlist" && (
 							<Discover
+								onBuy={(instrument) => openTrade(instrument, "buy")}
 								onSelect={(instrument) =>
 									setOverlay({ kind: "detail", instrument })
 								}
@@ -319,28 +366,31 @@ export function App() {
 				/>
 			)}
 			{!recoveryOpen && overlay.kind === "cash" && <Cash onClose={close} />}{" "}
+			{!recoveryOpen && overlay.kind === "admission" && (
+				<Modal title={`${overlay.instrument.name} · 买入核验`} onClose={close}>
+					{overlay.error ? (
+						<>
+							<ErrorNotice message={overlay.error} />
+							<button
+								type="button"
+								className="button"
+								disabled={!online}
+								onClick={() => openTrade(overlay.instrument, "buy")}
+							>
+								重新核验
+							</button>
+						</>
+					) : (
+						<p role="status">正在核验交易条件…</p>
+					)}
+				</Modal>
+			)}
 			{!recoveryOpen && overlay.kind === "detail" && (
 				<Detail
 					key={overlay.instrument.symbol}
 					instrument={overlay.instrument}
 					onClose={close}
-					onEnabled={(instrument) =>
-						setOverlay((current) =>
-							current.kind === "detail" &&
-							current.instrument.symbol === instrument.symbol
-								? { kind: "detail", instrument }
-								: current,
-						)
-					}
-					onTrade={(side) =>
-						pendingOrder
-							? setRecoveryOpen(true)
-							: setOverlay({
-									kind: "trade",
-									instrument: overlay.instrument,
-									side,
-								})
-					}
+					onTrade={(side) => openTrade(overlay.instrument, side)}
 				/>
 			)}{" "}
 			{!recoveryOpen && overlay.kind === "reorder" && (

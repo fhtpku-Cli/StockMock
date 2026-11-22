@@ -66,7 +66,7 @@ try {
 	}
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole("button", { name: "自选", exact: true }).tap();
-	await page.getByLabel("筛选已可交易证券").fill("600519");
+	await page.getByLabel("搜索代码或名称").fill("600519");
 	await page.locator('[data-symbol="600519.SS"] .security-main').tap();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).tap();
 	await page.getByLabel("限价（CNY）").fill("100");
@@ -195,7 +195,7 @@ try {
 	});
 	await page.getByRole("button", { name: "关闭" }).tap();
 	await page.getByRole("button", { name: "自选", exact: true }).tap();
-	await page.getByLabel("筛选已可交易证券").fill("600519");
+	await page.getByLabel("搜索代码或名称").fill("600519");
 	await page.locator('[data-symbol="600519.SS"] .security-main').tap();
 	await page.getByRole("button", { name: "模拟买入", exact: true }).tap();
 	await page.getByLabel("限价（CNY）").fill("100");

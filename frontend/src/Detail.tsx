@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Alerts } from "./Alerts";
 import { api, errorMessage, money, price, time } from "./api";
 import { ChangeLine } from "./ChangeLine";
+import { canVerifyOnBuy, tradingLabel } from "./instrumentAdmission";
 import { MarketSession } from "./MarketSession";
 import { changeDisplay } from "./marketView";
 import { Plans } from "./Plans";
@@ -10,7 +11,6 @@ import { SignedValue } from "./SignedValue";
 import type { Instrument } from "./schema";
 import { historySchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Modal } from "./ui";
-import { useEnableInstrument } from "./useEnableInstrument";
 import { useOnline } from "./useOnline";
 import { useTradeReference } from "./useTradeReference";
 import { useWatchlist } from "./useWatchlist";
@@ -18,17 +18,12 @@ export function Detail({
 	instrument,
 	onClose,
 	onTrade,
-	onEnabled,
 }: {
 	readonly instrument: Instrument;
 	readonly onClose: () => void;
 	readonly onTrade: (side: "buy" | "sell") => void;
-	readonly onEnabled: (instrument: Instrument) => void;
 }) {
 	const online = useOnline();
-	const enable = useEnableInstrument(onEnabled);
-	const canEnable =
-		!instrument.tradable && ["CN", "US"].includes(instrument.market);
 	const { toggle, contains, pending } = useWatchlist();
 	const { quote, portfolio } = useTradeReference(instrument.symbol);
 	const position = portfolio.data?.positions.find(
@@ -54,7 +49,7 @@ export function Detail({
 					{instrument.symbol} · {instrument.market} · {instrument.currency}
 				</span>
 				<Badge tone={instrument.tradable ? "good" : "warn"}>
-					{instrument.tradable ? "可模拟交易" : "仅观察"}
+					{tradingLabel(instrument)}
 				</Badge>
 			</div>
 			{quote.isPending ? (
@@ -101,7 +96,11 @@ export function Detail({
 				<button
 					type="button"
 					className="button primary"
-					disabled={!online || !instrument.tradable || !quote.isSuccess}
+					disabled={
+						!online ||
+						(!instrument.tradable && !canVerifyOnBuy(instrument)) ||
+						(instrument.tradable && !quote.isSuccess)
+					}
 					onClick={() => onTrade("buy")}
 				>
 					模拟买入
@@ -207,28 +206,6 @@ export function Detail({
 				</dl>
 			)}
 			{toggle.isError && <ErrorNotice message={errorMessage(toggle.error)} />}
-			{canEnable && (
-				<div className="notice" aria-live="polite" aria-busy={enable.isPending}>
-					<p>
-						通过交易规则与行情核验后，可启用此证券的模拟交易；核验未通过时继续保留观察。
-					</p>
-					<button
-						type="button"
-						className="button primary"
-						disabled={!online || enable.isPending}
-						onClick={() => enable.mutate(instrument.symbol)}
-					>
-						{enable.isPending
-							? "正在核验交易条件…"
-							: enable.isError
-								? "重试启用模拟交易"
-								: "启用模拟交易"}
-					</button>
-					{enable.isError && (
-						<ErrorNotice message={errorMessage(enable.error)} />
-					)}
-				</div>
-			)}
 		</Modal>
 	);
 }

@@ -9,7 +9,16 @@ export async function verifyTrading({
 	discover,
 	observations,
 }) {
-	let additions = 0;
+	const searchPanel = page
+		.locator("section.panel")
+		.filter({
+			has: page.getByRole("heading", { name: "证券搜索", exact: true }),
+		});
+	const watchPanel = page
+		.locator("section.panel")
+		.filter({
+			has: page.getByRole("heading", { name: "我的自选", exact: true }),
+		});
 	for (const [width, symbol, currency, min, step] of [
 		[1280, "688981.SS", "CNY", 200, 1],
 		[390, "IBM", "USD", 1, 1],
@@ -21,7 +30,7 @@ export async function verifyTrading({
 		const dialog = page.getByRole("dialog");
 		await expect(
 			dialog.getByRole("button", { name: "模拟买入", exact: true }),
-		).toBeDisabled();
+		).toBeEnabled();
 		await dialog.getByRole("button", { name: "加入自选", exact: true }).click();
 		await expect(
 			dialog.getByRole("button", { name: "移除自选", exact: true }),
@@ -43,12 +52,12 @@ export async function verifyTrading({
 				{ times: 1 },
 			);
 			await dialog
-				.getByRole("button", { name: "启用模拟交易", exact: true })
+				.getByRole("button", { name: "模拟买入", exact: true })
 				.click();
 			await expect(dialog.getByRole("alert")).toContainText("行情暂不可用");
 			await expect(
-				dialog.getByRole("button", { name: "模拟买入", exact: true }),
-			).toBeDisabled();
+				dialog.getByRole("button", { name: "重新核验" }),
+			).toBeEnabled();
 			await capture(`${engine}-failure-observation-${width}`);
 		}
 		let count = 0,
@@ -63,15 +72,13 @@ export async function verifyTrading({
 		});
 		const requested = page.waitForRequest(endpoint);
 		await dialog
-			.getByRole("button", { name: /^(重试)?启用模拟交易$/ })
-			.dblclick();
+			.getByRole("button", {
+				name: symbol === "IBM" ? "重新核验" : "模拟买入",
+				exact: true,
+			})
+			.click({ clickCount: 2 });
 		await requested;
-		await expect(
-			dialog.getByRole("button", { name: "正在核验交易条件…" }),
-		).toBeDisabled();
-		await expect(
-			dialog.getByRole("button", { name: "模拟买入", exact: true }),
-		).toBeDisabled();
+		await expect(dialog.getByRole("status")).toContainText("正在核验交易条件");
 		await capture(`${engine}-pending-${width}`);
 		const response = page.waitForResponse(endpoint, { timeout: 60000 });
 		if (engine === "chromium" && width === 1280)
@@ -85,19 +92,7 @@ export async function verifyTrading({
 		expect(enabled.quantity_step).toBe(step);
 		await page.unroute(endpoint);
 		expect(count).toBe(1);
-		additions++;
-		await expect(
-			dialog.getByRole("button", { name: "模拟买入", exact: true }),
-		).toBeEnabled();
-		await expect(
-			dialog.getByRole("button", { name: "模拟卖出", exact: true }),
-		).toBeEnabled();
-		await expect(
-			dialog.getByRole("button", { name: /启用模拟交易/ }),
-		).toHaveCount(0);
-		await dialog.locator(".discovery-detail-actions").scrollIntoViewIfNeeded();
 		await capture(`${engine}-enabled-${width}`);
-		await dialog.getByRole("button", { name: "模拟买入", exact: true }).click();
 		await expect(page.locator("#quantity")).toHaveValue(String(min));
 		await expect(page.locator("#quantity")).toHaveAttribute(
 			"step",
@@ -127,24 +122,26 @@ export async function verifyTrading({
 		await capture(`${engine}-preview-${width}`);
 		await page.getByRole("button", { name: "返回标的详情" }).click();
 		await page.keyboard.press("Escape");
-		await expect(page.locator(`[data-symbol="${symbol}"]`)).toContainText(
-			"可模拟交易",
-		);
 		await expect(
-			page.locator(".watch-card").filter({ hasText: symbol }),
+			searchPanel.locator(`[data-symbol="${symbol}"]`),
 		).toContainText("可模拟交易");
-		await page.getByLabel("搜索代码或名称").fill("");
-		await expect(page.locator(`[data-symbol="${symbol}"]`)).toContainText(
+		await expect(watchPanel.locator(`[data-symbol="${symbol}"]`)).toContainText(
 			"可模拟交易",
 		);
-		await expect(page.locator(".security-row")).toHaveCount(
-			catalog.length + additions,
-		);
+		await page.getByLabel("搜索代码或名称").fill("");
+		const refreshedCatalog = await (
+			await page.request.get(new URL("/api/instruments", page.url()).href)
+		).json();
+		expect(
+			refreshedCatalog.filter(
+				(item) => item.symbol === symbol && item.tradable,
+			),
+		).toHaveLength(1);
 		await page.reload();
 		await discover();
-		await expect(
-			page.locator(".watch-card").filter({ hasText: symbol }),
-		).toContainText("可模拟交易");
+		await expect(watchPanel.locator(`[data-symbol="${symbol}"]`)).toContainText(
+			"可模拟交易",
+		);
 		await open(symbol);
 		await page
 			.getByRole("dialog")
@@ -178,26 +175,22 @@ export async function verifyTrading({
 		},
 		{ times: 1 },
 	);
-	await page.getByRole("button", { name: "启用模拟交易", exact: true }).click();
+	await page.getByRole("button", { name: "模拟买入", exact: true }).click();
 	await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
 		"暂时无法连接服务",
 	);
 	expect(lostResponse.tradable).toBe(true);
 	await expect(
-		page
-			.getByRole("dialog")
-			.getByRole("button", { name: "模拟买入", exact: true }),
-	).toBeDisabled();
+		page.getByRole("dialog").getByRole("button", { name: "重新核验" }),
+	).toBeEnabled();
 	await capture(`${engine}-lost-response-observation`);
 
-	await page
-		.getByRole("button", { name: "重试启用模拟交易", exact: true })
-		.click();
-	await expect(
-		page
-			.getByRole("dialog")
-			.getByRole("button", { name: "模拟买入", exact: true }),
-	).toBeEnabled();
+	await page.getByRole("button", { name: "重新核验", exact: true }).click();
+	await expect(page.locator("#quantity")).toBeEnabled();
+	const orders = await (
+		await page.request.get(new URL("/api/orders", page.url()).href)
+	).json();
+	expect(orders).toHaveLength(0);
 	await capture(`${engine}-us-etf-enabled`);
 	await page.keyboard.press("Escape");
 }

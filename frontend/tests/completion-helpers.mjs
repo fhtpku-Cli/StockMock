@@ -57,7 +57,7 @@ export async function createCompletionFixture() {
 		await page.getByRole("button", { name: "自选", exact: true }).click();
 		await page.getByLabel("筛选市场").selectOption("all");
 		await page.getByLabel("筛选证券类型").selectOption("all");
-		await page.getByLabel("筛选已可交易证券").fill(symbol);
+		await page.getByLabel("搜索代码或名称").fill(symbol);
 		await page.locator(`[data-symbol="${symbol}"] .security-main`).click();
 	};
 	let previewCount = 0;

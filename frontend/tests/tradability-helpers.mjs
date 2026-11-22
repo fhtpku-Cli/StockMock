@@ -29,7 +29,12 @@ export function uiHelpers(getPage, output, observations) {
 		async open(symbol) {
 			const page = getPage();
 			await page.getByLabel("搜索代码或名称").fill(symbol.split(".")[0]);
-			const row = page.locator(`[data-symbol="${symbol}"]`);
+			const row = page
+				.locator("section.panel")
+				.filter({
+					has: page.getByRole("heading", { name: "证券搜索", exact: true }),
+				})
+				.locator(`[data-symbol="${symbol}"]`);
 			await expect(row).toBeVisible();
 			await row.locator(".security-main").click();
 			await expect(

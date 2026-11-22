@@ -29,7 +29,7 @@ try {
 	const catalog = await read("/api/instruments");
 	await page.getByRole("button", { name: "自选", exact: true }).click();
 	const enabled = page.locator("section.panel").filter({
-		has: page.getByRole("heading", { name: "已可交易", exact: true }),
+		has: page.getByRole("heading", { name: "证券搜索", exact: true }),
 	});
 	const tradableCount = catalog.filter((item) => item.tradable).length;
 	await expect(enabled.locator(".security-main")).toHaveCount(24);
@@ -59,17 +59,17 @@ try {
 			);
 		}
 	}
-	await expect(enabled).toContainText("港股继续仅观察");
+	await expect(enabled).toContainText("港股仅供观察");
 	await expect(
 		page.getByLabel("筛选市场").locator('option[value="HK"]'),
-	).toHaveCount(0);
+	).toHaveCount(1);
 	await shot("catalog-pagination-observation");
 	await page.getByLabel("筛选证券类型").selectOption("all");
 	for (const symbol of ["COST", "VOO"]) {
 		const item = catalog.find((i) => i.symbol === symbol);
 		expect(item).toBeTruthy();
 		for (const term of [item.symbol, item.name]) {
-			await page.getByLabel("筛选已可交易证券").fill(term);
+			await page.getByLabel("搜索代码或名称").fill(term);
 			const result = page.locator(`[data-symbol="${symbol}"] .security-main`);
 			await expect(result).toHaveCount(1);
 			await expect(result).toContainText(symbol);

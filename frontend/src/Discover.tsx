@@ -27,6 +27,7 @@ export function InstrumentList({
 	readonly items: readonly Instrument[];
 	readonly onSelect: (i: Instrument) => void;
 	readonly empty: string;
+	readonly onBuy: (i: Instrument) => void;
 	readonly onToggle: (i: Instrument) => void;
 	readonly contains: (symbol: string) => boolean;
 	readonly pending: boolean;
@@ -45,7 +46,7 @@ export function InstrumentList({
 		if (mostCommon && mostCommon[1] > 1) sharedRules.set(market, mostCommon[0]);
 	}
 	return items.length === 0 ? (
-		<Empty title={empty}>可调整筛选，或在在线搜索中查找目录外的证券。</Empty>
+		<Empty title={empty}>可输入证券代码或调整筛选。</Empty>
 	) : (
 		<>
 			{sharedRules.size > 0 && (
@@ -84,10 +85,11 @@ export function InstrumentList({
 
 export function Discover({
 	onSelect,
+	onBuy,
 }: {
 	readonly onSelect: (i: Instrument) => void;
+	readonly onBuy: (i: Instrument) => void;
 }) {
-	const [localSearch, setLocalSearch] = useState("");
 	const [search, setSearch] = useState("");
 	const [query, setQuery] = useState("");
 	const [kind, setKind] = useState("all");
@@ -104,26 +106,41 @@ export function Discover({
 	});
 	const onlineSearch = useQuery({
 		queryKey: ["instrument-search", query],
-		queryFn: () =>
+		queryFn: ({ signal }) =>
 			api(
 				`instruments/search?q=${encodeURIComponent(query)}`,
 				instrumentSearchSchema,
+				undefined,
+				{ signal },
 			),
 		enabled: query.length > 0 && query === trimmed,
 		retry: false,
 		staleTime: 60_000,
 	});
 	const enabled = instruments.data?.filter((item) => item.tradable) ?? [];
-	const filtered = enabled.filter(
+	const identity = (symbol: string) => symbol.replace(/^0+(?=\d+\.HK$)/, "");
+	const local = new Map(
+		(instruments.data ?? []).map((i) => [identity(i.symbol), i]),
+	);
+	const matches = trimmed
+		? (instruments.data ?? []).filter((i) =>
+				`${i.symbol} ${i.name}`.toLowerCase().includes(trimmed.toLowerCase()),
+			)
+		: enabled;
+	const merged = new Map(matches.map((i) => [identity(i.symbol), i]));
+	if (trimmed && trimmed === query)
+		for (const item of onlineSearch.data?.items ?? []) {
+			const code = identity(item.symbol);
+			merged.set(code, local.get(code) ?? item);
+		}
+	const filtered = Array.from(merged.values()).filter(
 		(item) =>
 			(market === "all" || item.market === market) &&
-			(kind === "all" || item.kind === kind) &&
-			`${item.symbol} ${item.name}`
-				.toLocaleLowerCase()
-				.includes(localSearch.trim().toLocaleLowerCase()),
+			(kind === "all" || item.kind === kind),
 	);
 	const listActions = {
 		onSelect,
+		onBuy,
 		onToggle: (item: Instrument) => toggle.mutate(item),
 		contains,
 		pending,
@@ -156,7 +173,7 @@ export function Discover({
 				)}
 			</Panel>
 			<Panel
-				title="已可交易"
+				title="证券搜索"
 				action={
 					<Badge tone="good">
 						{instruments.data ? enabled.length : "—"} 只已启用
@@ -164,7 +181,8 @@ export function Discover({
 				}
 			>
 				<p className="footnote discovery-intro">
-					这些标的已通过交易规则核验，可进入详情练习；能否下单仍取决于当前行情、交易时间和可用资金。港股继续仅观察。
+					输入代码或名称可搜索目录内外的证券。首次买入 A
+					股或美股时自动核验，港股仅供观察。
 				</p>
 				<section className="coverage-summary" aria-label="已启用数量汇总">
 					{coverageGroups.map((group) => (
@@ -186,10 +204,11 @@ export function Discover({
 					<label className="search-box">
 						<MagnifyingGlass size={20} />
 						<input
-							aria-label="筛选已可交易证券"
-							placeholder="在已可交易中按名称或代码筛选"
-							value={localSearch}
-							onChange={(event) => setLocalSearch(event.target.value)}
+							aria-label="搜索代码或名称"
+							placeholder="输入证券代码或名称"
+							maxLength={80}
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
 						/>
 					</label>
 					<select
@@ -200,6 +219,7 @@ export function Discover({
 						<option value="all">全部市场</option>
 						<option value="CN">A 股及境内 ETF</option>
 						<option value="US">美股及 ETF</option>
+						<option value="HK">港股（仅观察）</option>
 					</select>
 					<select
 						aria-label="筛选证券类型"
@@ -217,59 +237,27 @@ export function Discover({
 						retry={() => void instruments.refetch()}
 					/>
 				)}
-				{instruments.isPending ? (
-					<Loading />
-				) : (
-					instruments.data && (
-						<InstrumentList
-							key={`${market}-${kind}-${localSearch}`}
-							items={filtered}
-							empty="已可交易目录中没有匹配项"
-							{...listActions}
-						/>
-					)
-				)}
-			</Panel>
-			<Panel title="在线搜索">
-				<p className="footnote discovery-intro">
-					查找目录之外的证券。查到不代表已可交易；可在详情核验启用，失败原因会保留显示。在线服务失败不会移除已加载的自选和目录。
-				</p>
-				<label className="search-box">
-					<MagnifyingGlass size={20} />
-					<input
-						aria-label="搜索代码或名称"
-						placeholder="输入名称或代码，在线查询"
-						value={search}
-						maxLength={80}
-						onChange={(event) => setSearch(event.target.value)}
-					/>
-				</label>
-				<div aria-live="polite" aria-busy={waiting || onlineSearch.isFetching}>
-					{!trimmed ? (
-						<p className="footnote">
-							输入关键词后查询在线来源，结果可能不完整。
-						</p>
-					) : waiting ? (
-						<Loading />
-					) : onlineSearch.isError ? (
+				<div aria-live="polite">
+					{(instruments.isPending || waiting) && <Loading />}
+					{trimmed && trimmed === query && onlineSearch.isError && (
 						<ErrorNotice
-							message={`在线结果当前不可用：${errorMessage(onlineSearch.error)} 已加载的自选和已可交易目录仍可查看。`}
+							message={`在线搜索暂不可用：${errorMessage(onlineSearch.error)} 仍可使用已加载的本地结果。`}
 							retry={() => void onlineSearch.refetch()}
 						/>
-					) : (
-						onlineSearch.data && (
-							<>
-								<p className="footnote">
-									{onlineSearch.data.message} · 来源：{onlineSearch.data.source}
-								</p>
-								<InstrumentList
-									key={query}
-									items={onlineSearch.data.items}
-									empty="当前在线查询没有匹配标的"
-									{...listActions}
-								/>
-							</>
-						)
+					)}
+					{trimmed && trimmed === query && onlineSearch.isSuccess && (
+						<p className="footnote">
+							在线结果可能不完整，可输入准确代码缩小范围。来源：
+							{onlineSearch.data.source}
+						</p>
+					)}
+					{(filtered.length > 0 || (!waiting && !instruments.isPending)) && (
+						<InstrumentList
+							key={JSON.stringify([market, kind, trimmed])}
+							items={filtered}
+							empty="没有匹配的证券"
+							{...listActions}
+						/>
 					)}
 				</div>
 			</Panel>

@@ -22,6 +22,7 @@ function render(item: Instrument) {
 		createElement(DiscoveryResults, {
 			items: [item],
 			onSelect: () => {},
+			onBuy: () => {},
 			onToggle: () => {},
 			contains: () => false,
 			pending: false,
@@ -47,6 +48,20 @@ describe("发现列表逐行规则", () => {
 	});
 });
 
+it("目录外的普通 A 股或美股在买入时核验，港股仍仅观察", () => {
+	for (const market of ["CN", "US", "HK"]) {
+		const html = render({
+			...instrument,
+			market,
+			tradable: false,
+			lot_size: null,
+			tick_size: null,
+		});
+		expect(html).toContain(market === "HK" ? "仅观察" : "买入时核验");
+		expect(html).not.toContain("可模拟交易");
+	}
+});
+
 describe("发现列表实际归并", () => {
 	it("同屏有例外时仍归并重复完整规则，并保留例外和观察行", () => {
 		const html = renderToStaticMarkup(
@@ -58,6 +73,7 @@ describe("发现列表实际归并", () => {
 					{ ...instrument, symbol: "WATCH", tradable: false },
 				],
 				onSelect: () => {},
+				onBuy: () => {},
 				onToggle: () => {},
 				contains: () => false,
 				pending: false,
@@ -79,6 +95,7 @@ describe("发现列表实际归并", () => {
 			createElement(InstrumentList, {
 				items,
 				onSelect: () => {},
+				onBuy: () => {},
 				onToggle: () => {},
 				contains: () => false,
 				pending: false,
@@ -101,6 +118,7 @@ it("同市场两个重复组只归并默认组，其他组逐行对应", () => {
 				{ ...instrument, symbol: "OTHER2", restriction: "另一组规则" },
 			],
 			onSelect: () => {},
+			onBuy: () => {},
 			onToggle: () => {},
 			contains: () => false,
 			pending: false,
