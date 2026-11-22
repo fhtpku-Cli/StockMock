@@ -57,6 +57,11 @@ class Worker:
                 _ = self.failed_since.setdefault(symbol, now)
                 failures.append(error.code)
                 logging.getLogger(__name__).warning("行情获取失败 symbol=%s code=%s", symbol, error.code)
+            except Exception as error:  # noqa: BLE001
+                samples = ()
+                _ = self.failed_since.setdefault(symbol, now)
+                failures.append(type(error).__name__)
+                logging.getLogger(__name__).warning("行情获取意外失败 symbol=%s type=%s", symbol, type(error).__name__)
             try:
                 completed = datetime.now(UTC)
                 failed_at = self.failed_since.get(symbol)
@@ -80,5 +85,9 @@ class Worker:
     async def run(self) -> None:
         """持续后台处理，应用关闭时由任务组取消。"""
         while True:
-            await anyio.to_thread.run_sync(self.tick)
+            try:
+                await anyio.to_thread.run_sync(self.tick)
+            except Exception as error:  # noqa: BLE001
+                self.view = WorkerView(last_run=datetime.now(UTC), status="交易处理暂不可用，下轮重试")
+                logging.getLogger(__name__).warning("交易处理下轮重试 type=%s", type(error).__name__)
             await anyio.sleep(60)

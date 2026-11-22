@@ -1,7 +1,6 @@
 """独立计划观察任务；有界轮询且不占用撮合任务或行情客户端锁。"""
 
 import logging
-import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import Final, final
 
@@ -67,7 +66,7 @@ class PlanWorker:
         while True:
             try:
                 await anyio.to_thread.run_sync(self.tick, limiter=limiter)
-            except (DomainError, sqlite3.OperationalError) as error:
+            except Exception as error:  # noqa: BLE001
                 self.view = WorkerView(last_run=datetime.now(UTC), status="计划观察暂不可用，下轮重试")
                 logging.getLogger(__name__).warning("计划观察下轮重试 type=%s", type(error).__name__)
             await anyio.sleep(60)
