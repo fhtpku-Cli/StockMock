@@ -24,10 +24,21 @@ export const submissionSchema = z
 	.strict();
 export type Submission = z.infer<typeof submissionSchema>;
 
-export function readPendingOrder(): Submission | null {
+const savedOrderSchema = submissionSchema.extend({
+	display_currency: z.enum(["CNY", "USD", "HKD"]).optional().catch(undefined),
+});
+
+export function readPendingOrderRecord(): {
+	readonly submission: Submission;
+	readonly currency: string | undefined;
+} | null {
 	try {
 		const saved = sessionStorage.getItem(PENDING_ORDER_KEY);
-		return saved === null ? null : submissionSchema.parse(JSON.parse(saved));
+		if (saved === null) return null;
+		const { display_currency, ...submission } = savedOrderSchema.parse(
+			JSON.parse(saved),
+		);
+		return { submission, currency: display_currency };
 	} catch (error) {
 		if (!(error instanceof Error)) throw error;
 		throw new ApiError(
@@ -37,8 +48,16 @@ export function readPendingOrder(): Submission | null {
 	}
 }
 
-export function savePendingOrder(submission: Submission): void {
-	const pending = readPendingOrder();
+export function readPendingOrder(): Submission | null {
+	return readPendingOrderRecord()?.submission ?? null;
+}
+
+export function savePendingOrder(
+	submission: Submission,
+	currency?: string,
+): void {
+	const record = readPendingOrderRecord();
+	const pending = record?.submission;
 	if (
 		pending &&
 		JSON.stringify(pending) !==
@@ -49,7 +68,12 @@ export function savePendingOrder(submission: Submission): void {
 			"请先核对上一笔委托结果，再建立新委托。",
 		);
 	try {
-		const saved = JSON.stringify(submissionSchema.parse(submission));
+		const saved = JSON.stringify(
+			savedOrderSchema.parse({
+				...submissionSchema.parse(submission),
+				display_currency: currency ?? record?.currency,
+			}),
+		);
 		sessionStorage.setItem(PENDING_ORDER_KEY, saved);
 		if (sessionStorage.getItem(PENDING_ORDER_KEY) !== saved)
 			throw new ApiError(

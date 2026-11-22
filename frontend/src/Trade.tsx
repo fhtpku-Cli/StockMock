@@ -208,7 +208,7 @@ export function Trade({
 				await assertRound();
 				if (!mounted.current)
 					throw new ApiError("session_changed", "请重新登录后核对委托。");
-				savePendingOrder(original);
+				savePendingOrder(original, instrument.currency);
 				setUnresolved(original);
 			}
 			attempted.current.add(original.request_id);

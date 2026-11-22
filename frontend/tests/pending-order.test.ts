@@ -5,8 +5,10 @@ import {
 	isFinalOrderRejection,
 	PENDING_ORDER_KEY,
 	readPendingOrder,
+	readPendingOrderRecord,
 	type Submission,
 	savePendingOrder,
+	submissionSchema,
 } from "../src/pendingOrder";
 
 const submission: Submission = {
@@ -77,6 +79,31 @@ describe("同标签页委托保存与确认", () => {
 		savePendingOrder(submission);
 		expect(readPendingOrder()).toEqual(submission);
 	});
+	test("展示币种随原委托保留，重读和重试只取严格请求字段", () => {
+		savePendingOrder(submission, "USD");
+		expect(readPendingOrderRecord()).toEqual({ submission, currency: "USD" });
+		expect(submissionSchema.parse(readPendingOrder())).toEqual(submission);
+		expect(readPendingOrder()).not.toHaveProperty("display_currency");
+		savePendingOrder(submission);
+		expect(readPendingOrderRecord()?.currency).toBe("USD");
+		expect(() =>
+			savePendingOrder({ ...submission, quantity: 3 }, "USD"),
+		).toThrow("请先核对");
+	});
+	test.each([undefined, "", "invalid currency", "EUR"])(
+		"旧记录或无效展示币种 %s 仍能读取原请求",
+		(currency) => {
+			values.set(
+				PENDING_ORDER_KEY,
+				JSON.stringify({ ...submission, display_currency: currency }),
+			);
+			expect(readPendingOrderRecord()).toEqual({
+				submission,
+				currency: undefined,
+			});
+			expect(readPendingOrder()).toEqual(submission);
+		},
+	);
 	test("未决记录阻止新号和同号改内容，旧记录完整保留", () => {
 		savePendingOrder(submission);
 		expect(() =>
