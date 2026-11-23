@@ -6,9 +6,10 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from app.discovery_models import ObservationInstrument
-from app.models import DomainError, Instrument, OrderInput, PlanSnapshot, State
+from app.models import DomainError, Instrument, Order, OrderInput, PlanSnapshot, State, plan_sync_conflict
 from app.plan_models import Monitoring, Plan, PlanInput, PlanUpdate
 from app.storage import Store, read_rows
 
@@ -138,3 +139,55 @@ def order_snapshot(connection: sqlite3.Connection, state: State, request: OrderI
     if plan.status == "ended":
         raise DomainError("plan_ended", "已结束计划不能关联新委托")
     return PlanSnapshot.model_validate(plan.model_dump(exclude={"monitoring"}))
+
+
+def check_sync_date(request: OrderInput, now: datetime) -> None:
+    """按北京时间检查新建计划的复查日期。"""
+    if (
+        request.plan_review_date is not None
+        and request.plan_review_date < now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+    ):
+        raise DomainError("invalid_review_date", "复查日期不能早于北京时间今天", 422)
+
+
+def check_sync_preview(connection: sqlite3.Connection, state: State, request: OrderInput, now: datetime) -> None:
+    """提前报告同步冲突，最终受理由同一写事务的唯一约束决定。"""
+    check_sync_date(request, now)
+    if request.save_as_plan and read_rows(
+        connection,
+        "SELECT id FROM plans WHERE round_id=? AND symbol=? AND status='active' LIMIT 1",
+        (state.id, request.symbol),
+    ):
+        raise plan_sync_conflict()
+
+
+def snapshot_request(connection: sqlite3.Connection, request: OrderInput, state: State, order: Order) -> OrderInput:
+    """在受理事务内同步建计划，仅为生成快照返回局部关联副本。"""
+    if not request.save_as_plan:
+        return request
+    check_sync_date(request, order.created_at)
+    plan = Plan(
+        id=str(uuid4()),
+        round_id=state.id,
+        symbol=order.symbol,
+        currency=order.currency,
+        direction="buy",
+        status="active",
+        reason=request.reason,
+        target_price=request.target_price,
+        stop_price=request.stop_price,
+        review_date=request.plan_review_date,
+        invalidation="",
+        version=1,
+        created_at=order.created_at,
+        updated_at=order.created_at,
+    )
+    try:
+        save_plan(connection, plan)
+    except DomainError as error:
+        if error.code != "active_plan_exists":
+            raise
+        raise plan_sync_conflict() from error
+    return request.model_copy(
+        update={"plan_id": plan.id, "plan_version": plan.version, "save_as_plan": False, "plan_review_date": None}
+    )

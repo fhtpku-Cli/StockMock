@@ -17,7 +17,7 @@ from app.models import DomainError, Instrument, Order, OrderInput, Preview, Stop
 from app.order_builder import OrderContext, build_order
 from app.order_requests import check_expected_round, retry_order
 from app.order_views import candidate_interval
-from app.plans import order_snapshot
+from app.plans import check_sync_preview, order_snapshot, snapshot_request
 from app.storage import Store
 
 
@@ -167,6 +167,7 @@ class Engine:
             state = self.store.load(connection)
             check_expected_round(request, state.id)
             _ = order_snapshot(connection, state, request)
+            check_sync_preview(connection, state, request, now)
         quote, rate, reference = self.prepare(request, now)
         order = build_order(
             instrument(request.symbol, self.catalog),
@@ -184,6 +185,18 @@ class Engine:
                 stop_loss = StopLoss(amount=difference + fee + execution_amount(order.stop_price, order.quantity)[1])
             else:
                 warnings.append("止损参考价不低于参考买价，暂不估算损失")
+        if request.save_as_plan:
+            warnings.append("提交后将同时创建进行中计划")
+            reached: list[str] = []
+            if request.target_price is not None and quote.price >= request.target_price:
+                reached.append("当前报价已达到目标价")
+            if request.stop_price is not None and quote.price <= request.stop_price:
+                reached.append("当前报价已达到止损参考价")
+            if reached:
+                warnings.extend(reached)
+                warnings.append(
+                    "提交后，后台取到 20 分钟内的有效报价且仍满足条件时会提醒；刚收盘时仍可能按收盘前的报价提醒，之后要等下次开市。"  # noqa: E501 用户确认的完整提示。
+                )
         return Preview(
             active_at=order.active_at,
             first_candidate_interval=candidate_interval(order, self.catalog),
@@ -224,9 +237,10 @@ class Engine:
             )
             if request.expected_expires_at is not None and request.expected_expires_at != order.expires_at:
                 raise DomainError("validity_changed", "委托有效期已变化，请重新预览后提交", 409)
-            snapshot = order_snapshot(connection, state, request)
+            linked = snapshot_request(connection, request, state, order)
+            snapshot = order_snapshot(connection, state, linked)
             order = order.model_copy(
-                update={"plan_id": request.plan_id, "plan_version": request.plan_version, "plan_snapshot": snapshot}
+                update={"plan_id": linked.plan_id, "plan_version": linked.plan_version, "plan_snapshot": snapshot}
             )
             state.orders.append(order)
             self.store.save(connection, state)

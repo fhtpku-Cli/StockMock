@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
+from operator import not_
 from typing import Annotated, ClassVar, Literal, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer, model_validator
@@ -85,8 +86,8 @@ class OrderInput(OrderParameters):
     expected_round_id: str | None = Field(default=None, max_length=36)
     expected_expires_at: AwareDatetime | None = None
 
-    save_as_plan: bool = Field(default=False, exclude_if=lambda value: value is False)
-    plan_review_date: date | None = Field(default=None, exclude_if=lambda value: value is None)
+    save_as_plan: bool = Field(default=False, exclude_if=not_)
+    plan_review_date: date | None = Field(default=None, exclude_if=not_)
 
     @model_validator(mode="after")
     def validate_plan_sync(self) -> Self:

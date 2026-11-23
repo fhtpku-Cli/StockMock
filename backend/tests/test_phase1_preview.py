@@ -1,9 +1,9 @@
 """候选接口示例使用受控报价，所有金额和比例都保留十进制文本。"""
 
-import json
 from decimal import Decimal
 
 import pytest
+from pydantic import JsonValue, TypeAdapter
 
 from app.engine import Engine
 from app.models import OrderInput, PositionImpact, StopLoss, plan_sync_conflict
@@ -28,11 +28,12 @@ def test_preview_response_examples() -> None:
 
 
 def test_original_request_examples() -> None:
-    legacy = json.loads(request().model_dump_json())
+    parser = TypeAdapter(dict[str, JsonValue])
+    legacy = parser.validate_json(request().model_dump_json())
     assert "save_as_plan" not in legacy
     assert "plan_review_date" not in legacy
     sync = OrderInput.model_validate({**legacy, "save_as_plan": True, "reason": "受控测试"})
-    assert json.loads(sync.model_dump_json()) == {**legacy, "save_as_plan": True, "reason": "受控测试"}
+    assert parser.validate_json(sync.model_dump_json()) == {**legacy, "save_as_plan": True, "reason": "受控测试"}
 
 
 @pytest.mark.parametrize(("kind", "expected"), [("limit", "1009.50"), ("market", "1209.60")])
