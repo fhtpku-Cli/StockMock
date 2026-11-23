@@ -6,14 +6,14 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Protocol, final
 
-from app.accounting import ACTIVE, FEE, money
+from app.accounting import ACTIVE, FEE, execution_amount, money
 from app.action_guard import check_actions
 from app.activated_registry import ActivatedRegistry
 from app.calendar import is_open, previous_segment_end, prior_session_close, prior_session_day, segment_start, window
 from app.catalog import CATALOG, from_rule, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
 from app.matching import advance, confirm_cutoff, valid_observation, validate_batch
-from app.models import DomainError, Instrument, Order, OrderInput, Preview
+from app.models import DomainError, Instrument, Order, OrderInput, Preview, StopLoss
 from app.order_builder import OrderContext, build_order
 from app.order_requests import check_expected_round, retry_order
 from app.order_views import candidate_interval
@@ -175,18 +175,28 @@ class Engine:
             OrderContext(quote, rate, now, reference),
         )
         conversion_rate = rate if order.reserved_cny > 0 else None
+        fee = money(order.price_bound * order.quantity * FEE)
+        warnings = ["模拟费用 0.05%；整笔成交；行情可能延迟；公司行动需人工核对"]
+        stop_loss = None
+        if order.side == "buy" and order.stop_price is not None:
+            if order.stop_price < order.price_bound:
+                difference = money((order.price_bound - order.stop_price) * order.quantity)
+                stop_loss = StopLoss(amount=difference + fee + execution_amount(order.stop_price, order.quantity)[1])
+            else:
+                warnings.append("止损参考价不低于参考买价，暂不估算损失")
         return Preview(
             active_at=order.active_at,
             first_candidate_interval=candidate_interval(order, self.catalog),
             price_bound=order.price_bound,
-            estimated_fee=money(order.price_bound * order.quantity * FEE),
+            estimated_fee=fee,
+            stop_loss=stop_loss,
             reserved_cny=order.reserved_cny,
             reserved_foreign=order.reserved_foreign,
             fx_rate=conversion_rate.cny_per_unit if conversion_rate else None,
             fx_source=conversion_rate.source if conversion_rate else None,
             fx_time=conversion_rate.market_time if conversion_rate else None,
             expires_at=order.expires_at,
-            warnings=["模拟费用 0.05%；整笔成交；行情可能延迟；公司行动需人工核对"],
+            warnings=warnings,
         )
 
     def place(self, request: OrderInput, now: datetime) -> Order:
