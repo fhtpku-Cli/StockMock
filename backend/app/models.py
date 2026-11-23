@@ -93,7 +93,7 @@ class OrderInput(OrderParameters):
     def validate_plan_sync(self) -> Self:
         """同步计划仅用于有依据的未关联买单。"""
         if self.plan_review_date is not None and not self.save_as_plan:
-            raise ValueError("复查日期仅用于同步创建计划")
+            raise ValueError("计划复盘日期仅用于同步创建计划")
         if self.save_as_plan and (
             self.side != "buy"
             or self.plan_id is not None
@@ -390,4 +390,4 @@ class DomainError(Exception):
 
 def plan_sync_conflict() -> DomainError:
     """同步失败时要求用户重新选择已有计划。"""
-    return DomainError("plan_sync_conflict", "该证券刚有进行中计划，请在计划中选择后重新预览", 409)
+    return DomainError("plan_sync_conflict", "该证券刚有进行中计划。可带入该计划，或取消同步后重新预览。", 409)

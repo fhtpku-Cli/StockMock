@@ -147,7 +147,7 @@ def check_sync_date(request: OrderInput, now: datetime) -> None:
         request.plan_review_date is not None
         and request.plan_review_date < now.astimezone(ZoneInfo("Asia/Shanghai")).date()
     ):
-        raise DomainError("invalid_review_date", "复查日期不能早于北京时间今天", 422)
+        raise DomainError("invalid_review_date", "计划复盘日期不能早于北京时间今天", 422)
 
 
 def check_sync_preview(connection: sqlite3.Connection, state: State, request: OrderInput, now: datetime) -> None:

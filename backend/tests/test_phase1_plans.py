@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app import plan_worker
 from app.engine import Engine
-from app.models import OrderInput, OrderView
+from app.models import OrderInput, OrderView, Preview
 from app.plan_alerts import alerts
 from app.plan_models import PlanInput
 from app.plan_worker import PlanWorker
@@ -36,8 +36,13 @@ def test_sync_order_and_original_receipt(engine: Engine, api: TestClient) -> Non
     body = original.model_dump(mode="json", exclude_none=True)
     preview = api.post("/api/orders/preview", json=body)
     assert preview.status_code == 200
-    assert "当前报价已达到目标价" in preview.json()["warnings"]
-    assert "当前报价已达到止损参考价" in preview.json()["warnings"]
+    assert preview.json()["warnings"][2:] == [
+        "提交后将同时创建进行中计划，计划复盘日期 2026-10-22",
+        "当前报价已达到目标价",
+        "当前报价已达到止损参考价",
+        "提交后，报价仍满足条件时会站内提醒。",
+        "只认 20 分钟内的交易时段报价：收盘后约 20 分钟内仍按收盘前报价判断，之后要等下次开市。",
+    ]
     assert round_plans(engine.store, engine.store.read().id) == []
     accepted = api.post("/api/orders", json=body)
     assert accepted.status_code == 200
@@ -108,10 +113,30 @@ def test_sync_conflict_blocks_original_and_persists_retry(engine: Engine, api: T
             blocked.release.set()
         assert pending.result(timeout=5).json() == retry.json()
     assert retry.json()["detail"]["code"] == "order_receipt_rejected"
-    assert "该证券刚有进行中计划，请在计划中选择后重新预览" in retry.json()["detail"]["message"]
+    assert "该证券刚有进行中计划。可带入该计划，或取消同步后重新预览。" in retry.json()["detail"]["message"]
+    assert early.json()["detail"]["message"] == "该证券刚有进行中计划。可带入该计划，或取消同步后重新预览。"
     assert api.get(f"/api/orders/receipts/{original.request_id}").json() == retry.json()
     assert engine.store.read().orders == []
     assert round_plans(engine.store, plan.round_id) == [plan]
+
+
+def test_sync_preview_without_date_or_reached_condition(api: TestClient) -> None:
+    body = {**request().model_dump(mode="json", exclude_none=True), "save_as_plan": True, "target_price": "120"}
+    warnings = Preview.model_validate_json(api.post("/api/orders/preview", json=body).content).warnings
+    assert warnings[1:] == ["提交后将同时创建进行中计划"]
+    assert not any("复盘日期" in warning or "站内提醒" in warning for warning in warnings)
+
+
+def test_sync_review_date_messages(api: TestClient) -> None:
+    body = {**request().model_dump(mode="json"), "save_as_plan": True, "reason": "隔离测试"}
+    past = api.post("/api/orders/preview", json={**body, "plan_review_date": "2026-10-21"})
+    assert past.json()["detail"] == {
+        "code": "invalid_review_date",
+        "message": "计划复盘日期不能早于北京时间今天",
+    }
+    unpaired = api.post("/api/orders", json={**body, "save_as_plan": False, "plan_review_date": "2026-12-01"})
+    assert "计划复盘日期仅用于同步创建计划" in unpaired.text
+    assert "复查日期" not in past.text + unpaired.text
 
 
 @pytest.mark.parametrize(("minutes", "expected"), [(2, ["target"]), (21, [])])

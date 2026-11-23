@@ -202,7 +202,10 @@ class Engine:
             else:
                 warnings.append("止损参考价不低于参考买价，暂不估算损失")
         if request.save_as_plan:
-            warnings.append("提交后将同时创建进行中计划")
+            sync_note = "提交后将同时创建进行中计划"
+            if request.plan_review_date is not None:
+                sync_note += f"，计划复盘日期 {request.plan_review_date.isoformat()}"
+            warnings.append(sync_note)
             reached: list[str] = []
             if request.target_price is not None and quote.price >= request.target_price:
                 reached.append("当前报价已达到目标价")
@@ -210,8 +213,11 @@ class Engine:
                 reached.append("当前报价已达到止损参考价")
             if reached:
                 warnings.extend(reached)
-                warnings.append(
-                    "提交后，后台取到 20 分钟内的有效报价且仍满足条件时会提醒；刚收盘时仍可能按收盘前的报价提醒，之后要等下次开市。"  # noqa: E501 用户确认的完整提示。
+                warnings.extend(
+                    (
+                        "提交后，报价仍满足条件时会站内提醒。",
+                        "只认 20 分钟内的交易时段报价：收盘后约 20 分钟内仍按收盘前报价判断，之后要等下次开市。",
+                    )
                 )
         preview = Preview(
             active_at=order.active_at,
