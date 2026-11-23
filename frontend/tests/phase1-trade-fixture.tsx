@@ -10,6 +10,10 @@ import "../src/styles.css";
 const client = new QueryClient({
 	defaultOptions: { queries: { retry: false, staleTime: 20000 } },
 });
+// 组件测试用它触发计划查询的后台重新获取。
+(
+	window as unknown as { stockmockQueryClient: QueryClient }
+).stockmockQueryClient = client;
 const side =
 	new URLSearchParams(location.search).get("side") === "sell" ? "sell" : "buy";
 function Fixture() {

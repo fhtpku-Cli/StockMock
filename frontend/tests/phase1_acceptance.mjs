@@ -60,7 +60,7 @@ async function check({ origin, password, evidence, spaceName }) {
 	];
 	const conflict = "该证券刚有进行中计划。可带入该计划，或取消同步后重新预览。";
 	const existingHint =
-		"该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒";
+		"该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒。";
 	const todayHint =
 		"计划复盘日期是今天，提交后通常 1–2 分钟内会出现在站内提醒中";
 	const retired = ["冻结人民币", "下一轮即会提醒", "将立即产生", "复查日期"];

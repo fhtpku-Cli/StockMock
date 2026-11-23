@@ -149,11 +149,15 @@ export function Trade({
 		!planBlocked;
 	const activePlan = useFirstPlan(instrument.symbol, "active", checkPlans);
 	const draftPlan = useFirstPlan(instrument.symbol, "draft", checkPlans);
+	const [openedAt] = useState(() => Date.now());
+	const planTaken = activePlan.isSuccess && activePlan.data.total > 0;
+	// 打开窗口前的缓存要等本次查询完成；窗口内取得的结果在后台重新获取时沿用，
+	// 冲突由预览检查和下单时的唯一索引兜底。
 	const canSync =
 		checkPlans &&
 		hasPlanBasis(draft) &&
 		activePlan.isSuccess &&
-		!activePlan.isFetching &&
+		(!activePlan.isFetching || activePlan.dataUpdatedAt >= openedAt) &&
 		activePlan.data.total === 0;
 	const today = fullTime(new Date().toISOString()).slice(0, 10);
 	const attempted = useRef(new Set<string>());
@@ -393,7 +397,6 @@ export function Trade({
 			dialog.style.removeProperty("scroll-padding-bottom");
 		};
 	}, [stickyActions]);
-	const planTaken = activePlan.isSuccess && activePlan.data.total > 0;
 	const conflictError =
 		isSyncConflict(preview.error) || isSyncConflict(submit.error);
 	const syncBlocked =
@@ -732,11 +735,14 @@ export function Trade({
 							</div>
 						</div>
 					</details>
-					{checkPlans && draftPlan.isSuccess && draftPlan.data.total > 0 && (
-						<p className="footnote">
-							已有草稿计划；关联草稿不会产生提醒，如需提醒请先在计划中启用。
-						</p>
-					)}
+					{checkPlans &&
+						!planTaken &&
+						draftPlan.isSuccess &&
+						draftPlan.data.total > 0 && (
+							<p className="footnote">
+								已有草稿计划；关联草稿不会产生提醒，如需提醒请先在计划中启用。
+							</p>
+						)}
 					{canSync && (
 						<label className="confirm-check">
 							<input
@@ -750,9 +756,11 @@ export function Trade({
 						</label>
 					)}
 					{checkPlans && planTaken && !draft.saveAsPlan && (
-						<p className="footnote">
-							该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒
-						</p>
+						<div className="field">
+							<p className="footnote">
+								该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒。
+							</p>
+						</div>
 					)}
 					{syncBlocked && (
 						<div className="notice sync-notice" role="status">

@@ -45,7 +45,8 @@ const reminders = [
 const conflict = "该证券刚有进行中计划。可带入该计划，或取消同步后重新预览。";
 const todayHint = "计划复盘日期是今天，提交后通常 1–2 分钟内会出现在站内提醒中";
 const existingHint =
-	"该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒";
+	"该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒。";
+const draftHint = /已有草稿计划/;
 const retired = ["冻结人民币", "下一轮即会提醒", "将立即产生", "复查日期"];
 const preview = {
 	price_bound: "100",
@@ -124,6 +125,7 @@ test.each([
 	"预览冲突",
 	"重试冲突",
 	"桌面",
+	"重新获取",
 ])(
 	"同步计划：%s",
 	async (mode) => {
@@ -157,7 +159,9 @@ test.each([
 			plan_review_date: "2026-11-24",
 		};
 		let active = mode === "已有计划",
-			reads = 0;
+			reads = 0,
+			draftReads = 0,
+			hold: PromiseWithResolvers<void> | undefined;
 		const previews: string[] = [],
 			orders: Record<string, unknown>[] = [],
 			retries: (string | null)[] = [];
@@ -176,12 +180,14 @@ test.each([
 						expect(u.searchParams.get("limit")).toBe("1");
 						reads++;
 						await ready.promise;
+						await hold?.promise;
 						if (mode === "查询失败")
 							return route.fulfill({
 								status: 400,
 								json: { detail: "受控失败" },
 							});
 					}
+					if (status === "draft") draftReads++;
 					const activePlan = { ...draft, status: "active" };
 					const items =
 						status === "active"
@@ -316,8 +322,27 @@ test.each([
 			}
 			if (mode === "已有计划") {
 				ready.resolve();
-				await check(page.getByText(existingHint)).toBeVisible();
+				await check(
+					page.getByText(existingHint, { exact: true }),
+				).toBeVisible();
 				await check(box).toHaveCount(0);
+				await check.poll(() => draftReads).toBeGreaterThan(0);
+				await page.waitForTimeout(300);
+				await check(page.getByText(draftHint)).toHaveCount(0);
+				const gap = await page.evaluate(() => {
+					const rows = Array.from(document.querySelectorAll("p"));
+					const hint = rows.find((row) =>
+						row.textContent?.startsWith("该证券已有进行中计划"),
+					);
+					const next = rows.find((row) =>
+						row.textContent?.startsWith("提交后等待有效行情确认"),
+					);
+					return (
+						(next?.getBoundingClientRect().top ?? 0) -
+						(hint?.getBoundingClientRect().bottom ?? 0)
+					);
+				});
+				expect(gap).toBeGreaterThanOrEqual(12);
 				await page.getByLabel("带入已有计划").selectOption("p");
 				await check(page.getByText(existingHint)).toHaveCount(0);
 				await noRetiredText(page);
@@ -373,6 +398,41 @@ test.each([
 			await check(box).not.toBeChecked();
 			await box.check();
 			await page.getByLabel("限价（USD）").fill("100");
+			if (mode === "重新获取") {
+				await check(page.getByText(draftHint)).toBeVisible();
+				hold = Promise.withResolvers<void>();
+				const before = reads;
+				await page.evaluate(() => {
+					void (
+						window as unknown as {
+							stockmockQueryClient: {
+								invalidateQueries: (filter: object) => Promise<void>;
+							};
+						}
+					).stockmockQueryClient.invalidateQueries({ queryKey: ["plans"] });
+				});
+				await check.poll(() => reads).toBeGreaterThan(before);
+				await check(box).toBeChecked();
+				await check(
+					page.getByLabel("计划复盘日期（北京时间，选填）"),
+				).toBeVisible();
+				await check(page.getByText(/暂未确认是否有进行中计划/)).toHaveCount(0);
+				await check(run).toBeEnabled();
+				const sent = previews.length;
+				await run.click();
+				await check(
+					page.getByRole("region", { name: "委托预览" }),
+				).toBeVisible();
+				expect(previews.length).toBe(sent + 1);
+				active = true;
+				hold.resolve();
+				await conflictShownOnce(page);
+				await check(page.getByText(draftHint)).toHaveCount(0);
+				await check(
+					page.getByRole("button", { name: "确认提交委托" }),
+				).toBeDisabled();
+				return;
+			}
 			if (mode === "预览冲突") {
 				await run.click();
 				await conflictShownOnce(page);
@@ -418,6 +478,8 @@ test.each([
 			await check(actions).not.toHaveClass(/trade-actions/);
 			await run.click();
 			await check(view).not.toContainText("计划复盘日期");
+			// 成功后对计划的刷新先挂起：重新打开时缓存仍是“无进行中计划”。
+			if (mode === "成功") hold = Promise.withResolvers<void>();
 			await page.getByRole("button", { name: "确认提交委托" }).click();
 			await check.poll(() => orders.length).toBe(1);
 			expect(new Set(previews).size).toBe(2);
@@ -444,16 +506,22 @@ test.each([
 				await check(page.getByRole("status").first()).toContainText(
 					"编号 order-00。已同时创建 AAPL 的进行中计划。最新状态见委托记录。",
 				);
+				// 打开窗口前的缓存（无进行中计划）在本次查询完成前不能用来显示勾选框。
 				await page.getByRole("button", { name: "再次买入" }).click();
 				await reason.fill("再次交易");
+				await page.waitForTimeout(300);
+				expect(await box.count()).toBe(0);
+				hold?.resolve();
 			} else await conflictShownOnce(page);
 			await check(
 				page.getByLabel("带入已有计划").getByRole("option", { name: /进行中/ }),
 			).toHaveCount(1);
 			await check(box).toHaveCount(0);
 			expect(reads).toBeGreaterThan(1);
-			if (mode === "成功")
+			if (mode === "成功") {
 				await check(page.getByText(existingHint)).toBeVisible();
+				await check(page.getByText(draftHint)).toHaveCount(0);
+			}
 			if (mode === "冲突") {
 				await check(run).toBeDisabled();
 				await page.getByRole("button", { name: "取消同步计划" }).click();
