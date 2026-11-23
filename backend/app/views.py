@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Final, Literal
+from threading import Lock
+from typing import Final, Literal, final
 
 from app.accounting import ACTIVE, money, reserved, sellable
 from app.activated_registry import RuleProvider
@@ -21,9 +22,10 @@ from app.models import (
     Portfolio,
     PositionView,
     SellabilityView,
+    State,
     WorkerView,
 )
-from app.valuation import value_account
+from app.valuation import Valuation, value_account
 
 Market = Literal["CN", "HK", "US"]
 
@@ -105,7 +107,56 @@ def position_change(
     return quote_change(market, reference)
 
 
-def portfolio(engine: Engine, now: datetime, worker: WorkerView, display: RuleProvider | None = None) -> Portfolio:
+@dataclass(frozen=True, slots=True)
+class ValuedState:
+    """同一轮资产计算的分母、报价、汇率和账户状态。"""
+
+    state: State
+    valuation: Valuation
+    at: datetime
+
+
+@final
+class ValuationCache:
+    """每个应用保留最近一次通过一致性检查的估值。"""
+
+    def __init__(self) -> None:
+        """建立只供本应用使用的空缓存。"""
+        self.lock = Lock()
+        self.latest: ValuedState | None = None
+
+    def put(self, record: ValuedState) -> None:
+        """一次替换完整记录，避免读到混合状态。"""
+        with self.lock:
+            self.latest = record
+
+    def match(self, state: State, now: datetime) -> ValuedState | None:
+        """仅返回六十秒内与本次预览账本相同的估值。"""
+        with self.lock:
+            lookup = self.latest
+        if lookup and timedelta(0) <= now - lookup.at <= timedelta(seconds=60) and lookup.state == state:
+            return lookup
+        return None
+
+
+def value_cny(value: Decimal | None, rate: Decimal | None) -> Decimal | None:
+    """用已舍入的原币市值计算人民币市值；缺价或缺汇率保留未知。"""
+    return money(value * rate) if value is not None and rate is not None else None
+
+
+def holding_weight(value: Decimal | None, rate: Decimal | None, total: Decimal | None) -> Decimal | None:
+    """资产页和预览共享原币市值、折算和分母。"""
+    return percentage(value_cny(value, rate), total)
+
+
+def portfolio(
+    engine: Engine,
+    now: datetime,
+    worker: WorkerView,
+    display: RuleProvider | None = None,
+    *,
+    cache: ValuationCache | None = None,
+) -> Portfolio:
     """汇总现金和持仓；缺失数据不按零价估值。"""
     state = engine.store.read()
     valuation = value_account(engine, state, now)
@@ -116,6 +167,8 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView, display: RulePr
         valuation = value_account(engine, state, now)
     if engine.store.read() != state:
         raise DomainError("valuation_changed", "账户正在变化，请刷新重试", 409)
+    if cache is not None:
+        cache.put(ValuedState(state, valuation, now))
     cash = [
         CashView(
             currency=c,
@@ -148,15 +201,8 @@ def portfolio(engine: Engine, now: datetime, worker: WorkerView, display: RulePr
                 market=item.market,
                 cost=cost,
                 pnl_percent=percentage(pnl, cost),
-                market_value_cny=money(value * valuation.rates[item.currency])
-                if value is not None and item.currency in valuation.rates
-                else None,
-                weight_percent=percentage(
-                    money(value * valuation.rates[item.currency])
-                    if value is not None and item.currency in valuation.rates
-                    else None,
-                    valuation.total,
-                ),
+                market_value_cny=value_cny(value, valuation.rates.get(item.currency)),
+                weight_percent=holding_weight(value, valuation.rates.get(item.currency), valuation.total),
                 price_time=valuation.times.get(symbol),
                 sellability=SellabilityView(
                     locked_quantity=sum(lot.quantity for lot in locked),

@@ -1,6 +1,5 @@
 """隔离 SQLite 上的计划同步、原载荷恢复和观察时效。"""
 
-from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -10,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from app import plan_worker
 from app.engine import Engine
-from app.main import create_app
 from app.models import OrderInput, OrderView
 from app.plan_alerts import alerts
 from app.plan_models import PlanInput
@@ -18,16 +16,7 @@ from app.plan_worker import PlanWorker
 from app.plans import create_plan, round_plans
 from app.storage import read_rows
 from tests.round_support import BarrierProvider, MarketClock, set_clock
-from tests.test_api import PASSWORD
 from tests.test_engine import NOW, ControlledProvider, request
-
-
-@pytest.fixture
-def api(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient]:
-    set_clock(monkeypatch)
-    with TestClient(create_app(engine, PASSWORD, run_worker=False)) as session:
-        assert session.post("/api/auth/login", json={"password": PASSWORD}).status_code == 200
-        yield session
 
 
 def sync_request() -> OrderInput:

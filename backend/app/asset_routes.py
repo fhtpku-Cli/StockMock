@@ -17,7 +17,7 @@ from app.models import (
 )
 from app.operations import convert
 from app.plan_worker import PlanWorker
-from app.views import portfolio
+from app.views import ValuationCache, portfolio
 from app.worker import Worker
 
 
@@ -28,6 +28,7 @@ def register(  # noqa: PLR0913 展示读取源必须显式传入，不从 engine
     worker: Worker,
     plan_worker: PlanWorker,
     *,
+    cache: ValuationCache,
     display: RuleProvider | None = None,
 ) -> None:
     """注册本模块的个人账户 HTTP 接口。"""
@@ -38,7 +39,7 @@ def register(  # noqa: PLR0913 展示读取源必须显式传入，不从 engine
 
     @app.get("/api/portfolio", dependencies=[Depends(auth.require)])
     def account() -> Portfolio:
-        return portfolio(engine, datetime.now(UTC), worker.view, display)
+        return portfolio(engine, datetime.now(UTC), worker.view, display, cache=cache)
 
     @app.get("/api/fx", dependencies=[Depends(auth.require)])
     def fx() -> tuple[FxRate, ...]:

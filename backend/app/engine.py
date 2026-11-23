@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Protocol, final
@@ -13,12 +14,22 @@ from app.calendar import is_open, previous_segment_end, prior_session_close, pri
 from app.catalog import CATALOG, from_rule, instrument
 from app.marketdata import Bar, FxRate, MarketDataError, Quote
 from app.matching import advance, confirm_cutoff, valid_observation, validate_batch
-from app.models import DomainError, Instrument, Order, OrderInput, Preview, StopLoss
+from app.models import DomainError, Instrument, Order, OrderInput, Preview, State, StopLoss
 from app.order_builder import OrderContext, build_order
 from app.order_requests import check_expected_round, retry_order
 from app.order_views import candidate_interval
 from app.plans import check_sync_preview, order_snapshot, snapshot_request
 from app.storage import Store
+
+
+@dataclass(frozen=True, slots=True)
+class PreviewContext:
+    """预览计算实际使用的状态、报价及汇率，仅在进程内传递。"""
+
+    preview: Preview
+    state: State
+    quote: Quote
+    rate: FxRate | None
 
 
 class Provider(Protocol):
@@ -163,15 +174,20 @@ class Engine:
 
     def preview(self, request: OrderInput, now: datetime) -> Preview:
         """检查委托资源并返回预览，不改变账户。"""
+        return self.preview_with_context(request, now).preview
+
+    def preview_with_context(self, request: OrderInput, now: datetime) -> PreviewContext:
+        """保留构建本笔委托所用的同批输入。"""
         with self.store.transaction() as connection:
             state = self.store.load(connection)
             check_expected_round(request, state.id)
             _ = order_snapshot(connection, state, request)
             check_sync_preview(connection, state, request, now)
         quote, rate, reference = self.prepare(request, now)
+        state = self.store.read()
         order = build_order(
             instrument(request.symbol, self.catalog),
-            self.store.read(),
+            state,
             request,
             OrderContext(quote, rate, now, reference),
         )
@@ -197,7 +213,7 @@ class Engine:
                 warnings.append(
                     "提交后，后台取到 20 分钟内的有效报价且仍满足条件时会提醒；刚收盘时仍可能按收盘前的报价提醒，之后要等下次开市。"  # noqa: E501 用户确认的完整提示。
                 )
-        return Preview(
+        preview = Preview(
             active_at=order.active_at,
             first_candidate_interval=candidate_interval(order, self.catalog),
             price_bound=order.price_bound,
@@ -211,6 +227,7 @@ class Engine:
             expires_at=order.expires_at,
             warnings=warnings,
         )
+        return PreviewContext(preview, state, quote, rate)
 
     def place(self, request: OrderInput, now: datetime) -> Order:
         """以请求编号保证委托受理幂等。"""

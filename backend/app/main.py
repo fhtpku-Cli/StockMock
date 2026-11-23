@@ -33,6 +33,7 @@ from app.security import AccessConfig
 from app.security import register as register_security
 from app.storage import Store
 from app.trading_routes import register as register_trading_routes
+from app.views import ValuationCache
 from app.worker import Worker
 
 
@@ -83,6 +84,8 @@ def create_app(
             group.cancel_scope.cancel()
 
     app = FastAPI(title="个人模拟投资", version="0.5.0", lifespan=lifespan)
+    cache = ValuationCache()
+    app.state.valuation_cache = cache
     app.state.engine = engine
     app.state.worker = worker
     app.state.plan_worker = plan_worker
@@ -111,9 +114,9 @@ def create_app(
     register_auth_routes(app, auth)
     register_market_routes(app, engine, auth, display)
     register_admission_routes(app, engine, auth)
-    register_trading_routes(app, engine, auth, worker)
+    register_trading_routes(app, engine, auth, worker, cache)
     register_record_routes(app, engine, auth)
-    register_asset_routes(app, engine, auth, worker, plan_worker, display=display)
+    register_asset_routes(app, engine, auth, worker, plan_worker, cache=cache, display=display)
     register_personal_routes(app, engine, auth)
     register_plan_routes(app, engine, auth)
     register_review_routes(app, engine, auth, worker)

@@ -3,24 +3,29 @@
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 from http import HTTPStatus
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Header, Query
 
+from app.accounting import ACTIVE, available, money
 from app.auth import Auth
-from app.engine import Engine
+from app.composition import percentage
+from app.engine import Engine, PreviewContext
 from app.models import (
     DomainError,
     Order,
     OrderInput,
     OrderView,
+    PositionImpact,
     Preview,
 )
 from app.order_requests import OrderRejection, order_receipt, reject_order
 from app.order_views import WaitingContext, order_view
 from app.personal_models import Sizing
 from app.sizing import size_order
+from app.views import ValuationCache, ValuedState, holding_weight
 from app.worker import Worker
 
 
@@ -39,13 +44,93 @@ def place_order(engine: Engine, body: OrderInput, now: datetime, *, retry: bool)
     return order
 
 
-def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker) -> None:
+RateSource = Literal["估值汇率", "预览汇率", "人民币原币"]
+
+
+def preview_rate(
+    context: PreviewContext, cached: ValuedState | None
+) -> tuple[Decimal | None, RateSource | None, datetime | None]:
+    """优先使用账户估值汇率，首次买入外币证券时可使用同次预览取得的汇率。"""
+    currency = context.quote.currency
+    if currency == "CNY":
+        return Decimal(1), "人民币原币", None
+    if cached and currency in cached.valuation.rates:
+        return cached.valuation.rates[currency], "估值汇率", cached.valuation.times.get(f"FX:{currency}")
+    if context.rate and context.rate.cny_per_unit > 0:
+        return context.rate.cny_per_unit, "预览汇率", context.rate.market_time
+    return None, None, None
+
+
+def rounded(value: Decimal | None) -> Decimal | None:
+    """仅在对外展示比例时量化到两位。"""
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if value is not None else None
+
+
+def estimate_position(context: PreviewContext, request: OrderInput, cached: ValuedState | None) -> Preview:
+    """仅使用已经取到的数据拼装预览；估值缺失时保留原有预览和受理能力。"""
+    preview, quote, state = context.preview, context.quote, context.state
+    rate, source, fx_time = preview_rate(context, cached)
+    total = cached.valuation.total if cached else None
+    held = sum(lot.quantity for lot in state.lots if lot.symbol == request.symbol)
+    impact = PositionImpact(
+        status="expired" if cached is None else ("missing_fx" if rate is None else "incomplete"),
+        quote_time=quote.market_time,
+        valuation_time=cached.at if cached else None,
+        fx_source=source,
+        fx_time=fx_time,
+        active_orders=sum(order.status in ACTIVE for order in state.orders),
+    )
+    stop_loss = preview.stop_loss
+    if stop_loss is not None and rate is not None:
+        cny = money(stop_loss.amount * rate)
+        stop_loss = stop_loss.model_copy(update={"cny": cny, "asset_percent": rounded(percentage(cny, total))})
+    if cached is not None and total is not None and total > 0 and rate is not None:
+        price = cached.valuation.prices.get(request.symbol) if held else quote.price
+        if price is not None:
+            direction = 1 if request.side == "buy" else -1
+            cash_price = preview.price_bound if request.order_type == "limit" else quote.price
+            gross = money(request.quantity * cash_price)
+            cash_delta = money((-direction * gross - preview.estimated_fee) * rate)
+            value_delta = money(money(request.quantity * price) * rate)
+            after_total = total + cash_delta + direction * value_delta
+            current = holding_weight(money(held * price), rate, total)
+            after = holding_weight(money((held + direction * request.quantity) * price), rate, after_total)
+            if after is not None:
+                impact = impact.model_copy(
+                    update={
+                        "status": "complete",
+                        "current_percent": rounded(current),
+                        "after_percent": rounded(after),
+                        "quote_time": cached.valuation.times[request.symbol] if held else quote.market_time,
+                    }
+                )
+    if impact.status != "complete":
+        if request.side == "sell":
+            impact = impact.model_copy(update={"remaining_quantity": held - request.quantity})
+        else:
+            impact = impact.model_copy(
+                update={
+                    "reserved_cny_percent": rounded(percentage(preview.reserved_cny, available(state, "CNY")))
+                    if preview.reserved_cny
+                    else None,
+                    "reserved_foreign_percent": rounded(
+                        percentage(preview.reserved_foreign, available(state, quote.currency))
+                    )
+                    if preview.reserved_foreign
+                    else None,
+                }
+            )
+    return preview.model_copy(update={"position_impact": impact, "stop_loss": stop_loss})
+
+
+def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker, cache: ValuationCache) -> None:
     """注册本模块的个人账户 HTTP 接口。"""
 
     @app.post("/api/orders/preview", dependencies=[Depends(auth.require)])
     def preview(body: OrderInput) -> Preview:
         """检查委托资源并返回预览，不改变账户。"""
-        return engine.preview(body, datetime.now(UTC))
+        context = engine.preview_with_context(body, datetime.now(UTC))
+        return estimate_position(context, body, cache.match(context.state, datetime.now(UTC)))
 
     @app.post("/api/orders/size", dependencies=[Depends(auth.require)])
     def sizing(body: OrderInput, percent: Annotated[int, Query(ge=1, le=100)] = 100) -> Sizing:
