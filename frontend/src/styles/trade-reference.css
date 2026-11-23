@@ -19,3 +19,25 @@
 	background: var(--soft);
 	border-left: 3px solid var(--accent);
 }
+.sync-notice .button-row {
+	margin-top: 8px;
+}
+
+/* 窄屏与横屏触屏：预览成功或委托待确认时，操作栏贴在弹窗滚动容器底部。 */
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+	.trade-actions {
+		position: sticky;
+		bottom: 0;
+		z-index: 1;
+		margin: 0 -20px -20px;
+		padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+		border-top: 1px solid var(--line);
+		background: var(--paper);
+	}
+	.trade-actions > :first-child {
+		margin-top: 0;
+	}
+	.trade-actions > :not(button) {
+		margin-bottom: 12px;
+	}
+}

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import {
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { z } from "zod";
 import {
 	ApiError,
@@ -59,6 +65,33 @@ function hasPlanBasis(draft: Draft) {
 	return Boolean(draft.reason.trim() || draft.target || draft.stop);
 }
 
+const SYNC_CONFLICT =
+	"该证券刚有进行中计划。可带入该计划，或取消同步后重新预览。";
+// 首次提交与预览返回 plan_sync_conflict；带重试头时同一拒绝以 order_receipt_rejected 返回。
+function isSyncConflict(error: unknown) {
+	return (
+		error instanceof ApiError &&
+		(error.code === "plan_sync_conflict" ||
+			(error.code === "order_receipt_rejected" &&
+				error.message.includes(SYNC_CONFLICT)))
+	);
+}
+
+// 与 mobile-surfaces.css 的窄屏/横屏触屏断点一致；桌面宽度保持原布局。
+const COMPACT = "(max-width: 700px), (max-height: 500px) and (pointer: coarse)";
+function watchCompact(notify: () => void) {
+	const query = window.matchMedia(COMPACT);
+	query.addEventListener("change", notify);
+	return () => query.removeEventListener("change", notify);
+}
+function useCompact() {
+	return useSyncExternalStore(
+		watchCompact,
+		() => window.matchMedia(COMPACT).matches,
+		() => false,
+	);
+}
+
 export function Trade({
 	instrument,
 	side,
@@ -83,6 +116,8 @@ export function Trade({
 		(row) => row.symbol === instrument.symbol,
 	);
 	const previewStart = useRef<HTMLElement>(null);
+	const actions = useRef<HTMLDivElement>(null);
+	const compact = useCompact();
 	const [draft, setDraft] = useState<Draft>({
 		quantity: original
 			? String(original.quantity)
@@ -342,6 +377,32 @@ export function Trade({
 		document.addEventListener("visibilitychange", resume);
 		return () => document.removeEventListener("visibilitychange", resume);
 	}, [preview.reset]);
+	const stickyActions = compact && (preview.isSuccess || !!unresolved);
+	useLayoutEffect(() => {
+		const bar = actions.current;
+		const dialog = bar?.closest("dialog");
+		if (!stickyActions || !bar || !dialog) return;
+		const measure = () => {
+			dialog.style.scrollPaddingBottom = `${bar.offsetHeight}px`;
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(bar);
+		return () => {
+			observer.disconnect();
+			dialog.style.removeProperty("scroll-padding-bottom");
+		};
+	}, [stickyActions]);
+	const planTaken = activePlan.isSuccess && activePlan.data.total > 0;
+	const conflictError =
+		isSyncConflict(preview.error) || isSyncConflict(submit.error);
+	const syncBlocked =
+		draft.saveAsPlan && !unresolved && (!canSync || conflictError);
+	const syncConflict = syncBlocked && (planTaken || conflictError);
+	const shownError = (error: Error | null) =>
+		error && !(syncConflict && isSyncConflict(error)) ? error : null;
+	const previewError = shownError(preview.error);
+	const submitError = shownError(submit.error);
 	const change = (patch: Partial<Draft>) => {
 		setDraft((previous) => {
 			const next = { ...previous, ...patch, requestId: crypto.randomUUID() };
@@ -366,6 +427,21 @@ export function Trade({
 			</Modal>
 		);
 	}
+	const submitNotices = (
+		<>
+			{submitError && <ErrorNotice message={errorMessage(submitError)} />}
+			{validityNotice && (
+				<p className="notice" role="status">
+					{validityNotice}
+				</p>
+			)}
+			{unresolved && !submit.isPending && (
+				<p className="notice" role="status">
+					委托结果尚未确认。请联网后重试确认结果；将核对原委托，不会重复创建。确认前暂不能修改交易内容或关闭窗口。
+				</p>
+			)}
+		</>
+	);
 	return (
 		<Modal
 			title={`${side === "buy" ? "模拟买入" : "模拟卖出"} · ${instrument.name}`}
@@ -670,27 +746,36 @@ export function Trade({
 									change({ saveAsPlan: event.target.checked })
 								}
 							/>
-							同时保存为该证券的进行中计划（启用到价提醒与后续复查）
+							同时保存为该证券的进行中计划（启用到价提醒与复盘提醒）
 						</label>
 					)}
-					{draft.saveAsPlan && !canSync && !unresolved && (
-						<div className="notice" role="status">
-							{activePlan.isSuccess && activePlan.data.total > 0
-								? "已有进行中计划。可带入该计划，也可取消同步后重新预览。"
-								: "暂未确认是否有进行中计划。你可以等查询完成，或取消同步后重新预览。"}
-							<button
-								type="button"
-								className="button small"
-								onClick={() => change({ saveAsPlan: false })}
-							>
-								取消同步计划
-							</button>
+					{checkPlans && planTaken && !draft.saveAsPlan && (
+						<p className="footnote">
+							该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒
+						</p>
+					)}
+					{syncBlocked && (
+						<div className="notice sync-notice" role="status">
+							<p>
+								{syncConflict
+									? SYNC_CONFLICT
+									: "暂未确认是否有进行中计划。你可以等查询完成，或取消同步后重新预览。"}
+							</p>
+							<div className="button-row">
+								<button
+									type="button"
+									className="button small"
+									onClick={() => change({ saveAsPlan: false })}
+								>
+									取消同步计划
+								</button>
+							</div>
 						</div>
 					)}
 					{canSync && draft.saveAsPlan && (
 						<div className="field">
 							<label htmlFor="plan-review-date">
-								复查日期（北京时间，选填）
+								计划复盘日期（北京时间，选填）
 							</label>
 							<input
 								id="plan-review-date"
@@ -700,25 +785,15 @@ export function Trade({
 								onChange={(event) => change({ reviewDate: event.target.value })}
 							/>
 							{draft.reviewDate === today && (
-								<p className="footnote">下一轮即会提醒</p>
+								<p className="footnote">
+									计划复盘日期是今天，提交后通常 1–2 分钟内会出现在站内提醒中
+								</p>
 							)}
 						</div>
 					)}
 				</fieldset>
-				{preview.isError && (
-					<ErrorNotice message={errorMessage(preview.error)} />
-				)}{" "}
-				{submit.isError && <ErrorNotice message={errorMessage(submit.error)} />}
-				{validityNotice && (
-					<p className="notice" role="status">
-						{validityNotice}
-					</p>
-				)}
-				{unresolved && !submit.isPending && (
-					<p className="notice" role="status">
-						委托结果尚未确认。请联网后重试确认结果；将核对原委托，不会重复创建。确认前暂不能修改交易内容或关闭窗口。
-					</p>
-				)}
+				{previewError && <ErrorNotice message={errorMessage(previewError)} />}{" "}
+				{!stickyActions && submitNotices}
 				{preview.isSuccess && (
 					<section
 						ref={previewStart}
@@ -731,35 +806,42 @@ export function Trade({
 							preview={preview.data}
 							currency={instrument.currency}
 							side={side}
+							quantity={payload.quantity}
 						/>
 					</section>
 				)}
 				<p className="footnote">
 					提交后等待有效行情确认，可能延迟成交。撤单确认前，资金或持仓继续占用。
 				</p>
-				<button
-					className="button primary full"
-					type="submit"
-					disabled={
-						!online ||
-						planBlocked ||
-						(!unresolved && draft.saveAsPlan && !canSync) ||
-						loadOriginalPlan.isPending ||
-						sizing.isPending ||
-						preview.isPending ||
-						submit.isPending
-					}
+				<div
+					ref={actions}
+					className={stickyActions ? "trade-actions" : undefined}
 				>
-					{submit.isPending
-						? "正在提交…"
-						: unresolved
-							? "重试确认委托结果"
-							: preview.isPending
-								? "正在计算…"
-								: preview.isSuccess
-									? "确认提交委托"
-									: "预览费用与资金占用"}
-				</button>
+					{stickyActions && submitNotices}
+					<button
+						className="button primary full"
+						type="submit"
+						disabled={
+							!online ||
+							planBlocked ||
+							(!unresolved && draft.saveAsPlan && !canSync) ||
+							loadOriginalPlan.isPending ||
+							sizing.isPending ||
+							preview.isPending ||
+							submit.isPending
+						}
+					>
+						{submit.isPending
+							? "正在提交…"
+							: unresolved
+								? "重试确认委托结果"
+								: preview.isPending
+									? "正在计算…"
+									: preview.isSuccess
+										? "确认提交委托"
+										: "预览费用与资金占用"}
+					</button>
+				</div>
 			</form>
 		</Modal>
 	);

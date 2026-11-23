@@ -7,6 +7,7 @@ import {
 	findOrderReceipt,
 	invalidateOrderPlanQueries,
 	isFinalOrderRejection,
+	planCreatedWithOrder,
 	readPendingOrderRecord,
 	type Submission,
 } from "./pendingOrder";
@@ -115,7 +116,9 @@ export function OrderRecovery({ onClose }: { readonly onClose: () => void }) {
 		case "accepted":
 			message =
 				(result.retried ? "原委托已受理。" : "已确认原委托曾被受理。") +
-				(pending?.save_as_plan ? "已同时创建进行中计划。" : "") +
+				(planCreatedWithOrder(result.order)
+					? `已同时创建 ${result.order.symbol} 的进行中计划。`
+					: "") +
 				"以下显示原委托的最新状态，归档后的记录属于原练习轮次。";
 			break;
 		case "rejected":
@@ -149,7 +152,7 @@ export function OrderRecovery({ onClose }: { readonly onClose: () => void }) {
 							}`}
 					。原有效期至 {fullTime(pending.expected_expires_at)}（北京时间）。
 					{pending.save_as_plan &&
-						`原委托已勾选同步计划${pending.plan_review_date ? `，复查日期 ${pending.plan_review_date}` : ""}。`}
+						`原委托已勾选同步计划${pending.plan_review_date ? `，计划复盘日期 ${pending.plan_review_date}` : ""}。`}
 				</p>
 			)}
 			{result.kind === "accepted" && <OrderRecord order={result.order} />}

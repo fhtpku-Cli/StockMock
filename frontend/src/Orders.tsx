@@ -4,7 +4,7 @@ import { z } from "zod";
 import { api, errorMessage } from "./api";
 import { CsvDownload } from "./CsvDownload";
 import { OrderRecord } from "./OrderRecord";
-import { clearPendingOrder } from "./pendingOrder";
+import { clearPendingOrder, planCreatedWithOrder } from "./pendingOrder";
 import {
 	initialRecordFilter,
 	RecordFilters,
@@ -76,8 +76,10 @@ export function Orders({
 			{receipt && (
 				<p role="status" className="trade-receipt" ref={receiptRef}>
 					已收到 {receipt.symbol} 的{receipt.side === "buy" ? "买入" : "卖出"}
-					委托 · {receipt.quantity} 股 / 份 · 编号 {receipt.id.slice(0, 8)}
-					。最新状态见委托记录。
+					委托 · {receipt.quantity} 股 / 份 · 编号 {receipt.id.slice(0, 8)}。
+					{planCreatedWithOrder(receipt) &&
+						`已同时创建 ${receipt.symbol} 的进行中计划。`}
+					最新状态见委托记录。
 				</p>
 			)}
 			{receiptStorageError && <ErrorNotice message={receiptStorageError} />}

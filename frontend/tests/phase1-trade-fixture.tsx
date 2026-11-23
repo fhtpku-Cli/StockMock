@@ -2,16 +2,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { OrderRecovery } from "../src/OrderRecovery";
+import { Orders } from "../src/Orders";
+import type { Order } from "../src/schema";
 import { Trade } from "../src/Trade";
 import "../src/styles.css";
 
 const client = new QueryClient({
 	defaultOptions: { queries: { retry: false, staleTime: 20000 } },
 });
+const side =
+	new URLSearchParams(location.search).get("side") === "sell" ? "sell" : "buy";
 function Fixture() {
 	const [screen, setScreen] = useState<"trade" | "closed" | "recovery">(
 		"trade",
 	);
+	const [receipt, setReceipt] = useState<Order>();
 	if (screen === "recovery")
 		return <OrderRecovery onClose={() => setScreen("closed")} />;
 	return screen === "trade" ? (
@@ -27,9 +32,12 @@ function Fixture() {
 				tradable: true,
 				restriction: null,
 			}}
-			side="buy"
+			side={side}
 			onClose={() => setScreen("closed")}
-			onSuccess={() => setScreen("closed")}
+			onSuccess={(order) => {
+				setReceipt(order);
+				setScreen("closed");
+			}}
 		/>
 	) : (
 		<>
@@ -39,6 +47,9 @@ function Fixture() {
 			<button type="button" onClick={() => setScreen("recovery")}>
 				核对委托
 			</button>
+			{receipt && (
+				<Orders receipt={receipt} initialFilter="all" onReorder={() => {}} />
+			)}
 		</>
 	);
 }

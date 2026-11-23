@@ -9,7 +9,8 @@ import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const evidence = root + ".omo/evidence/phase1/";
+const evidence =
+	root + ".omo/evidence/" + (process.env.PHASE1_EVIDENCE ?? "phase1") + "/";
 const socket = createServer();
 socket.listen(0, "127.0.0.1");
 await once(socket, "listening");
@@ -53,8 +54,18 @@ async function check({ origin, password, evidence, spaceName }) {
 	let frontendAsset;
 	const source =
 		"受控行情、固定交易时钟、临时 SQLite，实际运行候选页面和交易接口";
-	const note =
-		"提交后，后台取到 20 分钟内的有效报价且仍满足条件时会提醒；刚收盘时仍可能按收盘前的报价提醒，之后要等下次开市。";
+	const notes = [
+		"提交后，报价仍满足条件时会站内提醒。",
+		"只认 20 分钟内的交易时段报价：收盘后约 20 分钟内仍按收盘前报价判断，之后要等下次开市。",
+	];
+	const conflict = "该证券刚有进行中计划。可带入该计划，或取消同步后重新预览。";
+	const existingHint =
+		"该证券已有进行中计划，可在「带入已有计划」中选择，沿用其提醒";
+	const todayHint =
+		"计划复盘日期是今天，提交后通常 1–2 分钟内会出现在站内提醒中";
+	const retired = ["冻结人民币", "下一轮即会提醒", "将立即产生", "复查日期"];
+	const viewports = [];
+	const noRetired = (shown) => retired.every((word) => !shown.includes(word));
 	const button = (caption) => "loc=role:button[name='" + caption + "']";
 	const wait = (selector) =>
 		page.waitForSelector(selector, { state: "visible", timeout: 12000 });
@@ -115,7 +126,11 @@ async function check({ origin, password, evidence, spaceName }) {
 		);
 		await writeFile(
 			evidence + "browser.json",
-			JSON.stringify({ source, frontendAsset, scenarios: results }, null, 2),
+			JSON.stringify(
+				{ source, frontendAsset, scenarios: results, viewports },
+				null,
+				2,
+			),
 		);
 		console.log(name + "：通过");
 	};
@@ -145,6 +160,145 @@ async function check({ origin, password, evidence, spaceName }) {
 		await wait(".preview-box");
 		return text(".preview-box");
 	};
+	const reason = "受控验收：第一次买入并同步";
+	// 场景 1 预览后逐个视口重新预览：提交按钮无需滚动即可见，且文字与输入框不被操作栏遮挡。
+	// 软键盘按 ui.tsx 对 visualViewport 缩小的处理写入可视高度，属于浏览器仿真，不是真机键盘。
+	const checkViewport = async ({ name, width, height, keyboard = 0 }) => {
+		await page.cdp("Emulation.setDeviceMetricsOverride", {
+			width,
+			height,
+			deviceScaleFactor: 1,
+			mobile: true,
+		});
+		await page.cdp("Emulation.setTouchEmulationEnabled", {
+			enabled: true,
+			maxTouchPoints: 5,
+		});
+		await page.waitForFunction(
+			(size) => innerWidth === size.width && innerHeight === size.height,
+			{ width, height },
+		);
+		await page.fill("#reason", reason + " ");
+		await page.fill("#reason", reason);
+		await page.waitForFunction(() => !document.querySelector(".preview-box"));
+		if (keyboard)
+			await page.evaluate((visible) => {
+				document
+					.querySelector("dialog")
+					.style.setProperty("--visible-height", visible + "px");
+			}, height - keyboard);
+		const shown = await preview();
+		await page.waitForFunction(() =>
+			document.querySelector(".trade-actions button[type=submit]"),
+		);
+		await page.waitForTimeout(400);
+		const layout = await page.evaluate((visible) => {
+			const dialog = document.querySelector("dialog");
+			const heading = dialog.querySelector(".modal-heading");
+			const bar = dialog.querySelector(".trade-actions");
+			const submit = bar.querySelector("button[type=submit]");
+			const title = dialog.querySelector(".preview-box h3");
+			const topmost = (element) => {
+				const box = element.getBoundingClientRect();
+				const hit = document.elementFromPoint(
+					box.left + box.width / 2,
+					box.top + box.height / 2,
+				);
+				return hit === element || element.contains(hit);
+			};
+			const dialogBox = dialog.getBoundingClientRect();
+			const submitBox = submit.getBoundingClientRect();
+			const result = {
+				visibleHeight: visible,
+				coarse: matchMedia("(pointer: coarse)").matches,
+				compact: matchMedia(
+					"(max-width: 700px), (max-height: 500px) and (pointer: coarse)",
+				).matches,
+				sticky: getComputedStyle(bar).position,
+				dialogHeight: Math.round(dialogBox.height),
+				submitText: submit.innerText,
+				submitVisible:
+					submitBox.top >= dialogBox.top - 0.5 &&
+					submitBox.bottom <= Math.min(dialogBox.bottom, visible) + 0.5 &&
+					topmost(submit),
+				previewTitleVisible:
+					title.getBoundingClientRect().top >=
+						heading.getBoundingClientRect().bottom - 0.5 &&
+					title.getBoundingClientRect().bottom <=
+						bar.getBoundingClientRect().top + 0.5 &&
+					topmost(title),
+				horizontalOverflow:
+					document.documentElement.scrollWidth > innerWidth ||
+					dialog.scrollWidth > dialog.clientWidth + 1,
+			};
+			const fields = Array.from(
+				dialog.querySelectorAll(
+					"form input:not([type=hidden]), form select, form textarea",
+				),
+			).filter(
+				(field) =>
+					field.getClientRects().length > 0 &&
+					!field.closest("details:not([open])"),
+			);
+			dialog.scrollTop = 0;
+			result.hiddenFields = [];
+			for (const field of fields) {
+				field.focus();
+				const box = field.getBoundingClientRect();
+				if (
+					box.top < heading.getBoundingClientRect().bottom - 0.5 ||
+					box.bottom > bar.getBoundingClientRect().top + 0.5 ||
+					!topmost(field)
+				)
+					result.hiddenFields.push(field.id || field.name || field.type);
+			}
+			document.activeElement?.blur();
+			dialog.scrollTop = dialog.scrollHeight;
+			const barTop = bar.getBoundingClientRect().top;
+			result.coveredAtEnd = Array.from(
+				dialog.querySelectorAll(
+					"form p, form dt, form dd, form label, form h3, form h4, form input, form select, form textarea",
+				),
+			)
+				.filter(
+					(element) =>
+						!bar.contains(element) && element.getClientRects().length > 0,
+				)
+				.filter(
+					(element) => element.getBoundingClientRect().bottom > barTop + 0.5,
+				)
+				.map((element) => element.textContent.trim().slice(0, 24));
+			result.fieldCount = fields.length;
+			return result;
+		}, height - keyboard);
+		assert(layout.compact && layout.coarse, name + " 未进入窄屏/触屏布局");
+		assert.equal(layout.sticky, "sticky", name);
+		assert.equal(layout.submitText, "确认提交委托", name);
+		assert(layout.submitVisible, name + " 提交按钮需滚动或被遮挡");
+		assert(layout.previewTitleVisible, name + " 预览开头被遮挡");
+		assert(!layout.horizontalOverflow, name + " 横向溢出");
+		assert.deepEqual(layout.hiddenFields, [], name + " 输入框被遮挡");
+		assert.deepEqual(
+			layout.coveredAtEnd,
+			[],
+			name + " 滚到底仍有内容在操作栏下",
+		);
+		assert(layout.fieldCount >= 6, name);
+		viewports.push({ name, width, height, keyboard, layout });
+		await page.evaluate(() => {
+			document.querySelector("dialog").scrollTop = 0;
+			document
+				.querySelector(".trade-preview-start")
+				.scrollIntoView({ block: "start" });
+		});
+		const shot = await page.cdp("Page.captureScreenshot", { format: "png" });
+		await writeFile(
+			evidence + "viewport-" + String(viewports.length) + ".png",
+			Buffer.from(shot.data, "base64"),
+		);
+		console.log(name + " 视口：通过");
+		return shown;
+	};
 	await page.cdp("Emulation.setDeviceMetricsOverride", {
 		width: 375,
 		height: 812,
@@ -161,7 +315,7 @@ async function check({ origin, password, evidence, spaceName }) {
 	assert.equal((await request("/fixture/status")).name, "phase1-controlled");
 	await request("/api/auth/login", { password });
 	await open("000001.SZ");
-	await page.fill("#reason", "受控验收：第一次买入并同步");
+	await page.fill("#reason", reason);
 	await click("dialog summary");
 	await page.fill("#target", "99");
 	await page.fill("#stop", "90");
@@ -180,21 +334,50 @@ async function check({ origin, password, evidence, spaceName }) {
 		field.dispatchEvent(new Event("input", { bubbles: true }));
 		field.dispatchEvent(new Event("change", { bubbles: true }));
 	}, today);
-	await page.waitForFunction(() =>
-		document.querySelector("dialog").innerText.includes("下一轮即会提醒"),
+	await page.waitForFunction(
+		(hint) => document.querySelector("dialog").innerText.includes(hint),
+		todayHint,
 	);
-	assert((await text("dialog")).includes("下一轮即会提醒"));
+	assert(noRetired(await text("dialog")));
 	let shown = await preview();
-	assert.match(shown, /当前 0\.00%.*成交后约 1\.00%/);
-	assert.match(shown, /1,?009\.50/);
+	assert.match(shown, /仓位占总资产：当前 0\.00%.*成交后约 1\.00%/);
+	assert.match(shown, /1,?009\.50，相当于总资产的 0\.10%/);
 	assert(
-		shown.includes("当前报价已达到目标价") &&
-			shown.includes(note) &&
-			!shown.includes("将立即产生"),
+		shown.includes("提交后将同时创建进行中计划，计划复盘日期 " + today) &&
+			shown.includes("当前报价已达到目标价") &&
+			notes.every((line) => shown.includes(line)) &&
+			noRetired(shown),
+	);
+	for (const viewport of [
+		{ name: "375×667", width: 375, height: 667 },
+		{ name: "375×812", width: 375, height: 812 },
+		{
+			name: "软键盘弹出（375×667，可视高度 407）",
+			width: 375,
+			height: 667,
+			keyboard: 260,
+		},
+		{ name: "横屏触屏（812×375）", width: 812, height: 375 },
+	])
+		shown = await checkViewport(viewport);
+	await page.cdp("Emulation.setDeviceMetricsOverride", {
+		width: 375,
+		height: 812,
+		deviceScaleFactor: 1,
+		mobile: true,
+	});
+	await page.waitForFunction(() => innerWidth === 375 && innerHeight === 812);
+	await page.evaluate(() =>
+		document
+			.querySelector(".trade-preview-start")
+			.scrollIntoView({ block: "start" }),
 	);
 	await save("初次买入并同步进行中计划", shown);
 	await activateSubmit();
 	await page.waitForFunction(() => !document.querySelector("#quantity"));
+	await page.waitForSelector(".trade-receipt", { state: "visible" });
+	const receipt = await text(".trade-receipt");
+	assert(receipt.includes("已同时创建 000001.SZ 的进行中计划。"), receipt);
 	const orders = await request("/api/orders");
 	const plans = await request("/api/plans?symbol=000001.SZ&status=active");
 	assert.equal(orders.length, 1);
@@ -216,6 +399,7 @@ async function check({ origin, password, evidence, spaceName }) {
 		),
 		false,
 	);
+	assert((await text("dialog")).includes(existingHint));
 	await open("600519.SS");
 	shown = await preview();
 	assert.match(shown, /当前 2\.00%.*成交后约 3\.00%/);
@@ -233,6 +417,11 @@ async function check({ origin, password, evidence, spaceName }) {
 		await open("600519.SS", "sell", qty);
 		shown = await preview();
 		assert(shown.includes("当前 2.00%") && shown.includes("成交后约 " + after));
+		assert(
+			shown.includes(qty + " 股 / 份（撤单确认前不可再卖）") &&
+				!shown.includes("占用人民币") &&
+				!shown.includes("占用外币"),
+		);
 		await save(name, shown);
 	}
 	await open("AAPL", "buy", "10");
@@ -243,8 +432,8 @@ async function check({ origin, password, evidence, spaceName }) {
 	shown = await preview();
 	assert(
 		shown.includes("当前报价已达到止损参考价") &&
-			shown.includes(note) &&
-			!shown.includes("将立即产生"),
+			notes.every((line) => shown.includes(line)) &&
+			noRetired(shown),
 	);
 	await request("/api/plans", {
 		symbol: "AAPL",
@@ -253,11 +442,23 @@ async function check({ origin, password, evidence, spaceName }) {
 		reason: "受控并发计划",
 	});
 	await activateSubmit();
-	await page.waitForFunction(() =>
-		document
-			.querySelector("dialog")
-			?.innerText.includes("该证券刚有进行中计划"),
+	await page.waitForFunction(
+		(message) => document.querySelector("dialog")?.innerText.includes(message),
+		conflict,
 	);
+	// 等计划列表刷新完成，确认最终只留一条提示。
+	await page.waitForTimeout(1000);
+	const conflictView = await page.evaluate((message) => {
+		const dialog = document.querySelector("dialog");
+		return {
+			count: dialog.innerText.split(message).length - 1,
+			alerts: dialog.querySelectorAll("[role=alert]").length,
+			cancel: Array.from(dialog.querySelectorAll("button")).some(
+				(button) => button.innerText === "取消同步计划",
+			),
+		};
+	}, conflict);
+	assert.deepEqual(conflictView, { count: 1, alerts: 0, cancel: true });
 	assert.equal((await request("/api/orders")).length, 1);
 	assert.equal(
 		(await request("/api/plans?symbol=AAPL&status=active")).total,
@@ -268,7 +469,9 @@ async function check({ origin, password, evidence, spaceName }) {
 	await open("000001.SZ");
 	shown = await preview();
 	assert(
-		shown.includes("其他持仓报价暂缺") && shown.includes("人民币可用资金"),
+		shown.includes("其他持仓报价暂缺") &&
+			shown.includes("本单占用人民币约为人民币可用资金的") &&
+			noRetired(shown),
 	);
 	assert(!shown.includes("成交后约"));
 	await save("其他持仓缺价时展示可用资金比例", shown);

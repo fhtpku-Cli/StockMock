@@ -105,7 +105,7 @@ test("刷新和重登只核对结果，明确重试才发送原委托", async ()
 		const dialog = page.getByRole("dialog", { name: "核对上一次委托" });
 		await expectPage(dialog).toContainText("暂未找到原委托");
 		await expectPage(dialog).toContainText(
-			"原委托已勾选同步计划，复查日期 2026-11-24",
+			"原委托已勾选同步计划，计划复盘日期 2026-11-24",
 		);
 		await dialog.getByRole("button", { name: "关闭", exact: true }).click();
 		await page

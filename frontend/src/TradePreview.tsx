@@ -8,11 +8,13 @@ export function TradePreview({
 	currency,
 	side,
 	orderType,
+	quantity,
 }: {
 	readonly preview: z.infer<typeof previewSchema>;
 	readonly currency: string;
 	readonly side: "buy" | "sell";
 	readonly orderType?: "limit" | "market";
+	readonly quantity: number;
 }) {
 	const impact = preview.position_impact;
 	const hasReference =
@@ -46,14 +48,23 @@ export function TradePreview({
 					<dt>预计费用</dt>
 					<dd>{money(preview.estimated_fee, currency)}</dd>
 				</div>
-				<div>
-					<dt>占用人民币</dt>
-					<dd>{money(preview.reserved_cny)}</dd>
-				</div>
-				<div>
-					<dt>占用外币</dt>
-					<dd>{money(preview.reserved_foreign, currency)}</dd>
-				</div>
+				{side === "sell" ? (
+					<div>
+						<dt>占用持仓</dt>
+						<dd>{quantity} 股 / 份（撤单确认前不可再卖）</dd>
+					</div>
+				) : (
+					<>
+						<div>
+							<dt>占用人民币</dt>
+							<dd>{money(preview.reserved_cny)}</dd>
+						</div>
+						<div>
+							<dt>占用外币</dt>
+							<dd>{money(preview.reserved_foreign, currency)}</dd>
+						</div>
+					</>
+				)}
 				{hasReference && (
 					<div>
 						<dt>换汇参考</dt>
@@ -78,7 +89,7 @@ export function TradePreview({
 							preview.stop_loss.cny !== null &&
 							`（约合 ${money(preview.stop_loss.cny)}）`}
 						{preview.stop_loss.asset_percent !== null &&
-							`，约占总资产 ${preview.stop_loss.asset_percent}%`}
+							`，相当于总资产的 ${preview.stop_loss.asset_percent}%`}
 						。
 					</p>
 					<p className="footnote">
@@ -92,7 +103,7 @@ export function TradePreview({
 					<h4>仓位变化</h4>
 					{impact.status === "complete" ? (
 						<p>
-							占总资产：当前 {impact.current_percent}% → 成交后约{" "}
+							仓位占总资产：当前 {impact.current_percent}% → 成交后约{" "}
 							{impact.after_percent}%
 						</p>
 					) : (
@@ -108,18 +119,18 @@ export function TradePreview({
 							</p>
 							{impact.reserved_cny_percent !== null && (
 								<p>
-									本单冻结人民币约占人民币可用资金 {impact.reserved_cny_percent}
-									%
+									本单占用人民币约为人民币可用资金的{" "}
+									{impact.reserved_cny_percent}%
 								</p>
 							)}
 							{impact.reserved_foreign_percent !== null && (
 								<p>
-									本单冻结外币约占 {currency} 可用资金{" "}
+									本单占用外币约为 {currency} 可用资金的{" "}
 									{impact.reserved_foreign_percent}%
 								</p>
 							)}
 							{impact.remaining_quantity !== null && (
-								<p>卖出后剩余 {impact.remaining_quantity} 股</p>
+								<p>卖出后剩余 {impact.remaining_quantity} 股 / 份</p>
 							)}
 						</>
 					)}

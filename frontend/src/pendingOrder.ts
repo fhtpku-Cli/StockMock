@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { z } from "zod";
 import { ApiError, api } from "./api";
-import { orderSchema } from "./schema";
+import { type Order, orderSchema } from "./schema";
 
 export const PENDING_ORDER_KEY = "stockmock.pending-order";
 const changed = "stockmock:pending-order-changed";
@@ -26,6 +26,17 @@ export const submissionSchema = z
 	})
 	.strict();
 export type Submission = z.infer<typeof submissionSchema>;
+
+/** 与试跑只读规则一致：关联计划第 1 版，且与委托在同一受理时刻创建。 */
+export function planCreatedWithOrder(order: Order): boolean {
+	const plan = order.plan_snapshot;
+	return (
+		plan != null &&
+		plan.id === order.plan_id &&
+		plan.version === 1 &&
+		plan.created_at === order.created_at
+	);
+}
 
 export function invalidateOrderPlanQueries(client: QueryClient) {
 	return Promise.all(

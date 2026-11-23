@@ -4,12 +4,14 @@ import {
 	clearPendingOrder,
 	isFinalOrderRejection,
 	PENDING_ORDER_KEY,
+	planCreatedWithOrder,
 	readPendingOrder,
 	readPendingOrderRecord,
 	type Submission,
 	savePendingOrder,
 	submissionSchema,
 } from "../src/pendingOrder";
+import { orderSchema } from "../src/schema";
 
 const submission: Submission = {
 	request_id: "original-request",
@@ -201,7 +203,7 @@ describe("恢复重试的最终拒绝", () => {
 	});
 });
 
-test("同步计划的复查日期与原始请求在刷新后原样保留", () => {
+test("同步计划的计划复盘日期与原始请求在刷新后原样保留", () => {
 	const { plan_id, plan_version, ...base } = submission;
 	const original = {
 		...base,
@@ -213,4 +215,67 @@ test("同步计划的复查日期与原始请求在刷新后原样保留", () =>
 		submission: original,
 		currency: "USD",
 	});
+});
+
+test("只有同一受理时刻创建的第 1 版计划才算随委托同步创建", () => {
+	const at = "2026-11-23T02:00:00.123456Z";
+	const snapshot = {
+		id: "plan",
+		round_id: "round",
+		symbol: "AAPL",
+		currency: "USD",
+		direction: "buy" as const,
+		status: "active" as const,
+		reason: "受控理由",
+		target_price: null,
+		stop_price: null,
+		review_date: null,
+		invalidation: "",
+		version: 1,
+		created_at: at,
+		updated_at: at,
+	};
+	const order = orderSchema.parse({
+		id: "order",
+		request_id: "request",
+		symbol: "AAPL",
+		side: "buy",
+		order_type: "limit",
+		quantity: 1,
+		limit_price: "100",
+		price_bound: "100",
+		status: "accepted",
+		status_reason: "",
+		created_at: at,
+		active_at: at,
+		expires_at: at,
+		cancel_at: null,
+		filled_at: null,
+		confirmed_at: null,
+		fill_price: null,
+		fee: null,
+		currency: "USD",
+		reserved_cny: "0",
+		reserved_foreign: "100",
+		fx_rate: null,
+		fx_source: null,
+		fx_time: null,
+		reason: "受控理由",
+		target_price: null,
+		stop_price: null,
+		plan_id: "plan",
+		plan_version: 1,
+		plan_snapshot: snapshot,
+	});
+	expect(planCreatedWithOrder(order)).toBe(true);
+	for (const changed of [
+		{ plan_snapshot: { ...snapshot, version: 2 } },
+		{
+			plan_snapshot: { ...snapshot, created_at: "2026-11-23T02:00:00.123457Z" },
+		},
+		{ plan_snapshot: null },
+		{ plan_id: "other", plan_snapshot: snapshot },
+		{ plan_id: null, plan_version: null, plan_snapshot: undefined },
+	])
+		expect(planCreatedWithOrder({ ...order, ...changed })).toBe(false);
 });
