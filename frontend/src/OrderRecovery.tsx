@@ -5,6 +5,7 @@ import { OrderRecord } from "./OrderRecord";
 import {
 	clearPendingOrder,
 	findOrderReceipt,
+	invalidateOrderPlanQueries,
 	isFinalOrderRejection,
 	readPendingOrderRecord,
 	type Submission,
@@ -59,6 +60,7 @@ export function OrderRecovery({ onClose }: { readonly onClose: () => void }) {
 					: { kind: "missing" },
 			);
 			if (order) {
+				if (saved.save_as_plan) void invalidateOrderPlanQueries(client);
 				void client.invalidateQueries({ queryKey: ["portfolio"] });
 				void client.invalidateQueries({ queryKey: ["orders"] });
 			}
@@ -68,6 +70,8 @@ export function OrderRecovery({ onClose }: { readonly onClose: () => void }) {
 			setError(errorMessage(failure));
 			if (isFinalOrderRejection(failure, true)) {
 				try {
+					if (saved?.save_as_plan)
+						void client.invalidateQueries({ queryKey: ["plans"] });
 					if (saved) clearPendingOrder(saved.request_id);
 					setPending(null);
 					setResult({ kind: "rejected" });
@@ -111,6 +115,7 @@ export function OrderRecovery({ onClose }: { readonly onClose: () => void }) {
 		case "accepted":
 			message =
 				(result.retried ? "原委托已受理。" : "已确认原委托曾被受理。") +
+				(pending?.save_as_plan ? "已同时创建进行中计划。" : "") +
 				"以下显示原委托的最新状态，归档后的记录属于原练习轮次。";
 			break;
 		case "rejected":
@@ -143,6 +148,8 @@ export function OrderRecovery({ onClose }: { readonly onClose: () => void }) {
 									: `${pending.limit_price ?? "—"}（币种待核对）`
 							}`}
 					。原有效期至 {fullTime(pending.expected_expires_at)}（北京时间）。
+					{pending.save_as_plan &&
+						`原委托已勾选同步计划${pending.plan_review_date ? `，复查日期 ${pending.plan_review_date}` : ""}。`}
 				</p>
 			)}
 			{result.kind === "accepted" && <OrderRecord order={result.order} />}

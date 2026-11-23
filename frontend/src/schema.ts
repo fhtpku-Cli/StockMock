@@ -157,6 +157,30 @@ export const candidateIntervalSchema = z.object({
 	reason: z.string(),
 });
 export const previewSchema = z.object({
+	position_impact: z
+		.object({
+			status: z.enum(["complete", "expired", "incomplete", "missing_fx"]),
+			current_percent: decimal.nullable(),
+			after_percent: decimal.nullable(),
+			reserved_cny_percent: decimal.nullable(),
+			reserved_foreign_percent: decimal.nullable(),
+			remaining_quantity: z.number().int().nonnegative().nullable(),
+			active_orders: z.number().int().nonnegative(),
+			valuation_time: z.iso.datetime({ offset: true }).nullable(),
+			quote_time: z.iso.datetime({ offset: true }),
+			fx_time: z.iso.datetime({ offset: true }).nullable(),
+			fx_source: z.enum(["估值汇率", "预览汇率", "人民币原币"]).nullable(),
+		})
+		.nullable()
+		.optional(),
+	stop_loss: z
+		.object({
+			amount: decimal,
+			cny: decimal.nullable(),
+			asset_percent: decimal.nullable(),
+		})
+		.nullable()
+		.optional(),
 	active_at: z.string().optional(),
 	first_candidate_interval: candidateIntervalSchema.optional(),
 	price_bound: decimal,

@@ -37,6 +37,8 @@ test("刷新和重登只核对结果，明确重试才发送原委托", async ()
 		quantity: 100,
 		limit_price: "100",
 		reason: "保留原交易理由",
+		save_as_plan: true,
+		plan_review_date: "2026-11-24",
 	};
 	let authenticated = false;
 	let reads = 0;
@@ -102,6 +104,9 @@ test("刷新和重登只核对结果，明确重试才发送原委托", async ()
 		await page.getByRole("button", { name: "进入我的空间" }).click();
 		const dialog = page.getByRole("dialog", { name: "核对上一次委托" });
 		await expectPage(dialog).toContainText("暂未找到原委托");
+		await expectPage(dialog).toContainText(
+			"原委托已勾选同步计划，复查日期 2026-11-24",
+		);
 		await dialog.getByRole("button", { name: "关闭", exact: true }).click();
 		await page
 			.getByRole("navigation")

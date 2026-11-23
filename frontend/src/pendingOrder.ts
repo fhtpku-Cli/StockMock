@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 import { z } from "zod";
 import { ApiError, api } from "./api";
@@ -20,9 +21,19 @@ export const submissionSchema = z
 		stop_price: z.string().optional(),
 		plan_id: z.string().optional(),
 		plan_version: z.number().int().optional(),
+		save_as_plan: z.boolean().optional(),
+		plan_review_date: z.iso.date().optional(),
 	})
 	.strict();
 export type Submission = z.infer<typeof submissionSchema>;
+
+export function invalidateOrderPlanQueries(client: QueryClient) {
+	return Promise.all(
+		["plans", "alerts", "reviews", "review-detail", "review-facts"].map((key) =>
+			client.invalidateQueries({ queryKey: [key] }),
+		),
+	);
+}
 
 const savedOrderSchema = submissionSchema.extend({
 	display_currency: z.enum(["CNY", "USD", "HKD"]).optional().catch(undefined),

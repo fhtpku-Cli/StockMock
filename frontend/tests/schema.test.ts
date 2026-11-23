@@ -1,5 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { portfolioSchema, quoteSchema, orderSchema } from "../src/schema";
+import {
+	portfolioSchema,
+	quoteSchema,
+	orderSchema,
+	previewSchema,
+} from "../src/schema";
 import { money, price } from "../src/api";
 describe("接口边界拒绝不可信的账户与行情", () => {
 	it("缺失真实总资产时不能用默认本金补齐", () => {
@@ -103,5 +108,44 @@ describe("价格精度与现金金额分离", () => {
 		expect(money("4.189")).toContain("4.19");
 		expect(price("100.2", "USD", "0.01")).toContain("100.20");
 		expect(price("4.1911", "CNY")).toContain("4.1911");
+	});
+});
+
+describe("预览响应兼容旧后端及两位百分比", () => {
+	const base = {
+		price_bound: "4.18",
+		estimated_fee: "0.21",
+		reserved_cny: "0.00",
+		reserved_foreign: "0.00",
+		fx_rate: null,
+		fx_source: null,
+		fx_time: null,
+		expires_at: "2026-11-23T07:00:00Z",
+		warnings: [],
+	};
+	it("旧预览未提供仓位与止损时仍然可用", () => {
+		expect(previewSchema.parse(base).position_impact).toBeUndefined();
+	});
+	it.each(["0.00", "0.01"])("清仓与极小仓位保留十进制文本 %s", (after) => {
+		const wire = JSON.stringify({
+			...base,
+			stop_loss: null,
+			position_impact: {
+				status: "complete",
+				active_orders: 1,
+				current_percent: "2.30",
+				after_percent: after,
+				reserved_cny_percent: null,
+				reserved_foreign_percent: null,
+				remaining_quantity: 0,
+				valuation_time: base.expires_at,
+				quote_time: base.expires_at,
+				fx_time: null,
+				fx_source: "人民币原币",
+			},
+		});
+		expect(
+			previewSchema.parse(JSON.parse(wire)).position_impact?.after_percent,
+		).toBe(after);
 	});
 });

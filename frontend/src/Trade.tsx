@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import {
@@ -13,11 +13,12 @@ import {
 import { PlanPicker } from "./PlanPicker";
 import {
 	clearPendingOrder,
+	invalidateOrderPlanQueries,
 	isFinalOrderRejection,
 	type Submission,
 	savePendingOrder,
 } from "./pendingOrder";
-import { type Plan, planSchema } from "./planSchema";
+import { type Plan, planPageSchema, planSchema } from "./planSchema";
 import type { Instrument, Order } from "./schema";
 import { orderSchema, portfolioSchema, previewSchema } from "./schema";
 import "./styles/trade-reference.css";
@@ -34,8 +35,30 @@ type Draft = {
 	readonly reason: string;
 	readonly target: string;
 	readonly stop: string;
+	readonly saveAsPlan: boolean;
+	readonly reviewDate: string;
 	readonly requestId: string;
 };
+function useFirstPlan(
+	symbol: string,
+	status: "active" | "draft",
+	enabled: boolean,
+) {
+	return useQuery({
+		queryKey: ["plans", "order-option", symbol, status],
+		queryFn: () =>
+			api(
+				`plans?symbol=${encodeURIComponent(symbol)}&status=${status}&limit=1`,
+				planPageSchema,
+			),
+		enabled,
+	});
+}
+
+function hasPlanBasis(draft: Draft) {
+	return Boolean(draft.reason.trim() || draft.target || draft.stop);
+}
+
 export function Trade({
 	instrument,
 	side,
@@ -73,6 +96,8 @@ export function Trade({
 		reason: original?.reason ?? "",
 		target: original?.target_price ?? "",
 		stop: original?.stop_price ?? "",
+		saveAsPlan: false,
+		reviewDate: "",
 		requestId: crypto.randomUUID(),
 	});
 	const client = useQueryClient();
@@ -81,6 +106,21 @@ export function Trade({
 	const [planNotice, setPlanNotice] = useState(
 		original?.plan_id ? "正在核对原关联计划…" : "",
 	);
+	const checkPlans =
+		side === "buy" &&
+		instrument.tradable &&
+		online &&
+		!selectedPlan &&
+		!planBlocked;
+	const activePlan = useFirstPlan(instrument.symbol, "active", checkPlans);
+	const draftPlan = useFirstPlan(instrument.symbol, "draft", checkPlans);
+	const canSync =
+		checkPlans &&
+		hasPlanBasis(draft) &&
+		activePlan.isSuccess &&
+		!activePlan.isFetching &&
+		activePlan.data.total === 0;
+	const today = fullTime(new Date().toISOString()).slice(0, 10);
 	const attempted = useRef(new Set<string>());
 	const retried = useRef(new Set<string>());
 	const previewRound = useRef("");
@@ -129,7 +169,7 @@ export function Trade({
 					? `原计划已由版本 ${original?.plan_version ?? "未知"} 更新至 ${plan.version}；关联当前版本，保留原委托理由与参考价。`
 					: "已核对原关联计划，保留原委托理由与参考价。",
 			);
-			change({});
+			change({ saveAsPlan: false });
 		},
 		onError: (error) => {
 			setPlanBlocked(true);
@@ -143,6 +183,12 @@ export function Trade({
 	}, [original?.plan_id, loadOriginalPlan.mutate]);
 	const payload = {
 		request_id: draft.requestId,
+		...(draft.saveAsPlan
+			? {
+					save_as_plan: true,
+					...(draft.reviewDate ? { plan_review_date: draft.reviewDate } : {}),
+				}
+			: {}),
 		...(draftRoundId ? { expected_round_id: draftRoundId } : {}),
 		...(selectedPlan
 			? { plan_id: selectedPlan.id, plan_version: selectedPlan.version }
@@ -159,6 +205,12 @@ export function Trade({
 	const [unresolved, setUnresolved] = useState<Submission | null>(null);
 	const [validityNotice, setValidityNotice] = useState("");
 	const preview = useMutation({
+		onError: (error) => {
+			if (error instanceof ApiError && error.code === "plan_sync_conflict") {
+				setDraft((prior) => ({ ...prior, requestId: crypto.randomUUID() }));
+				void client.invalidateQueries({ queryKey: ["plans"] });
+			}
+		},
 		onSettled: () => {
 			actionLock.current = false;
 		},
@@ -241,6 +293,12 @@ export function Trade({
 					requestId: crypto.randomUUID(),
 				}));
 				preview.reset();
+				if (
+					original.save_as_plan &&
+					error instanceof ApiError &&
+					["plan_sync_conflict", "order_receipt_rejected"].includes(error.code)
+				)
+					void client.invalidateQueries({ queryKey: ["plans"] });
 			}
 			if (
 				finalRejection &&
@@ -264,8 +322,9 @@ export function Trade({
 				}
 			}
 		},
-		onSuccess: (order) => {
+		onSuccess: (order, original) => {
 			if (!mounted.current) return;
+			if (original.save_as_plan) void invalidateOrderPlanQueries(client);
 			void Promise.all([
 				client.invalidateQueries({ queryKey: ["portfolio"] }),
 				client.invalidateQueries({ queryKey: ["orders"] }),
@@ -284,11 +343,12 @@ export function Trade({
 		return () => document.removeEventListener("visibilitychange", resume);
 	}, [preview.reset]);
 	const change = (patch: Partial<Draft>) => {
-		setDraft((previous) => ({
-			...previous,
-			...patch,
-			requestId: crypto.randomUUID(),
-		}));
+		setDraft((previous) => {
+			const next = { ...previous, ...patch, requestId: crypto.randomUUID() };
+			if (!next.saveAsPlan || !hasPlanBasis(next))
+				return { ...next, saveAsPlan: false, reviewDate: "" };
+			return next;
+		});
 		preview.reset();
 		submit.reset();
 		setValidityNotice("");
@@ -355,6 +415,7 @@ export function Trade({
 						!online ||
 						actionLock.current ||
 						planBlocked ||
+						(!unresolved && draft.saveAsPlan && !canSync) ||
 						loadOriginalPlan.isPending ||
 						sizing.isPending ||
 						preview.isPending ||
@@ -408,7 +469,7 @@ export function Trade({
 										setPlanNotice(
 											"已明确选择不关联计划；保留原委托理由与参考价。",
 										);
-										change({});
+										change({ saveAsPlan: false });
 									}}
 								>
 									明确不关联计划
@@ -427,7 +488,7 @@ export function Trade({
 							setPlanBlocked(false);
 							setPlanNotice("已重新核对所选计划，保留原委托理由与参考价。");
 							setSelectedPlan(plan);
-							change({});
+							change({ saveAsPlan: false });
 						}}
 						onInvalid={(message) => {
 							setPlanBlocked(true);
@@ -446,6 +507,7 @@ export function Trade({
 							change(
 								plan
 									? {
+											saveAsPlan: false,
 											reason: plan.reason,
 											target: plan.target_price ?? "",
 											stop: plan.stop_price ?? "",
@@ -594,6 +656,54 @@ export function Trade({
 							</div>
 						</div>
 					</details>
+					{checkPlans && draftPlan.isSuccess && draftPlan.data.total > 0 && (
+						<p className="footnote">
+							已有草稿计划；关联草稿不会产生提醒，如需提醒请先在计划中启用。
+						</p>
+					)}
+					{canSync && (
+						<label className="confirm-check">
+							<input
+								type="checkbox"
+								checked={draft.saveAsPlan}
+								onChange={(event) =>
+									change({ saveAsPlan: event.target.checked })
+								}
+							/>
+							同时保存为该证券的进行中计划（启用到价提醒与后续复查）
+						</label>
+					)}
+					{draft.saveAsPlan && !canSync && !unresolved && (
+						<div className="notice" role="status">
+							{activePlan.isSuccess && activePlan.data.total > 0
+								? "已有进行中计划。可带入该计划，也可取消同步后重新预览。"
+								: "暂未确认是否有进行中计划。你可以等查询完成，或取消同步后重新预览。"}
+							<button
+								type="button"
+								className="button small"
+								onClick={() => change({ saveAsPlan: false })}
+							>
+								取消同步计划
+							</button>
+						</div>
+					)}
+					{canSync && draft.saveAsPlan && (
+						<div className="field">
+							<label htmlFor="plan-review-date">
+								复查日期（北京时间，选填）
+							</label>
+							<input
+								id="plan-review-date"
+								type="date"
+								min={today}
+								value={draft.reviewDate}
+								onChange={(event) => change({ reviewDate: event.target.value })}
+							/>
+							{draft.reviewDate === today && (
+								<p className="footnote">下一轮即会提醒</p>
+							)}
+						</div>
+					)}
 				</fieldset>
 				{preview.isError && (
 					<ErrorNotice message={errorMessage(preview.error)} />
@@ -617,6 +727,7 @@ export function Trade({
 						className="trade-preview-start"
 					>
 						<TradePreview
+							orderType={draft.type}
 							preview={preview.data}
 							currency={instrument.currency}
 							side={side}
@@ -632,6 +743,7 @@ export function Trade({
 					disabled={
 						!online ||
 						planBlocked ||
+						(!unresolved && draft.saveAsPlan && !canSync) ||
 						loadOriginalPlan.isPending ||
 						sizing.isPending ||
 						preview.isPending ||

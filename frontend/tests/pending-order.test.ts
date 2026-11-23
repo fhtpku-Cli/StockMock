@@ -200,3 +200,17 @@ describe("恢复重试的最终拒绝", () => {
 		).toBe(false);
 	});
 });
+
+test("同步计划的复查日期与原始请求在刷新后原样保留", () => {
+	const { plan_id, plan_version, ...base } = submission;
+	const original = {
+		...base,
+		save_as_plan: true,
+		plan_review_date: "2026-11-24",
+	};
+	savePendingOrder(original, "USD");
+	expect(readPendingOrderRecord()).toEqual({
+		submission: original,
+		currency: "USD",
+	});
+});
