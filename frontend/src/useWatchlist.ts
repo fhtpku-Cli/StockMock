@@ -13,6 +13,7 @@ export function useWatchlist() {
 	const contains = (symbol: string) =>
 		watch.data?.some((item) => item.symbol === symbol) ?? false;
 	const toggle = useMutation({
+		networkMode: "always",
 		mutationFn: async (instrument: Instrument) => {
 			if (contains(instrument.symbol)) await removeWatch(instrument.symbol);
 			else

@@ -109,11 +109,22 @@ try {
 			await page.setViewportSize({ width, height: 900 });
 			for (const nav of ["委托", "复盘"]) {
 				await page.getByRole("button", { name: nav, exact: true }).click();
-				await page.getByLabel("起始日期").fill("2026-10-20");
-				await page.getByLabel("结束日期").fill("2026-10-22");
-				await expect(page.getByLabel("起始日期")).toHaveValue("2026-10-20");
-				await expect(page.getByLabel("结束日期")).toHaveValue("2026-10-22");
-				const bounds = await page.locator(".record-filters").evaluate((c) => {
+				if (nav === "复盘")
+					await page
+						.getByText("按证券、市场和日期筛选", { exact: true })
+						.click();
+				const filters = page.locator(
+					nav === "复盘"
+						? ".review-filter-options .review-filters"
+						: ".record-filters",
+				);
+				const from = filters.getByLabel(/起始日期$/);
+				const to = filters.getByLabel(/结束日期$/);
+				await from.fill("2026-10-20");
+				await to.fill("2026-10-22");
+				await expect(from).toHaveValue("2026-10-20");
+				await expect(to).toHaveValue("2026-10-22");
+				const bounds = await filters.evaluate((c) => {
 					const r = c.getBoundingClientRect();
 					return [...c.querySelectorAll("input,select")].map((el) => ({
 						height: el.getBoundingClientRect().height,
@@ -127,10 +138,17 @@ try {
 					expect(b.height).toBeLessThanOrEqual(52);
 				}
 				await capture(`${engine}-${nav}-dates-${width}`);
-				await page
-					.getByRole("button", { name: "清除筛选", exact: true })
-					.click();
-				await expect(page.getByLabel("起始日期")).toHaveValue("");
+				if (nav === "复盘") {
+					await from.fill("");
+					await to.fill("");
+					await filters.getByRole("button", { name: "应用复盘筛选" }).click();
+				} else {
+					await filters
+						.getByRole("button", { name: "清除筛选", exact: true })
+						.click();
+				}
+				await expect(from).toHaveValue("");
+				await expect(to).toHaveValue("");
 			}
 		}
 		expect(errors).toEqual([]);

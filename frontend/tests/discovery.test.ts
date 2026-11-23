@@ -1,4 +1,13 @@
 import { describe, expect, it } from "bun:test";
+import {
+	QueryClient,
+	QueryClientProvider,
+	onlineManager,
+} from "@tanstack/react-query";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { Instrument } from "../src/schema";
+import { useWatchlist } from "../src/useWatchlist";
 import { instrumentSearchSchema, quoteSchema } from "../src/schema";
 
 describe("在线发现接口边界", () => {
@@ -54,3 +63,51 @@ describe("在线发现接口边界", () => {
 		expect(parsed.tick_size).toBeNull();
 	});
 });
+
+it.each([false, true])(
+	"自选写入遇到断网立即拒绝且不排队（已收藏 %p）",
+	async (saved) => {
+		const item: Instrument = {
+			symbol: "IBM",
+			name: "IBM",
+			market: "US",
+			currency: "USD",
+			kind: "stock",
+			lot_size: 1,
+			tick_size: "0.01",
+			tradable: true,
+			restriction: null,
+		};
+		const client = new QueryClient();
+		client.setQueryData(["watchlist"], saved ? [item] : []);
+		let toggle!: ReturnType<typeof useWatchlist>["toggle"]["mutateAsync"];
+		function WatchProbe() {
+			toggle = useWatchlist().toggle.mutateAsync;
+			return null;
+		}
+		renderToStaticMarkup(
+			createElement(QueryClientProvider, { client }, createElement(WatchProbe)),
+		);
+		const original = Object.getOwnPropertyDescriptor(navigator, "onLine");
+		const wasOnline = onlineManager.isOnline();
+		Object.defineProperty(navigator, "onLine", {
+			configurable: true,
+			value: false,
+		});
+		client.mount();
+		onlineManager.setOnline(false);
+		const result = toggle(item).catch((e: unknown) => e);
+		try {
+			expect(client.getMutationCache().getAll()[0]?.state.isPaused).toBe(false);
+			expect(await result).toMatchObject({ code: "offline" });
+		} finally {
+			onlineManager.setOnline(true);
+			await result;
+			client.unmount();
+			client.clear();
+			onlineManager.setOnline(wasOnline);
+			if (original) Object.defineProperty(navigator, "onLine", original);
+			else Reflect.deleteProperty(navigator, "onLine");
+		}
+	},
+);

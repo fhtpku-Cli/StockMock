@@ -194,7 +194,7 @@ export function Adjustments({ onClose }: { readonly onClose: () => void }) {
 					onChange={changed}
 				>
 					<fieldset disabled={save.isPending || !online}>
-						<div className="form-grid">
+						<div className="form-grid adjustment-fields">
 							<div className="field">
 								<label htmlFor="adjust-symbol">当前持仓</label>
 								<select

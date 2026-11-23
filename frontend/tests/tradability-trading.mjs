@@ -9,16 +9,26 @@ export async function verifyTrading({
 	discover,
 	observations,
 }) {
-	const searchPanel = page
-		.locator("section.panel")
-		.filter({
-			has: page.getByRole("heading", { name: "证券搜索", exact: true }),
-		});
-	const watchPanel = page
-		.locator("section.panel")
-		.filter({
-			has: page.getByRole("heading", { name: "我的自选", exact: true }),
-		});
+	const searchPanel = page.locator("section.panel").filter({
+		has: page.getByRole("heading", { name: "证券搜索", exact: true }),
+	});
+	const watchPanel = page.locator("section.panel").filter({
+		has: page.getByRole("heading", { name: "我的自选", exact: true }),
+	});
+	await page.getByLabel("筛选市场").selectOption("HK");
+	const hongKong = catalog.filter((item) => item.market === "HK");
+	expect(hongKong.length).toBeGreaterThan(0);
+	await expect(searchPanel.locator(".security-row")).toHaveCount(
+		hongKong.length,
+	);
+	for (const item of hongKong) {
+		await expect(
+			searchPanel
+				.locator(`[data-symbol="${item.symbol}"]`)
+				.getByRole("button", { name: "买入", exact: true }),
+		).toBeDisabled();
+	}
+	await page.getByLabel("筛选市场").selectOption("all");
 	for (const [width, symbol, currency, min, step] of [
 		[1280, "688981.SS", "CNY", 200, 1],
 		[390, "IBM", "USD", 1, 1],
@@ -28,6 +38,9 @@ export async function verifyTrading({
 		expect(catalog.some((i) => i.symbol === symbol)).toBe(false);
 		await open(symbol);
 		const dialog = page.getByRole("dialog");
+		await expect(
+			dialog.getByText("核验通过后买卖各 0.05%", { exact: true }),
+		).toBeVisible();
 		await expect(
 			dialog.getByRole("button", { name: "模拟买入", exact: true }),
 		).toBeEnabled();
@@ -150,8 +163,10 @@ export async function verifyTrading({
 		await expect(page.getByRole("heading", { name: /模拟卖出/ })).toBeVisible();
 		await expect(page.locator("#quantity")).toBeEnabled();
 		await capture(`${engine}-persisted-sell-${width}`);
-		await page.getByRole("button", { name: "返回标的详情" }).click();
+		await dialog.getByRole("button", { name: "关闭", exact: true }).click();
+		await expect(dialog).toHaveAccessibleName(enabled.name);
 		await page.keyboard.press("Escape");
+		await expect(dialog).toHaveCount(0);
 		observations.push({
 			scenario: `${engine}-${width}-启用与缓存刷新`,
 			passed: true,
@@ -193,4 +208,9 @@ export async function verifyTrading({
 	expect(orders).toHaveLength(0);
 	await capture(`${engine}-us-etf-enabled`);
 	await page.keyboard.press("Escape");
+	await expect(page.getByRole("dialog")).toHaveAccessibleName(
+		"Vanguard Growth ETF",
+	);
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("dialog")).toHaveCount(0);
 }

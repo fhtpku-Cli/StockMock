@@ -70,7 +70,7 @@ export function DiscoveryResults({
 						type="button"
 						className="icon-button"
 						aria-label={`${contains(instrument.symbol) ? "移除" : "添加"}自选 ${instrument.name}`}
-						disabled={pending}
+						disabled={pending || !online}
 						onClick={() => onToggle(instrument)}
 					>
 						{contains(instrument.symbol) ? (

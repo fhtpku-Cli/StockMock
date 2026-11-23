@@ -62,6 +62,8 @@ def test_parser_accepts_only_target_types() -> None:
     # Then: 仅股票及 ETF，未知规则留空。
     assert {i.symbol for i in items} == {"688981.SS", "00981.HK", "512660.SS"}
     assert all(not i.tradable and i.lot_size is None and i.tick_size is None for i in items)
+    assert all("首次模拟买入时" in i.restriction and "港股" not in i.restriction for i in items if i.market == "CN")
+    assert all("仅供观察" in i.restriction and "买入" not in i.restriction for i in items if i.market == "HK")
 
 
 def test_us_classification_rejects_unknown_and_labels_etf() -> None:
@@ -79,6 +81,7 @@ def test_us_classification_rejects_unknown_and_labels_etf() -> None:
     raw = json.dumps({"QuotationCodeTable": {"Data": rows, "Status": 0}}).encode()
     items = parse_us_search(raw)
     assert [(i.symbol, i.kind) for i in items] == [("ADBE", "stock"), ("TESTETF", "ETF")]
+    assert all("首次模拟买入时" in i.restriction and "港股" not in i.restriction for i in items)
 
 
 def test_search_encodes_and_coalesces_requests(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -140,6 +143,7 @@ def test_http_discovery_persists_observation_without_trade_eligibility(
         _ = client.post("/api/auth/login", json={"password": PASSWORD})
         result = SearchResult.model_validate_json(client.get("/api/instruments/search?q=688981").content)
         assert "688981.SS" in {item.symbol for item in result.items}
+        assert "首次模拟买入时" in result.message
         assert (
             client.post(
                 "/api/watchlist", json={"symbol": "688981.SS"}, headers={"Origin": "https://evil.example"}
@@ -167,6 +171,33 @@ def test_http_discovery_persists_observation_without_trade_eligibility(
         item = ObservationInstrument.model_validate(watch.json()[0])
         assert item.symbol == "688981.SS"
         assert item.tradable is False
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        ("交易规则尚未核验，仅供观察；港股模拟交易仍需已核验行情权限", "首次模拟买入时"),
+        ("此标的有单独的观察限制", "此标的有单独的观察限制"),
+    ],
+)
+def test_existing_watch_restriction_on_identity_and_watchlist(engine: Engine, stored: str, expected: str) -> None:
+    item = parse_search(response(ROWS))[0]
+    with engine.store.transaction() as connection:
+        payload = item.model_copy(update={"restriction": stored}).model_dump_json()
+        _ = connection.execute("INSERT INTO observations VALUES(?,?)", (item.symbol, payload))
+        state = engine.store.load(connection)
+        state.watchlist.append(item.symbol)
+        engine.store.save(connection, state)
+
+    with TestClient(create_app(engine, PASSWORD, run_worker=False)) as client:
+        assert client.post("/api/auth/login", json={"password": PASSWORD}).status_code == 200
+        identity = client.get(f"/api/instruments/{item.symbol}")
+        watched = client.get("/api/watchlist")
+        assert identity.status_code == watched.status_code == 200
+        assert identity.json() == watched.json()[0]
+        assert expected in identity.json()["restriction"]
+        assert "港股" not in identity.json()["restriction"]
+        assert not identity.json()["tradable"]
 
 
 def test_http_search_failure_is_explicit_and_known_rules_win(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -37,6 +37,10 @@ const errorSchema = z.object({
 		z.object({ code: z.string(), message: z.string() }),
 	]),
 });
+function requireOnline() {
+	if (!navigator.onLine)
+		throw new ApiError("offline", "当前离线，操作未提交。请联网后重新确认。");
+}
 export async function api<T>(
 	path: string,
 	schema: z.ZodType<T>,
@@ -49,8 +53,7 @@ export async function api<T>(
 	},
 ): Promise<T> {
 	try {
-		if (body && !navigator.onLine)
-			throw new ApiError("offline", "当前离线，操作未提交。请联网后重新确认。");
+		if (body) requireOnline();
 		const response = body
 			? await http(path, {
 					json: body,
@@ -96,6 +99,7 @@ export async function api<T>(
 	}
 }
 export async function removeWatch(symbol: string): Promise<void> {
+	requireOnline();
 	try {
 		await http.delete(`watchlist/${encodeURIComponent(symbol)}`);
 	} catch (error) {

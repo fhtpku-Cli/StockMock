@@ -99,6 +99,12 @@ fieldset {
 	grid-template-columns: 1fr 1fr;
 	gap: 16px;
 }
+@media (max-width: 540px) {
+	.form-grid.adjustment-fields {
+		grid-template-columns: minmax(0, 1fr);
+		row-gap: 0;
+	}
+}
 .button-row {
 	display: flex;
 	gap: 12px;

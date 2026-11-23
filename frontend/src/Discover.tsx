@@ -18,6 +18,21 @@ const coverageGroups = [
 	{ market: "US", kind: "ETF", label: "美股 ETF" },
 ] as const;
 
+export function localSearchCandidates(
+	catalog: readonly Instrument[],
+	query: string,
+	market: string,
+) {
+	const keyword = query.trim().toLowerCase();
+	if (keyword)
+		return catalog.filter((item) =>
+			`${item.symbol} ${item.name}`.toLowerCase().includes(keyword),
+		);
+	return catalog.filter((item) =>
+		market === "HK" ? item.market === "HK" : item.tradable,
+	);
+}
+
 export function InstrumentList({
 	items,
 	onSelect,
@@ -122,11 +137,11 @@ export function Discover({
 	const local = new Map(
 		(instruments.data ?? []).map((i) => [identity(i.symbol), i]),
 	);
-	const matches = trimmed
-		? (instruments.data ?? []).filter((i) =>
-				`${i.symbol} ${i.name}`.toLowerCase().includes(trimmed.toLowerCase()),
-			)
-		: enabled;
+	const matches = localSearchCandidates(
+		instruments.data ?? [],
+		trimmed,
+		market,
+	);
 	const merged = new Map(matches.map((i) => [identity(i.symbol), i]));
 	if (trimmed && trimmed === query)
 		for (const item of onlineSearch.data?.items ?? []) {

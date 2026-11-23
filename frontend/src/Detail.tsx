@@ -37,6 +37,7 @@ export function Detail({
 				historySchema,
 			),
 	});
+	const verifyOnBuy = canVerifyOnBuy(instrument);
 	const tickSize = quote.data?.tick_size ?? instrument.tick_size;
 	const change =
 		quote.data && quote.data.change_status !== "market_disabled"
@@ -98,7 +99,7 @@ export function Detail({
 					className="button primary"
 					disabled={
 						!online ||
-						(!instrument.tradable && !canVerifyOnBuy(instrument)) ||
+						(!instrument.tradable && !verifyOnBuy) ||
 						(instrument.tradable && !quote.isSuccess)
 					}
 					onClick={() => onTrade("buy")}
@@ -170,7 +171,13 @@ export function Detail({
 				</div>
 				<div>
 					<dt>模拟费用</dt>
-					<dd>{instrument.tradable ? "买卖各 0.05%" : "仅观察，暂不适用"}</dd>
+					<dd>
+						{instrument.tradable
+							? "买卖各 0.05%"
+							: verifyOnBuy
+								? "核验通过后买卖各 0.05%"
+								: "仅观察，暂不适用"}
+					</dd>
 				</div>
 			</dl>
 			{instrument.rule_source && (
@@ -179,9 +186,10 @@ export function Detail({
 					{instrument.verified_on ?? "未注明"}
 				</p>
 			)}
-			{instrument.restriction && (
-				<p className="notice">{instrument.restriction}</p>
-			)}
+			{instrument.restriction &&
+				(!quote.isSuccess || instrument.restriction !== quote.data.message) && (
+					<p className="notice">{instrument.restriction}</p>
+				)}
 			{position && (
 				<dl className="summary-list">
 					<div>

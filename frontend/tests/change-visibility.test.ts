@@ -267,3 +267,50 @@ test.each([
 		}
 	},
 );
+
+test.each([
+	["CN", false, null, "核验通过后买卖各 0.05%"],
+	["US", false, null, "核验通过后买卖各 0.05%"],
+	["HK", false, null, "仅观察，暂不适用"],
+	["US", false, 1, "仅观察，暂不适用"],
+	["US", true, 1, "买卖各 0.05%"],
+] as const)(
+	"详情按 %s 的实际资格展示费率并保留一份限制",
+	(market, tradable, lot_size, fee) => {
+		const restriction = "受控证券限制";
+		const item = { ...instrument, market, tradable, lot_size, restriction };
+		const client = new QueryClient();
+		try {
+			for (const message of [undefined, restriction, "受控报价延迟"]) {
+				if (message !== undefined)
+					client.setQueryData(["quote", item.symbol], {
+						symbol: item.symbol,
+						price: "100",
+						currency: item.currency,
+						market_time: "2026-10-30T20:00:00Z",
+						retrieved_at: "2026-10-30T20:00:00Z",
+						source: "受控数据",
+						status: "reference",
+						message,
+						change_status: "market_disabled",
+					} satisfies Quote);
+				const html = renderToStaticMarkup(
+					createElement(
+						QueryClientProvider,
+						{ client },
+						createElement(Detail, {
+							instrument: item,
+							onClose: () => {},
+							onTrade: () => {},
+						}),
+					),
+				);
+				expect(html).toContain(`<dt>模拟费用</dt><dd>${fee}</dd>`);
+				expect(html.split(restriction)).toHaveLength(2);
+				if (message === "受控报价延迟") expect(html).toContain(message);
+			}
+		} finally {
+			client.clear();
+		}
+	},
+);

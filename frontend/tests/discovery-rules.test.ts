@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { InstrumentList } from "../src/Discover";
+import { InstrumentList, localSearchCandidates } from "../src/Discover";
 import { DiscoveryResults } from "../src/DiscoveryResults";
 import type { Instrument } from "../src/schema";
 
@@ -128,4 +128,20 @@ it("同市场两个重复组只归并默认组，其他组逐行对应", () => {
 	expect(html.match(/受控共同规则/g)?.length).toBe(1);
 	expect(html.match(/另一组规则/g)?.length).toBe(2);
 	expect(html).toContain("除行内另注外");
+});
+
+it("空白搜索按已启用目录浏览，选择港股时可看本地观察项", () => {
+	const hk = {
+		...instrument,
+		symbol: "0700.HK",
+		market: "HK",
+		tradable: false,
+	};
+	const awaiting = { ...instrument, symbol: "AWAITING", tradable: false };
+	const catalog = [instrument, hk, awaiting];
+	for (const market of ["all", "CN", "US"]) {
+		expect(localSearchCandidates(catalog, "  ", market)).toEqual([instrument]);
+	}
+	expect(localSearchCandidates(catalog, "", "HK")).toEqual([hk]);
+	expect(localSearchCandidates(catalog, "awaiting", "all")).toEqual([awaiting]);
 });

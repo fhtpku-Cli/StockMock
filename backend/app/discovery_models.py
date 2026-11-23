@@ -1,10 +1,14 @@
 """搜索观察标的不携带未经核验的交易规则。"""
 
-from typing import Literal
+from typing import Final, Literal
+
+from pydantic import Field, ValidationInfo, field_validator
 
 from app.instrument_registry import resolve_rule
 from app.instrument_rules import InstrumentRule
 from app.models import Currency, Instrument, Model
+
+_LEGACY_RESTRICTION: Final = "交易规则尚未核验，仅供观察；港股模拟交易仍需已核验行情权限"
 
 
 class ObservationInstrument(Model):
@@ -17,7 +21,7 @@ class ObservationInstrument(Model):
     kind: Literal["stock", "ETF"]
     provider_code: str
     tradable: Literal[False] = False
-    restriction: str = "交易规则尚未核验，仅供观察；港股模拟交易仍需已核验行情权限"
+    restriction: str = Field(default="", validate_default=True)
     lot_size: None = None
     tick_size: None = None
     min_buy_quantity: None = None
@@ -28,15 +32,23 @@ class ObservationInstrument(Model):
     rule_source: str = ""
     verified_on: str = ""
 
+    @field_validator("restriction")
+    @classmethod
+    def restriction_by_market(cls, value: str, info: ValidationInfo) -> str:
+        """新观察标的与旧版保存的通用提示按市场展示，保留标的专属限制。"""
+        if value and value != _LEGACY_RESTRICTION:
+            return value
+        if info.data.get("market") == "HK":
+            return "港股仅供观察，暂未开放模拟交易。"
+        return "首次模拟买入时核验交易资格，通过后可预览委托。"
+
 
 class SearchResult(Model):
     """搜索覆盖受供应商限制，不能解释为完整全球清单。"""
 
     items: list[Instrument | ObservationInstrument]
     source: str = "tencent-smartbox / eastmoney-us-classification / hkex-securities-list"
-    message: str = (
-        "供应商搜索结果可能截断，非完整市场清单；筛选无结果时请输入更精确代码；核验前仅供观察；可在详情申请启用"
-    )
+    message: str = "在线结果可能不完整，可输入准确代码缩小范围。未启用的 A 股和美股在首次模拟买入时核验，港股仅供观察。"
 
 
 def observation_identity(value: str | InstrumentRule | ObservationInstrument) -> InstrumentRule | ObservationInstrument:
