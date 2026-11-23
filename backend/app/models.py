@@ -2,9 +2,9 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, ClassVar, Literal
+from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
 Currency = Literal["CNY", "USD", "HKD"]
 
@@ -84,6 +84,23 @@ class OrderInput(OrderParameters):
 
     expected_round_id: str | None = Field(default=None, max_length=36)
     expected_expires_at: AwareDatetime | None = None
+
+    save_as_plan: bool = Field(default=False, exclude_if=lambda value: value is False)
+    plan_review_date: date | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def validate_plan_sync(self) -> Self:
+        """同步计划仅用于有依据的未关联买单。"""
+        if self.plan_review_date is not None and not self.save_as_plan:
+            raise ValueError("复查日期仅用于同步创建计划")
+        if self.save_as_plan and (
+            self.side != "buy"
+            or self.plan_id is not None
+            or self.plan_version is not None
+            or not (self.reason.strip() or self.target_price or self.stop_price)
+        ):
+            raise ValueError("同步计划需要未关联计划的买单，并填写理由、目标价或止损参考价")
+        return self
 
 
 class FillObservation(Model):
@@ -207,6 +224,30 @@ class OrderView(Order):
     waiting: WaitingView | None = None
 
 
+class StopLoss(Model):
+    """按本单数量和保护价格估算的含费损失。"""
+
+    amount: Decimal
+    cny: Decimal | None = None
+    asset_percent: Percentage | None = None
+
+
+class PositionImpact(Model):
+    """同一次预览的估值、仓位和资金占用依据。"""
+
+    status: Literal["complete", "expired", "incomplete", "missing_fx"]
+    current_percent: Percentage | None = None
+    after_percent: Percentage | None = None
+    reserved_cny_percent: Percentage | None = None
+    reserved_foreign_percent: Percentage | None = None
+    remaining_quantity: int | None = None
+    active_orders: int
+    valuation_time: datetime | None = None
+    quote_time: datetime
+    fx_source: Literal["估值汇率", "预览汇率", "人民币原币"] | None = None
+    fx_time: datetime | None = None
+
+
 class Preview(Model):
     """订单价格边界、费用与预留预览。"""
 
@@ -221,6 +262,8 @@ class Preview(Model):
     fx_time: datetime | None
     expires_at: datetime
     warnings: list[str]
+    stop_loss: StopLoss | None = None
+    position_impact: PositionImpact | None = None
 
 
 class CashView(Model):
@@ -342,3 +385,8 @@ class DomainError(Exception):
         self.code: str = code
         self.message: str = message
         self.status: int = status
+
+
+def plan_sync_conflict() -> DomainError:
+    """同步失败时要求用户重新选择已有计划。"""
+    return DomainError("plan_sync_conflict", "该证券刚有进行中计划，请在计划中选择后重新预览", 409)
