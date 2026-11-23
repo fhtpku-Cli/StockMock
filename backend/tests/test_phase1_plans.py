@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -128,3 +129,35 @@ def test_after_close_observation(
     PlanWorker(engine).tick()
     assert order.plan_id is not None
     assert [event.condition for event in alerts(engine.store, engine.store.read().id)] == expected
+
+
+def test_sync_retries_across_rounds_leave_archived_plan_alone(engine: Engine, api: TestClient) -> None:
+    old_round = engine.store.read().id
+    original = sync_request().model_copy(update={"expected_round_id": old_round})
+    payload = original.model_dump(mode="json", exclude_none=True)
+    order = OrderView.model_validate_json(api.post("/api/orders", json=payload).content)
+    _ = engine.cancel(order.id, NOW)
+    (plan,) = round_plans(engine.store, old_round)
+    reset = api.post("/api/rounds/reset", json={"request_id": str(uuid4()), "confirmation": "重新开始"})
+    assert reset.status_code == 200, reset.text
+    retry = api.post("/api/orders", json=payload, headers={"X-StockMock-Retry": "1"})
+    assert OrderView.model_validate_json(retry.content).id == order.id
+    late = api.post("/api/orders", json={**payload, "request_id": str(uuid4())})
+    assert late.json()["detail"]["code"] == "round_changed"
+    assert round_plans(engine.store, old_round) == [plan]
+    assert round_plans(engine.store, engine.store.read().id) == []
+
+
+def test_legacy_payload_retry_with_new_defaults(engine: Engine, api: TestClient) -> None:
+    original = request()
+    payload = original.model_dump(mode="json", exclude_none=True)
+    accepted = api.post("/api/orders", json=payload)
+    assert accepted.status_code == 200
+    retry = api.post(
+        "/api/orders",
+        json={**payload, "save_as_plan": False, "plan_review_date": None},
+        headers={"X-StockMock-Retry": "1"},
+    )
+    assert retry.json() == accepted.json()
+    assert len(engine.store.read().orders) == 1
+    assert round_plans(engine.store, engine.store.read().id) == []
