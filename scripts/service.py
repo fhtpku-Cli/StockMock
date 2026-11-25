@@ -38,7 +38,7 @@ def plist(root: Path) -> dict[str, str | bool | int | list[str]]:
         "RunAtLoad": True,
         "KeepAlive": True,
         "ThrottleInterval": 10,
-        "ProcessType": "Background",
+        "ProcessType": "Interactive",
         "StandardOutPath": "/dev/null",
         "StandardErrorPath": "/dev/null",
     }

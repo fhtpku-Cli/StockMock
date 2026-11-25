@@ -75,6 +75,8 @@ class ServiceTests(unittest.TestCase):
             path = Path(temp) / "service.plist"
             path.write_bytes(plistlib.dumps(payload))
             self.assertEqual(plistlib.loads(path.read_bytes()), payload)
+            # 后台类任务在长时间无人操作时可能不被调度，交易处理会停顿。
+            self.assertEqual(payload["ProcessType"], "Interactive")
             if REAL_PLATFORM == "darwin":
                 result = subprocess.run(["plutil", "-lint", str(path)], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
