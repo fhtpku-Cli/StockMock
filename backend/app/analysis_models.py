@@ -1,13 +1,13 @@
 """只读资产分析的金额、日期和分页边界。"""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from app.models import Currency, Entry, Model
+from app.models import Currency, Entry, Model, Percentage
 from app.personal_models import ValuationSnapshot
 from app.plan_queries import PageQuery
 
@@ -85,6 +85,27 @@ class SnapshotQuery(Model):
         return self
 
 
+class DrawdownPoint(Model):
+    """最大回落一端所使用的首次完整观察值。"""
+
+    day: date
+    captured_at: datetime
+    total_assets_cny: Decimal
+
+
+class SnapshotDrawdown(Model):
+    """只在连续完整段内比较前期高点与随后低点。"""
+
+    status: Literal["computed", "no_drop", "insufficient"]
+    reason: str
+    peak: DrawdownPoint | None
+    trough: DrawdownPoint | None
+    amount_cny: Decimal | None
+    percent: Percentage | None
+    segments_used: int
+    broken_days: int
+
+
 class SnapshotRange(Model):
     """端点永远是实际首末记录，不跳过无效端点。"""
 
@@ -100,3 +121,4 @@ class SnapshotRange(Model):
     change_cny: Decimal | None
     continuous: bool
     reason: str
+    drawdown: SnapshotDrawdown
