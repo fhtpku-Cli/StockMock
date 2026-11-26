@@ -75,6 +75,7 @@ export function App() {
 		readonly id: number;
 		readonly filter: "all" | "active";
 		readonly receipt?: Order;
+		readonly locate?: string;
 	}>({ id: 0, filter: "all" });
 	const openOrders = (filter: "all" | "active", receipt?: Order) => {
 		cancelAdmission();
@@ -84,6 +85,18 @@ export function App() {
 			id: entry.id + 1,
 			filter,
 			...(receipt && { receipt }),
+		}));
+		setPage("orders");
+	};
+	// 只定位并高亮指定委托：不显示回执，也不清除待确认记录。
+	const locateOrder = (orderId: string) => {
+		cancelAdmission();
+		symbols.cancel();
+		main.current?.scrollTo({ top: 0 });
+		setOrdersEntry((entry) => ({
+			id: entry.id + 1,
+			filter: "all",
+			locate: orderId,
 		}));
 		setPage("orders");
 	};
@@ -320,6 +333,7 @@ export function App() {
 						{page === "assets" && (
 							<PortfolioView
 								onOrders={() => openOrders("active")}
+								onLocateOrder={locateOrder}
 								onExplore={() => navigate("watchlist")}
 								onCash={() => setOverlay({ kind: "cash" })}
 								onSymbol={(symbol) => void symbols.open(symbol)}
@@ -345,6 +359,7 @@ export function App() {
 										: setOverlay({ kind: "reorder", order })
 								}
 								{...(ordersEntry.receipt && { receipt: ordersEntry.receipt })}
+								{...(ordersEntry.locate && { locate: ordersEntry.locate })}
 							/>
 						)}{" "}
 						{page === "journal" && <Journal />}

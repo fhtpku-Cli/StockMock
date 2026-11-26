@@ -17,12 +17,17 @@ import { Empty, ErrorNotice, Loading, Modal, Panel } from "./ui";
 import { useOnline } from "./useOnline";
 export const CANCEL_CONFIRM =
 	"撤单申请提交后不能撤回；委托生效后，系统要等撤单前的延迟数据确认，期间仍可能成交。";
+export const LOCATE_MISSING = "已结束，可在委托记录中按创建日期查找。";
+const LOCATE_HIGHLIGHT_MS = 4000;
 export function Orders({
 	receipt,
+	locate,
 	onReorder,
 	initialFilter,
 }: {
 	readonly receipt?: Order;
+	/** 只定位并高亮这一笔委托；不显示回执，也不清除待确认记录。 */
+	readonly locate?: string;
 	readonly onReorder: (order: Order) => void;
 	readonly initialFilter: "all" | "active";
 }) {
@@ -63,6 +68,32 @@ export function Orders({
 			]);
 		},
 	});
+	const listRef = useRef<HTMLDivElement>(null);
+	const [located, setLocated] = useState<string | null>(null);
+	const [locateMissing, setLocateMissing] = useState(false);
+	const locateDone = useRef(false);
+	useEffect(() => {
+		if (!locate || locateDone.current || !query.data) return;
+		if (query.data.some((o) => o.id === locate)) {
+			// 新进入委托页时筛选已重置为全部，全量列表中一定可见。
+			locateDone.current = true;
+			setLocated(locate);
+		} else if (!query.isFetching && !query.isError) {
+			// 缓存与最新读取都没有这一笔，才提示按创建日期查找；读取失败时不误报。
+			locateDone.current = true;
+			setLocateMissing(true);
+		}
+	}, [locate, query.data, query.isFetching, query.isError]);
+	useEffect(() => {
+		if (!located) return;
+		const row = listRef.current?.querySelector<HTMLElement>(
+			`[data-order-id="${CSS.escape(located)}"]`,
+		);
+		row?.scrollIntoView({ block: "center" });
+		row?.focus({ preventScroll: true });
+		const timer = setTimeout(() => setLocated(null), LOCATE_HIGHLIGHT_MS);
+		return () => clearTimeout(timer);
+	}, [located]);
 	const orders = query.data?.filter(
 		(o) =>
 			recordMatches(o.created_at, o.currency, recordFilter) &&
@@ -83,6 +114,11 @@ export function Orders({
 				</p>
 			)}
 			{receiptStorageError && <ErrorNotice message={receiptStorageError} />}
+			{locateMissing && (
+				<p role="status" className="notice">
+					{LOCATE_MISSING}
+				</p>
+			)}
 			<div className="notice">
 				委托以有效市场行情判断成交，回执可能延迟。撤单确认前，原占用资金或持仓继续保留。
 			</div>
@@ -144,11 +180,12 @@ export function Orders({
 						)}
 					</Empty>
 				) : (
-					<div className="order-list">
+					<div className="order-list" ref={listRef}>
 						{orders?.map((o) => (
 							<OrderRecord
 								key={o.id}
 								order={o}
+								located={o.id === located}
 								actions={
 									<>
 										<button

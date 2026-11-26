@@ -7,6 +7,7 @@ import { api, errorMessage, fullTime, money } from "./api";
 import { BackgroundStatus } from "./BackgroundStatus";
 import { Composition } from "./Composition";
 import { Positions } from "./Positions";
+import { RecentEndings } from "./RecentEndings";
 import { SignedValue } from "./SignedValue";
 import { portfolioSchema } from "./schema";
 import { Badge, ErrorNotice, Loading, Panel } from "./ui";
@@ -16,6 +17,7 @@ export function PortfolioView({
 	onCash,
 	onSymbol,
 	onOrders,
+	onLocateOrder,
 	symbolError = null,
 	onReviewOpen,
 }: {
@@ -23,6 +25,7 @@ export function PortfolioView({
 	readonly onCash: () => void;
 	readonly onSymbol: (symbol: string) => void;
 	readonly onOrders: () => void;
+	readonly onLocateOrder: (orderId: string) => void;
 	readonly symbolError?: SymbolError;
 	readonly onReviewOpen?: () => void;
 }) {
@@ -85,6 +88,11 @@ export function PortfolioView({
 				</div>
 			))}
 			<ActiveOrdersSummary value={p.active_orders} onOrders={onOrders} />
+			<RecentEndings
+				key={p.round_id}
+				roundId={p.round_id}
+				onLocate={onLocateOrder}
+			/>
 			<div className="stack">
 				<Positions
 					positions={p.positions}

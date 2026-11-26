@@ -3,7 +3,11 @@ import { useState } from "react";
 import { dateRangeError, filterParams } from "./analysis";
 import { api, errorMessage, money, time } from "./api";
 import { CsvDownload } from "./CsvDownload";
-import { snapshotRangeSchema } from "./history";
+import {
+	DRAWDOWN_BROKEN_NOTE,
+	drawdownSummary,
+	snapshotRangeSchema,
+} from "./history";
 import { SignedValue } from "./SignedValue";
 import { SnapshotChart } from "./SnapshotChart";
 import { ErrorNotice, Loading, Panel } from "./ui";
@@ -136,6 +140,14 @@ export function AssetHistory({ roundId }: { readonly roundId?: string }) {
 								: "无记录"}
 						</small>
 					</div>
+					{query.data.drawdown && (
+						<div className="history-drawdown">
+							<p>{drawdownSummary(query.data.drawdown)}</p>
+							{query.data.drawdown.broken_days > 0 && (
+								<p className="footnote">{DRAWDOWN_BROKEN_NOTE}</p>
+							)}
+						</div>
+					)}
 					{!query.data.continuous && query.data.recorded_days > 0 && (
 						<p className="notice">
 							覆盖不连续：未记录日期、缺失或过时估值均不连线。有效首末记录的差额不代表逐日或收盘收益。
@@ -146,7 +158,10 @@ export function AssetHistory({ roundId }: { readonly roundId?: string }) {
 							所选范围没有实际资产记录。可调整日期；不会补采过去的数据。
 						</p>
 					) : (
-						<SnapshotChart items={query.data.items} />
+						<SnapshotChart
+							items={query.data.items}
+							drawdown={query.data.drawdown}
+						/>
 					)}
 					<div className="analysis-actions">
 						<CsvDownload

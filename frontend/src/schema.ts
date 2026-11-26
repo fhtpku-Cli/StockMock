@@ -320,3 +320,31 @@ export const sessionSchema = z.object({
 	configured: z.boolean(),
 });
 export const acknowledgmentSchema = z.unknown();
+// 09 隔夜摘要：最近 3 个自然日内结束的委托（只读，当前轮次）。
+const endingCurrency = z.enum(["CNY", "USD", "HKD"]);
+export const recentEndingSchema = z.object({
+	order_id: z.string(),
+	symbol: z.string(),
+	name: z.string().nullable(),
+	side: z.enum(["buy", "sell"]),
+	quantity: z.number().int(),
+	status: z.enum(["filled", "cancelled", "expired", "terminated"]),
+	status_reason: z.string(),
+	currency: endingCurrency,
+	fill_price: decimal.nullable(),
+	filled_at: z.string().nullable(),
+	ended_at: z.string(),
+	cash_changes: z.array(
+		z.object({ currency: endingCurrency, amount: decimal }),
+	),
+	released_cny: decimal.nullable(),
+	released_foreign: decimal.nullable(),
+	released_shares: z.number().int().nullable(),
+});
+export type RecentEnding = z.infer<typeof recentEndingSchema>;
+export const recentEndingsSchema = z.object({
+	window_start: z.string(),
+	window_end: z.string(),
+	items: z.array(recentEndingSchema),
+	more: z.boolean(),
+});

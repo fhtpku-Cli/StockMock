@@ -1,9 +1,17 @@
 import { money, time } from "./api";
-import { type Snapshot, snapshotSegments } from "./history";
+import {
+	type Drawdown,
+	drawdownDayLabel,
+	type Snapshot,
+	snapshotSegments,
+} from "./history";
 export function SnapshotChart({
 	items,
+	drawdown,
 }: {
 	readonly items: readonly Snapshot[];
+	/** 区间高点回落；旧后端不返回或未算出回落时不画特殊标记。 */
+	readonly drawdown?: Drawdown | undefined;
 }) {
 	const rows = [...items].sort((a, b) => a.day.localeCompare(b.day));
 	const segments = snapshotSegments(rows);
@@ -17,6 +25,12 @@ export function SnapshotChart({
 		20 + ((Date.parse(day) - start) / Math.max(end - start, 86400000)) * 660;
 	const y = (value: string | null) =>
 		160 - ((Number(value) - low) / Math.max(high - low, 1)) * 130;
+	const marks =
+		drawdown?.status === "computed" && drawdown.peak && drawdown.trough
+			? { peak: drawdown.peak, trough: drawdown.trough }
+			: null;
+	const peakDay = marks?.peak.day ?? null;
+	const troughDay = marks?.trough.day ?? null;
 
 	return (
 		<>
@@ -26,7 +40,11 @@ export function SnapshotChart({
 					<svg
 						viewBox="0 0 700 190"
 						role="img"
-						aria-label="每日资产轨迹，缺失日期断开"
+						aria-label={`每日资产轨迹，缺失日期断开${
+							marks
+								? `；回落高点 ${drawdownDayLabel(marks.peak.day, marks.trough.day)} ${money(marks.peak.total_assets_cny)}，回落低点 ${drawdownDayLabel(marks.trough.day, marks.peak.day)} ${money(marks.trough.total_assets_cny)}`
+								: ""
+						}`}
 					>
 						<path d="M20 30H680 M20 95H680 M20 160H680" className="grid-line" />
 						{segments.map((segment) => (
@@ -40,24 +58,60 @@ export function SnapshotChart({
 									stroke="currentColor"
 									strokeWidth="2"
 								/>
-								{segment.map((r) => (
-									<circle
-										key={r.id}
-										cx={x(r.day)}
-										cy={y(r.total_assets_cny)}
-										r="3"
-										fill="currentColor"
-									>
-										<title>
-											{r.day} {money(r.total_assets_cny)}
-										</title>
-									</circle>
-								))}
+								{segment.map((r) => {
+									const cx = x(r.day),
+										cy = y(r.total_assets_cny);
+									// 高点用空心上三角、低点用实心下三角，与普通圆点区分。
+									if (r.day === peakDay || r.day === troughDay) {
+										const peak = r.day === peakDay;
+										const point = peak ? marks?.peak : marks?.trough;
+										const other = peak ? troughDay : peakDay;
+										return (
+											<path
+												key={r.id}
+												data-drawdown-mark={peak ? "peak" : "trough"}
+												className={
+													peak ? "chart-marker-peak" : "chart-marker-trough"
+												}
+												d={
+													peak
+														? `M${cx} ${cy - 6}L${cx + 6} ${cy + 4}L${cx - 6} ${cy + 4}Z`
+														: `M${cx} ${cy + 6}L${cx + 6} ${cy - 4}L${cx - 6} ${cy - 4}Z`
+												}
+											>
+												<title>
+													{peak ? "回落高点 " : "回落低点 "}
+													{drawdownDayLabel(r.day, other)}{" "}
+													{point ? money(point.total_assets_cny) : ""}
+												</title>
+											</path>
+										);
+									}
+									return (
+										<circle
+											key={r.id}
+											cx={cx}
+											cy={cy}
+											r="3"
+											fill="currentColor"
+										>
+											<title>
+												{r.day} {money(r.total_assets_cny)}
+											</title>
+										</circle>
+									);
+								})}
 							</g>
 						))}
 					</svg>
 					<figcaption>
 						<span>{rows[0]?.day}</span>
+						{marks && (
+							<span className="chart-legend">
+								<span>△ 回落高点</span>
+								<span>▼ 回落低点</span>
+							</span>
+						)}
 						<span>{rows.at(-1)?.day}</span>
 					</figcaption>
 				</figure>

@@ -17,15 +17,22 @@ export function OrderRecord({
 	order: o,
 	actions,
 	expanded = false,
+	located = false,
 }: {
 	readonly order: Order;
 	readonly actions?: ReactNode;
 	readonly expanded?: boolean;
+	/** 从资产页定位到这一笔时短暂高亮，并可接收焦点。 */
+	readonly located?: boolean;
 }) {
 	const waiting =
 		o.status === "accepted" || o.status === "cancel_pending" ? o.waiting : null;
 	return (
-		<article className="order-row" data-order-id={o.id}>
+		<article
+			className={located ? "order-row located" : "order-row"}
+			data-order-id={o.id}
+			{...(located && { tabIndex: -1, "aria-current": "true" as const })}
+		>
 			<div className="order-top">
 				<div>
 					<strong>{o.symbol}</strong>
