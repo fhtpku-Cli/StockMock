@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Literal
+from typing import Final, Literal
 from uuid import uuid4
 
 import pytest
@@ -18,6 +18,7 @@ from app.order_endings import EndedStatus, RecentEndings, recent_endings
 from tests.test_api import PASSWORD
 from tests.test_engine import NOW
 
+ZERO: Final = Decimal(0)
 OrderStatus = Literal["accepted", "cancel_pending", "filled", "cancelled", "expired", "terminated"]
 
 
@@ -33,8 +34,8 @@ def make_order(  # noqa: PLR0913 — 测试工厂集中声明委托的所有相�
     cancel_at: datetime | None = None,
     fill_price: Decimal | None = None,
     filled_at: datetime | None = None,
-    reserved_cny: Decimal = Decimal(0),
-    reserved_foreign: Decimal = Decimal(0),
+    reserved_cny: Decimal = ZERO,
+    reserved_foreign: Decimal = ZERO,
 ) -> Order:
     """构造完全受控的委托，不调用交易或行情路径。"""
     return Order(
