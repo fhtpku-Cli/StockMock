@@ -1,6 +1,6 @@
 """同批行情与汇率派生构成，不重拉来源。"""
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.accounting import money
 from app.models import Allocation, Composition, Currency, PositionView, State
@@ -10,6 +10,11 @@ from app.valuation import Valuation
 def percentage(value: Decimal | None, total: Decimal | None) -> Decimal | None:
     """缺失或非正分母时比例未知。"""
     return value / total * 100 if value is not None and total is not None and total > 0 else None
+
+
+def rounded(value: Decimal | None) -> Decimal | None:
+    """仅在对外展示比例时量化到两位。"""
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if value is not None else None
 
 
 def complete_sum(values: list[Decimal | None]) -> Decimal | None:

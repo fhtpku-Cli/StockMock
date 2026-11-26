@@ -3,7 +3,7 @@
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from http import HTTPStatus
 from typing import Annotated, Literal
 
@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Header, Query
 
 from app.accounting import ACTIVE, available, money
 from app.auth import Auth
-from app.composition import percentage
+from app.composition import percentage, rounded
 from app.engine import Engine, PreviewContext
 from app.models import (
     DomainError,
@@ -21,6 +21,7 @@ from app.models import (
     PositionImpact,
     Preview,
 )
+from app.order_endings import RecentEndings, recent_endings
 from app.order_requests import OrderRejection, order_receipt, reject_order
 from app.order_views import WaitingContext, order_view
 from app.personal_models import Sizing
@@ -59,11 +60,6 @@ def preview_rate(
     if context.rate and context.rate.cny_per_unit > 0:
         return context.rate.cny_per_unit, "预览汇率", context.rate.market_time
     return None, None, None
-
-
-def rounded(value: Decimal | None) -> Decimal | None:
-    """仅在对外展示比例时量化到两位。"""
-    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if value is not None else None
 
 
 def estimate_position(context: PreviewContext, request: OrderInput, cached: ValuedState | None) -> Preview:
@@ -149,6 +145,11 @@ def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker, cache: Va
     def orders() -> list[OrderView]:
         context = WaitingContext(datetime.now(UTC), engine.paused, worker.failures)
         return [order_view(o, engine.catalog, waiting=context) for o in reversed(engine.store.read().orders)]
+
+    @app.get("/api/orders/recent-endings", dependencies=[Depends(auth.require)])
+    def endings() -> RecentEndings:
+        """只读当前轮次最近 3 个北京自然日内结束的委托。"""
+        return recent_endings(engine.store.read(), engine.catalog, datetime.now(UTC))
 
     @app.get("/api/orders/receipts/{request_id}", dependencies=[Depends(auth.require)])
     def receipt(request_id: str) -> OrderView:
