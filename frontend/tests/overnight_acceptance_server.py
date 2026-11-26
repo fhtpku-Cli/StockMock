@@ -42,7 +42,10 @@ class FixtureHost:
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "http":
             headers = dict(scope["headers"])
-            if headers.get(b"host") != self.site or headers.get(b"origin", b"http://" + self.site) != b"http://" + self.site:
+            if (
+                headers.get(b"host") != self.site
+                or headers.get(b"origin", b"http://" + self.site) != b"http://" + self.site
+            ):
                 await PlainTextResponse("仅限隔离站点", status_code=403)(scope, receive, send)
                 return
             headers[b"host"] = self.local
@@ -55,9 +58,13 @@ class FixtureHost:
 def seed(engine: Engine) -> None:
     """北京时间 10/22 10:00；窗口为 10/20 00:00 起。"""
     with engine.store.transaction() as connection:
-        state = engine.store.load(connection).model_copy(update={"created_at": NOW - timedelta(days=12)})
+        state = engine.store.load(connection).model_copy(
+            update={"created_at": NOW - timedelta(days=12)}
+        )
         state.watchlist[:] = ["000001.SZ", "600519.SS", "AAPL"]
-        state.lots.append(Lot(symbol="600519.SS", quantity=200, cost=Decimal("20000"), sellable_at=NOW))
+        state.lots.append(
+            Lot(symbol="600519.SS", quantity=200, cost=Decimal("20000"), sellable_at=NOW)
+        )
         delayed = make_order(
             "a-delayed",
             status="filled",
@@ -100,7 +107,9 @@ def seed(engine: Engine) -> None:
             quantity=100,
             confirmed_at=datetime(2026, 10, 20, 7, 0, tzinfo=UTC),
         ).model_copy(update={"status_reason": "当日有效委托到期，未成交"})
-        outside = make_order("e-outside", status="expired", confirmed_at=datetime(2026, 10, 19, 15, 59, tzinfo=UTC))
+        outside = make_order(
+            "e-outside", status="expired", confirmed_at=datetime(2026, 10, 19, 15, 59, tzinfo=UTC)
+        )
         active = make_order("f-active", status="accepted", confirmed_at=None)
         state.orders.extend([outside, expired_sell, precancel, usd, delayed, active])
         state.ledger.extend(
@@ -126,8 +135,13 @@ def seed(engine: Engine) -> None:
         21: "1005000.00",
         22: "1008000.00",
     }
-    points = [point(date(2026, 10, day), amount).model_copy(update={"round_id": round_id}) for day, amount in values.items()]
-    points.append(point(date(2026, 10, 20), None, status="stale").model_copy(update={"round_id": round_id}))
+    points = [
+        point(date(2026, 10, day), amount).model_copy(update={"round_id": round_id})
+        for day, amount in values.items()
+    ]
+    points.append(
+        point(date(2026, 10, 20), None, status="stale").model_copy(update={"round_id": round_id})
+    )
     save_points(engine, points)
 
 
@@ -145,13 +159,29 @@ def main():
     if len(secret) < 32:
         parser.error("验收运行器须提供一次性随机测试口令")
     with tempfile.TemporaryDirectory(prefix="stockmock-0912-") as temp, ExitStack() as stack:
-        for module in ("trading_routes", "asset_routes", "analysis_routes", "personal_routes", "record_routes", "market_routes", "storage"):
+        for module in (
+            "trading_routes",
+            "asset_routes",
+            "analysis_routes",
+            "personal_routes",
+            "record_routes",
+            "market_routes",
+            "storage",
+        ):
             stack.enter_context(patch(f"app.{module}.datetime", Clock))
         stack.enter_context(patch("app.discovery.Discovery.search", return_value=()))
-        engine = Engine(Store(Path(temp) / "accept.sqlite3"), ControlledProvider(), clock=lambda: NOW)
+        engine = Engine(
+            Store(Path(temp) / "accept.sqlite3"), ControlledProvider(), clock=lambda: NOW
+        )
         seed(engine)
         app = create_app(engine=engine, password=secret, run_worker=False)
-        uvicorn.run(FixtureHost(app, args.port), host="127.0.0.1", port=args.port, log_level="warning", access_log=False)
+        uvicorn.run(
+            FixtureHost(app, args.port),
+            host="127.0.0.1",
+            port=args.port,
+            log_level="warning",
+            access_log=False,
+        )
 
 
 if __name__ == "__main__":
