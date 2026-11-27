@@ -18,7 +18,7 @@ from app.models import (
 from app.operations import convert
 from app.plan_worker import PlanWorker
 from app.views import ValuationCache, portfolio
-from app.worker import Worker
+from app.worker import Worker, gap_summary
 
 
 def register(  # noqa: PLR0913 展示读取源必须显式传入，不从 engine.provider 隐式推断。
@@ -35,7 +35,14 @@ def register(  # noqa: PLR0913 展示读取源必须显式传入，不从 engine
 
     @app.get("/api/health", dependencies=[Depends(auth.require)])
     def health() -> HealthView:
-        return HealthView(last_run=worker.view.last_run, status=worker.view.status, plan_worker=plan_worker.view)
+        count, gaps = gap_summary(engine.store, datetime.now(UTC))
+        return HealthView(
+            last_run=worker.view.last_run,
+            status=worker.view.status,
+            plan_worker=plan_worker.view,
+            recent_gaps=gaps,
+            gap_count_7d=count,
+        )
 
     @app.get("/api/portfolio", dependencies=[Depends(auth.require)])
     def account() -> Portfolio:

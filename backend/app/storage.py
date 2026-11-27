@@ -53,6 +53,14 @@ class Store:
             _ = connection.execute(
                 "CREATE TABLE IF NOT EXISTS activated_instruments(symbol TEXT PRIMARY KEY, data TEXT NOT NULL)"
             )
+            _ = connection.execute(
+                """CREATE TABLE IF NOT EXISTS worker_heartbeat(
+                id INTEGER PRIMARY KEY CHECK(id=1), last_success TEXT NOT NULL)"""
+            )
+            _ = connection.execute(
+                """CREATE TABLE IF NOT EXISTS worker_gaps(
+                id TEXT PRIMARY KEY, started_at TEXT, ended_at TEXT, markets TEXT, cause TEXT)"""
+            )
             if connection.execute("SELECT id FROM rounds WHERE active=1").fetchone() is None:
                 self.save(connection, State(id=str(uuid4()), created_at=datetime.now(UTC)))
 
@@ -64,6 +72,14 @@ class Store:
             with connection:
                 _ = connection.execute("BEGIN IMMEDIATE")
                 yield connection
+
+    @contextmanager
+    def read_transaction(self) -> Generator[sqlite3.Connection]:
+        """在只读连接的一致快照中读取，不取得写锁。"""
+        uri = f"{self.path.resolve().as_uri()}?mode=ro"
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
+            _ = connection.execute("BEGIN")
+            yield connection
 
     def load(self, connection: sqlite3.Connection) -> State:
         """读取唯一活动轮次，拒绝损坏的数据库状态。"""
