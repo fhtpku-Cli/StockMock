@@ -1,5 +1,7 @@
 """启动：uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000。"""
 
+import logging
+import sqlite3
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI
@@ -35,7 +37,12 @@ def register(  # noqa: PLR0913 展示读取源必须显式传入，不从 engine
 
     @app.get("/api/health", dependencies=[Depends(auth.require)])
     def health() -> HealthView:
-        count, gaps = gap_summary(engine.store, datetime.now(UTC))
+        try:
+            count, gaps = gap_summary(engine.store, datetime.now(UTC))
+        except (sqlite3.Error, ValueError) as error:
+            # 数据库暂不可读时仍返回内存中的后台状态，中断记录留待下次读取。
+            logging.getLogger(__name__).warning("后台中断记录读取失败 type=%s", type(error).__name__)
+            count, gaps = 0, []
         return HealthView(
             last_run=worker.view.last_run,
             status=worker.view.status,

@@ -353,3 +353,17 @@ def test_health_endpoint_returns_empty_gaps_on_new_database(engine: Engine) -> N
     # Then: 接口显式返回默认空字段。
     assert health.recent_gaps == []
     assert health.gap_count_7d == 0
+
+
+def test_health_still_reports_worker_when_gap_records_unreadable(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unreadable(*_: object) -> tuple[int, list[object]]:
+        raise sqlite3.OperationalError
+
+    monkeypatch.setattr("app.asset_routes.gap_summary", unreadable)
+    response = api.get("/api/health")
+    assert response.status_code == 200
+    health = HealthView.model_validate_json(response.content)
+    assert health.gap_count_7d == 0
+    assert health.recent_gaps == []
