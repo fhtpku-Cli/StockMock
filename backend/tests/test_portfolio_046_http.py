@@ -88,16 +88,16 @@ def test_actual_http_and_store_reopen_preserve_old_json_and_exports(
                 )
             ),
         )
-    # Then: 十张业务表和State/Order/Lot原始文本完全相同，新增投影未入库。
+    # Then: 十二张业务表和State/Order/Lot原始文本完全相同，新增投影未入库。
     after = database_dump(engine.store)
     assert after == before
     assert "active_orders" not in after
     assert "sellability" not in after
-    assert before.count("CREATE TABLE ") == 10
+    assert before.count("CREATE TABLE ") == 12
     evidence("q04-after.sql", after)
     evidence(
         "q04-read-only-result.txt",
-        "10业务表、schema、State/Order/Lot原JSON逐字相同；GET及重开无持久投影；订单和两种CSV字节相同",
+        "12业务表、schema、State/Order/Lot原JSON逐字相同；GET及重开无持久投影；订单和两种CSV字节相同",
     )
 
 

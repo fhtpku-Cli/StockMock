@@ -11,8 +11,10 @@ from fastapi import Depends, FastAPI, Header, Query
 
 from app.accounting import ACTIVE, available, money
 from app.auth import Auth
+from app.catalog import instrument
 from app.composition import percentage, rounded
 from app.engine import Engine, PreviewContext
+from app.episodes import PositionEpisodes, position_episodes
 from app.models import (
     DomainError,
     Order,
@@ -119,8 +121,19 @@ def estimate_position(context: PreviewContext, request: OrderInput, cached: Valu
     return preview.model_copy(update={"position_impact": impact, "stop_loss": stop_loss})
 
 
+def register_episode_routes(app: FastAPI, engine: Engine, auth: Auth) -> None:
+    """集中注册持仓回看，避免增加交易路由函数的嵌套复杂度。"""
+
+    @app.get("/api/positions/{symbol}/episodes", dependencies=[Depends(auth.require)])
+    def episodes(symbol: str) -> PositionEpisodes:
+        """只读当前轮次单只证券的建仓、清仓与公司行动时间线。"""
+        item = instrument(symbol, engine.catalog)
+        return position_episodes(engine.store, item, datetime.now(UTC))
+
+
 def register(app: FastAPI, engine: Engine, auth: Auth, worker: Worker, cache: ValuationCache) -> None:
     """注册本模块的个人账户 HTTP 接口。"""
+    register_episode_routes(app, engine, auth)
 
     @app.post("/api/orders/preview", dependencies=[Depends(auth.require)])
     def preview(body: OrderInput) -> Preview:

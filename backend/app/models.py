@@ -355,10 +355,24 @@ class Composition(Model):
     issues: list[str]
 
 
+GapMarket = Literal["CN", "HK", "US", "unknown"]
+
+
+class Gap(Model):
+    """一次与交易支持时段有交集或日历覆盖未知的后台间隔。"""
+
+    started_at: AwareDatetime
+    ended_at: AwareDatetime
+    duration_minutes: int
+    markets: list[GapMarket]
+
+
 class HealthView(WorkerView):
-    """兼容原撮合状态，同时暴露计划观察心跳。"""
+    """兼容原撮合状态，同时暴露计划观察心跳与近期后台中断。"""
 
     plan_worker: WorkerView
+    recent_gaps: list[Gap] = Field(default_factory=list)
+    gap_count_7d: int = 0
 
 
 class Portfolio(Model):

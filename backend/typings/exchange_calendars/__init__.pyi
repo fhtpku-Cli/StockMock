@@ -7,6 +7,7 @@ class Timestamp(Protocol):
 
 class ExchangeCalendar(Protocol):
     tz: tzinfo
+    first_session: Timestamp
     last_session: Timestamp
     def default_end(self) -> Timestamp: ...
     def date_to_session(self, date: str, direction: Literal["next", "previous", "none"]) -> Timestamp: ...
