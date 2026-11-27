@@ -221,14 +221,23 @@ test("事件时间为北京时间，市场日不同日时补充市场当地日�
 	).toBe("11/28 02:00（北京时间） · 市场日 11/27");
 });
 
+test("拆合股与股息只显示生效的市场日期，不显示推算时刻", () => {
+	for (const kind of ["split", "dividend"] as const)
+		expect(
+			eventTimeText(
+				event({ kind, at: "2026-10-15T04:00:00Z", market_date: "2026-10-15" }),
+			),
+		).toBe("10/15 生效（市场当地日期）");
+});
+
 test("段内最大持仓：含拆合股时标注口径", () => {
 	const withSplit = episode({
 		peak_quantity: 300,
 		events: [event({ kind: "split", ratio: "2:1" })],
 	});
-	expect(peakText(withSplit)).toBe("段内最大持仓 300 股/份（按拆合股后口径）");
+	expect(peakText(withSplit)).toBe("300 股/份（按拆合股后口径）");
 	expect(peakText(episode({ peak_quantity: 300 }))).toBe(
-		"段内最大持仓 300 股/份",
+		"300 股/份",
 	);
 });
 

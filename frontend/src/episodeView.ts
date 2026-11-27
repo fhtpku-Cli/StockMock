@@ -36,6 +36,9 @@ const beijingDay = (at: string): string =>
 
 /** 事件时间以北京时间为主；市场日与北京日期不是同一天时补充市场当地日期。 */
 export function eventTimeText(event: EpisodeEvent): string {
+	// 拆合股与股息只记录生效日期，按日级约定排序，不显示推算出的具体时刻。
+	if (event.kind === "split" || event.kind === "dividend")
+		return `${marketDay(event.market_date)} 生效（市场当地日期）`;
 	const base = `${time(event.at)}（北京时间）`;
 	return event.market_date && event.market_date !== beijingDay(event.at)
 		? `${base} · 市场日 ${marketDay(event.market_date)}`
@@ -122,9 +125,9 @@ export function eventDetailTexts(event: EpisodeEvent): readonly string[] {
 	return details;
 }
 
-/** 段内最大持仓；段内发生过拆合股时标注口径。 */
+/** 段内最大持仓的数值（标签由调用处给出）；段内发生过拆合股时标注口径。 */
 export function peakText(episode: Episode): string {
-	const base = `段内最大持仓 ${number(episode.peak_quantity)} 股/份`;
+	const base = `${number(episode.peak_quantity)} 股/份`;
 	return episode.events.some((event) => event.kind === "split")
 		? `${base}（按拆合股后口径）`
 		: base;

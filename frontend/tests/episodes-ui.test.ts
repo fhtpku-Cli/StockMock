@@ -193,8 +193,8 @@ test("时间线行含股息、市场日与事件后持仓，成交行可跳转�
 	const html = markup();
 	expect(html).toContain("每股股息 US$0.500");
 	expect(html).toContain("股息 US$50.00（应收）");
-	// 北京时间 11/28 05:00 与市场日 11/27 不是同一天，补充市场日。
-	expect(html).toContain("11/28 05:00（北京时间） · 市场日 11/27");
+	// 股息只记生效日期，按市场当地日期显示，不显示推算时刻。
+	expect(html).toContain("11/27 生效（市场当地日期）");
 	expect(html).toContain("事件后持仓 100 股/份");
 	// 展开的最近一段只有首买成交行带跳转按钮。
 	expect(html).toContain('data-order-id="order-first"');
@@ -209,7 +209,9 @@ test("重放与当前持仓不一致时顶部文字说明，段外事件单列",
 	expect(html).toContain("当时没有持仓，未计入任何段。");
 	expect(html).toContain("首买时间");
 	expect(html).toContain("2026-11-26 22:30:00（北京时间）");
-	expect(html).toContain("段内最大持仓 200 股/份");
+	expect(html).toContain("段内最大持仓");
+	expect(html).toContain("200 股/份");
+	expect(html).not.toContain("段内最大持仓 200");
 });
 
 test("本轮无成交与调整时不占位", async () => {
