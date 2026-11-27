@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Alerts } from "./Alerts";
 import { api, errorMessage, money, price, time } from "./api";
 import { ChangeLine } from "./ChangeLine";
+import { Episodes } from "./Episodes";
 import { canVerifyOnBuy, tradingLabel } from "./instrumentAdmission";
 import { MarketSession } from "./MarketSession";
 import { changeDisplay } from "./marketView";
@@ -18,10 +19,12 @@ export function Detail({
 	instrument,
 	onClose,
 	onTrade,
+	onLocateOrder,
 }: {
 	readonly instrument: Instrument;
 	readonly onClose: () => void;
 	readonly onTrade: (side: "buy" | "sell") => void;
+	readonly onLocateOrder: (orderId: string) => void;
 }) {
 	const online = useOnline();
 	const { toggle, contains, pending } = useWatchlist();
@@ -141,6 +144,7 @@ export function Detail({
 			<MarketSession market={instrument.market} symbol={instrument.symbol} />
 			<Plans symbol={instrument.symbol} currency={instrument.currency} />
 			<Alerts symbol={instrument.symbol} />
+			<Episodes symbol={instrument.symbol} onLocateOrder={onLocateOrder} />
 			<dl className="summary-list">
 				{instrument.min_buy_quantity != null &&
 					instrument.quantity_step != null && (

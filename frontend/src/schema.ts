@@ -3,7 +3,22 @@ export const workerSchema = z.object({
 	last_run: z.string().nullable(),
 	status: z.string(),
 });
-export const healthSchema = workerSchema.extend({ plan_worker: workerSchema });
+// 04 后台中断：markets 含 unknown 表示日历覆盖不到、时段无法确定。
+export const marketIdSchema = z.enum(["CN", "HK", "US", "unknown"]);
+export type MarketId = z.infer<typeof marketIdSchema>;
+export const gapSchema = z.object({
+	started_at: z.string(),
+	ended_at: z.string(),
+	duration_minutes: z.number(),
+	markets: z.array(marketIdSchema),
+});
+export type Gap = z.infer<typeof gapSchema>;
+// 两字段可选：旧后端缺省时按无中断处理。
+export const healthSchema = workerSchema.extend({
+	plan_worker: workerSchema,
+	recent_gaps: z.array(gapSchema).optional(),
+	gap_count_7d: z.number().int().nonnegative().optional(),
+});
 export const decimal = z.string().regex(/^-?\d+(\.\d+)?$/);
 // 0.5.0 展示字段全部可选，旧后端缺少时页面显示“不可用”。
 export const changeStatusSchema = z.enum([
@@ -348,3 +363,58 @@ export const recentEndingsSchema = z.object({
 	items: z.array(recentEndingSchema),
 	more: z.boolean(),
 });
+// 04 建仓到清仓：当前轮次单只证券按持仓 0→正→0 分段回看，第 7 节最终契约。
+// 金额与价格为 Decimal 字符串；可空字段由后端明确置 null。
+export const episodeEventSchema = z.object({
+	kind: z.enum([
+		"first_buy",
+		"add",
+		"reduce",
+		"close",
+		"split",
+		"dividend",
+		"anomaly",
+	]),
+	at: z.string(),
+	market_date: z.string(),
+	currency: z.string(),
+	quantity: z.number().nullable(),
+	price: decimal.nullable(),
+	fee: decimal.nullable(),
+	position_after: z.number().nullable(),
+	order_id: z.string().nullable(),
+	ratio: z.string().nullable(),
+	cash_per_share: decimal.nullable(),
+	cash_amount: decimal.nullable(),
+	payment_status: z.enum(["paid", "receivable"]).nullable(),
+	note: z.string().nullable(),
+});
+export type EpisodeEvent = z.infer<typeof episodeEventSchema>;
+export const episodeSchema = z.object({
+	index: z.number().int(),
+	status: z.enum(["closed", "open"]),
+	opened_at: z.string(),
+	closed_at: z.string().nullable(),
+	opened_market_date: z.string(),
+	closed_market_date: z.string().nullable(),
+	holding_days: z.number().int().nonnegative(),
+	buy_count: z.number().int().nonnegative(),
+	sell_count: z.number().int().nonnegative(),
+	peak_quantity: z.number(),
+	boundary_note: z.string().nullable(),
+	events: z.array(episodeEventSchema),
+});
+export type Episode = z.infer<typeof episodeSchema>;
+export const episodesSchema = z.object({
+	symbol: z.string(),
+	name: z.string(),
+	currency: z.string(),
+	round_id: z.string(),
+	as_of: z.string(),
+	market_today: z.string(),
+	reconciled: z.boolean(),
+	reconcile_note: z.string().nullable(),
+	episodes: z.array(episodeSchema),
+	outside_events: z.array(episodeEventSchema),
+});
+export type EpisodesData = z.infer<typeof episodesSchema>;

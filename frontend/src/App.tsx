@@ -406,6 +406,10 @@ export function App() {
 					instrument={overlay.instrument}
 					onClose={close}
 					onTrade={(side) => openTrade(overlay.instrument, side)}
+					onLocateOrder={(orderId) => {
+						close();
+						locateOrder(orderId);
+					}}
 				/>
 			)}{" "}
 			{!recoveryOpen && overlay.kind === "reorder" && (

@@ -1,0 +1,161 @@
+/* 04 建仓到清仓：详情页分段回看与时间线 */
+.episodes {
+	margin-top: var(--s5);
+	min-width: 0;
+}
+.episodes .section-heading {
+	flex-wrap: wrap;
+	margin-bottom: var(--s2);
+}
+.episodes > .footnote {
+	margin: 0 0 var(--s2);
+}
+.episode-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	gap: var(--s2);
+}
+.episode {
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	overflow: hidden;
+	min-width: 0;
+	background: var(--paper);
+}
+.episode-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--s2);
+	width: 100%;
+	min-height: 44px;
+	padding: var(--s2) var(--s3);
+	border: 0;
+	background: var(--canvas);
+	color: var(--ink);
+	font-size: 13px;
+	line-height: 1.6;
+	text-align: left;
+	cursor: pointer;
+}
+.episode-summary:hover {
+	background: var(--soft);
+}
+.episode-summary > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	text-align: left;
+}
+.episode-summary svg {
+	flex-shrink: 0;
+	color: var(--muted);
+}
+.episode-detail {
+	padding: var(--s3);
+	border-top: 1px solid var(--line);
+	display: grid;
+	gap: var(--s2);
+	min-width: 0;
+}
+.episode-facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+	gap: var(--s2) var(--s4);
+	margin: 0;
+	min-width: 0;
+}
+.episode-facts dt {
+	font-size: 12px;
+	color: var(--muted);
+}
+.episode-facts dd {
+	margin: 2px 0 0;
+	font-size: 13px;
+	overflow-wrap: anywhere;
+	font-variant-numeric: tabular-nums;
+}
+.episode-events {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: var(--s3);
+}
+.episode-event {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--s2);
+	min-width: 0;
+}
+.episode-event-kind {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	background: var(--canvas);
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+.episode-event[data-event-kind="first_buy"] .episode-event-kind,
+.episode-event[data-event-kind="add"] .episode-event-kind {
+	color: var(--buy-direction);
+	border-color: var(--buy-direction);
+}
+.episode-event[data-event-kind="reduce"] .episode-event-kind,
+.episode-event[data-event-kind="close"] .episode-event-kind {
+	color: var(--sell-direction);
+	border-color: var(--sell-direction);
+}
+.episode-event-body {
+	min-width: 0;
+	display: grid;
+	gap: 2px;
+	justify-items: start;
+	overflow-wrap: anywhere;
+}
+.episode-event-time {
+	font-size: 12px;
+	color: var(--muted);
+}
+.episode-event-main {
+	margin: 0;
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+.episode-event-details {
+	margin: 0;
+	font-size: 12px;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+.episode-event-note {
+	margin: 0;
+	font-size: 12px;
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+.episode-event-body .text-button {
+	padding: var(--s1) 0 0;
+}
+.episode-outside {
+	margin-top: var(--s4);
+	padding-top: var(--s3);
+	border-top: 1px solid var(--line);
+	min-width: 0;
+}
+.episode-outside h4 {
+	margin: 0 0 var(--s1);
+	font-size: 13px;
+}
+.episode-outside .footnote {
+	margin: 0 0 var(--s2);
+}
+.episode-outside .episode-events {
+	margin-top: var(--s2);
+}
