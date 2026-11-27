@@ -66,7 +66,15 @@ def at(day: int, hour: int, minute: int = 0) -> datetime:
     return datetime(2026, 10, day, hour, minute, tzinfo=UTC)
 
 
-def filled(identifier: str, symbol: str, side: str, quantity: int, price: str, when: datetime, currency: str = "CNY"):
+def filled(
+    identifier: str,
+    symbol: str,
+    side: str,
+    quantity: int,
+    price: str,
+    when: datetime,
+    currency: str = "CNY",
+):
     order = make_order(
         identifier,
         status="filled",
@@ -79,10 +87,14 @@ def filled(identifier: str, symbol: str, side: str, quantity: int, price: str, w
         fill_price=Decimal(price),
     )
     fee = (Decimal(price) * quantity * Decimal("0.0005")).quantize(Decimal("0.01"))
-    return order.model_copy(update={"fee": fee, "status_reason": "按有效市场样本整笔成交；不模拟盘口排队"})
+    return order.model_copy(
+        update={"fee": fee, "status_reason": "按有效市场样本整笔成交；不模拟盘口排队"}
+    )
 
 
-def adjustment(round_id: str, symbol: str, kind: str, effective: date, before: int, after: int, **extra) -> Adjustment:
+def adjustment(
+    round_id: str, symbol: str, kind: str, effective: date, before: int, after: int, **extra
+) -> Adjustment:
     return Adjustment(
         request_id=f"request-{uuid4()}",
         round_id=round_id,
@@ -107,7 +119,9 @@ def adjustment(round_id: str, symbol: str, kind: str, effective: date, before: i
 def seed(engine: Engine) -> None:
     """北京时间 10/22 10:00；茅台两段（第二段进行中），AAPL 含拆股与应收股息。"""
     with engine.store.transaction() as connection:
-        state = engine.store.load(connection).model_copy(update={"created_at": NOW - timedelta(days=12)})
+        state = engine.store.load(connection).model_copy(
+            update={"created_at": NOW - timedelta(days=12)}
+        )
         state.watchlist[:] = ["600519.SS", "AAPL"]
         state.orders.extend(
             [
@@ -128,7 +142,9 @@ def seed(engine: Engine) -> None:
         )
         engine.store.save(connection, state)
         actions = [
-            adjustment(state.id, "AAPL", "split", date(2026, 10, 15), 10, 20, numerator=2, denominator=1),
+            adjustment(
+                state.id, "AAPL", "split", date(2026, 10, 15), 10, 20, numerator=2, denominator=1
+            ),
             adjustment(
                 state.id,
                 "AAPL",
@@ -144,7 +160,14 @@ def seed(engine: Engine) -> None:
         for action in actions:
             _ = connection.execute(
                 "INSERT INTO adjustments VALUES(?,?,?,?,?,?)",
-                (action.id, state.id, action.symbol, action.kind, str(action.effective_date), action.model_dump_json()),
+                (
+                    action.id,
+                    state.id,
+                    action.symbol,
+                    action.kind,
+                    str(action.effective_date),
+                    action.model_dump_json(),
+                ),
             )
         gaps = [
             (at(21, 14, 30), at(21, 16, 10), ["US"]),
@@ -153,7 +176,13 @@ def seed(engine: Engine) -> None:
         for started, ended, markets in gaps:
             _ = connection.execute(
                 "INSERT INTO worker_gaps VALUES(?,?,?,?,?)",
-                (started.isoformat(), started.isoformat(), ended.isoformat(), json.dumps(markets), "paused_or_down"),
+                (
+                    started.isoformat(),
+                    started.isoformat(),
+                    ended.isoformat(),
+                    json.dumps(markets),
+                    "paused_or_down",
+                ),
             )
 
 
