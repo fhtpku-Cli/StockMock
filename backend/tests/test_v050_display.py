@@ -47,7 +47,7 @@ BUFFER = timedelta(minutes=10)
         ("US", date(2026, 11, 27), "2026-11-27T13:00:00-05:00", timedelta(0), True),
         ("US", date(2026, 11, 27), "2026-11-27T12:59:00-05:00", timedelta(0), False),
         ("CN", date(2026, 10, 31), "2026-10-31T20:00:00+08:00", BUFFER, False),
-        ("CN", date(2027, 1, 15), "2027-01-15T20:00:00+08:00", BUFFER, None),
+        ("CN", date(2028, 1, 14), "2028-01-14T20:00:00+08:00", BUFFER, None),
         ("CN", date(2026, 10, 30), "2026-10-30T20:00:00+08:00", None, False),
         ("US", date(2026, 10, 30), "2026-10-30T20:00:00-04:00", None, False),
         ("CN", date(2026, 10, 29), "2026-10-30T20:00:00+08:00", None, True),
@@ -123,7 +123,7 @@ def test_disabled_market_hides_change(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_calendar_out_of_bounds_and_non_session_quote_are_unknown() -> None:
-    assert quote_change("CN", reference("2027-01-15T10:00:00+08:00")).change_status == "unknown"
+    assert quote_change("CN", reference("2028-01-14T10:00:00+08:00")).change_status == "unknown"
     assert quote_change("CN", reference("2026-10-31T10:00:00+08:00")).change_status == "unknown"
 
 

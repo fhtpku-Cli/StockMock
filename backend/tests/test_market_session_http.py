@@ -79,7 +79,7 @@ def test_real_http_when_all_boundaries_are_read_only(engine: Engine, monkeypatch
             assert view.phase == phase
             assert ((view.current_period.start, view.current_period.end) if view.current_period else None) == current
             assert (view.next_period.start if view.next_period else None) == following
-        monkeypatch.setattr(Clock, "current", datetime.fromisoformat("2027-01-01T02:00:00Z"))
+        monkeypatch.setattr(Clock, "current", datetime.fromisoformat("2028-01-03T02:00:00Z"))
         unknown = http.get(url + "/api/markets/CN/session")
         assert MarketSessionView.model_validate_json(unknown.content).phase == "unknown"
         monkeypatch.setattr(Clock, "current", datetime.fromisoformat("2026-10-29T02:00:00Z"))

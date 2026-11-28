@@ -17,10 +17,10 @@ from tests.socket_support import client, server
 from tests.test_api import PASSWORD
 from tests.test_engine import ControlledProvider, request, sample
 
-NORMAL: Final = datetime(2026, 12, 30, 1, 35, tzinfo=UTC)
-PREOPEN: Final = datetime(2026, 12, 30, 7, 1, tzinfo=UTC)
-LAST: Final = datetime(2026, 12, 31, 1, 35, tzinfo=UTC)
-UNKNOWN: Final = datetime(2027, 1, 4, 1, 35, tzinfo=UTC)
+NORMAL: Final = datetime(2027, 12, 30, 1, 35, tzinfo=UTC)
+PREOPEN: Final = datetime(2027, 12, 30, 7, 1, tzinfo=UTC)
+LAST: Final = datetime(2027, 12, 31, 1, 35, tzinfo=UTC)
+UNKNOWN: Final = datetime(2028, 1, 3, 1, 35, tzinfo=UTC)
 
 
 def configure(engine: Engine, now: datetime) -> None:
@@ -31,7 +31,7 @@ def configure(engine: Engine, now: datetime) -> None:
     )
 
 
-@pytest.mark.parametrize("now", [PREOPEN, LAST, UNKNOWN], ids=["preopen-dec31", "intraday-dec31", "unknown-jan4"])
+@pytest.mark.parametrize("now", [PREOPEN, LAST, UNKNOWN], ids=["preopen-dec31", "intraday-dec31", "unknown-jan3"])
 @pytest.mark.parametrize("action", ["preview", "size", "place"])
 def test_reject_without_writes_when_settlement_calendar_missing(
     engine: Engine, now: datetime, action: Literal["preview", "size", "place"]
@@ -60,7 +60,7 @@ def test_reject_without_writes_when_settlement_calendar_missing(
 
 
 def test_buy_and_fill_when_next_session_is_covered(engine: Engine) -> None:
-    # Given: 12 月 30 日仍能算出次日可卖时刻。
+    # Given: 2027 年 12 月 30 日仍能算出次日可卖时刻。
     configure(engine, NORMAL)
     body = request()
     assert engine.preview(body, NORMAL).active_at == NORMAL
@@ -72,7 +72,7 @@ def test_buy_and_fill_when_next_session_is_covered(engine: Engine) -> None:
     # Then: 买单成交，持仓次日开盘解锁。
     state = engine.store.read()
     assert state.orders[0].status == "filled"
-    assert state.lots[0].sellable_at == datetime(2026, 12, 31, 1, 30, tzinfo=UTC)
+    assert state.lots[0].sellable_at == datetime(2027, 12, 31, 1, 30, tzinfo=UTC)
     assert len(state.ledger) == 2
 
 
@@ -96,7 +96,7 @@ def test_sell_when_existing_lot_is_available_on_last_session(engine: Engine) -> 
 
 def test_t0_buy_when_cn_settlement_calendar_is_exhausted(engine: Engine) -> None:
     # Given: 实际 T+0 美股规则；已有外币避免无关汇率时效。
-    now = datetime(2026, 12, 31, 15, 35, tzinfo=UTC)
+    now = datetime(2027, 12, 31, 15, 35, tzinfo=UTC)
     configure(engine, now)
     with engine.store.transaction() as connection:
         state = engine.store.load(connection)

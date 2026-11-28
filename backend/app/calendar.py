@@ -2,16 +2,64 @@
 
 from datetime import UTC, date, datetime, time, timedelta
 from functools import lru_cache
+from typing import Final, override
 
 import exchange_calendars as xcals
+import pandas as pd
+from exchange_calendars.exchange_calendar_xshg import XSHGExchangeCalendar
 
 from app.models import DomainError, Instrument
+
+# 国务院办公厅国办发明电〔2026〕10号放假日中的工作日；调休上班的周末不开市。
+# 截至 2026-11-28，锁定的 exchange-calendars 4.13.2 与最新 4.13.3 的 XSHG 均止于 2026-12-31；
+# 上游覆盖 2027 后自动停用本补充。
+CN_SUPPLEMENT_YEAR: Final = 2027
+CN_2027_HOLIDAYS: tuple[str, ...] = (
+    "2027-01-01",
+    "2027-02-05",
+    "2027-02-08",
+    "2027-02-09",
+    "2027-02-10",
+    "2027-02-11",
+    "2027-02-12",
+    "2027-04-05",
+    "2027-05-03",
+    "2027-05-04",
+    "2027-05-05",
+    "2027-06-09",
+    "2027-09-15",
+    "2027-10-01",
+    "2027-10-04",
+    "2027-10-05",
+    "2027-10-06",
+    "2027-10-07",
+)
+
+
+class XSHG2027(XSHGExchangeCalendar):
+    """在上游 XSHG 假日表后补 2027 年；交易时段、午休沿用上游。"""
+
+    @classmethod
+    @override
+    def precomputed_holidays(cls) -> pd.DatetimeIndex:
+        """上游假日表加 2027 年休市工作日。"""
+        upstream = pd.DatetimeIndex(XSHGExchangeCalendar.precomputed_holidays())
+        return upstream.append(pd.DatetimeIndex(CN_2027_HOLIDAYS)).sort_values()
+
+
+def cn_calendar() -> xcals.ExchangeCalendar:
+    """上游已覆盖 2027 时直接使用上游，否则使用本地补充。"""
+    if XSHGExchangeCalendar.bound_max().year >= CN_SUPPLEMENT_YEAR:
+        return xcals.get_calendar("XSHG")
+    return XSHG2027(end=XSHG2027.bound_max())
 
 
 @lru_cache(maxsize=3)
 def calendar(market: str) -> xcals.ExchangeCalendar:
     """取得交易所假日与夏令时日历。"""
-    name = {"CN": "XSHG", "HK": "XHKG", "US": "XNYS"}[market]
+    if market == "CN":
+        return cn_calendar()
+    name = {"HK": "XHKG", "US": "XNYS"}[market]
     cal = xcals.get_calendar(name)
     if market in {"HK", "US"} and cal.default_end().to_pydatetime().date() < date(2028, 1, 3):
         cal = xcals.get_calendar(name, end="2028-01-03")

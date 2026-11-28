@@ -304,11 +304,11 @@ def test_s5_cn_application_cutoff_is_1457() -> None:
 
 
 def test_s5_uncovered_calendar_is_unknown_not_closed() -> None:
-    # Given: A 股 2027 日历尚未覆盖，港美股当天也无交易时段交集。
+    # Given: A 股 2028 日历尚未覆盖，港美股当天（周六）也无交易时段交集。
     # Then: 不把覆盖缺失误判成无中断。
     assert gap_markets(
-        datetime.fromisoformat("2027-01-01T02:00:00+00:00"),
-        datetime.fromisoformat("2027-01-01T02:10:00+00:00"),
+        datetime.fromisoformat("2028-01-01T02:00:00+00:00"),
+        datetime.fromisoformat("2028-01-01T02:10:00+00:00"),
     ) == ["unknown"]
 
 
